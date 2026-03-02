@@ -1,6 +1,6 @@
 /**
- * สมองกลน้องนำทาง - เวอร์ชั่น Ultra Stable (Presence-Aware Edition)
- * ปรับปรุงล่าสุด: แยกแยะคนเดินผ่าน/ยืนแช่, พื้นที่ว่าง 10s ก่อนเริ่ม Countdown
+ * สมองกลน้องนำทาง - เวอร์ชั่น Ultra Stable (Direct Response Edition)
+ * ปรับปรุงล่าสุด: ตัดระบบยืนยัน/What do you mean, เพิ่มคำทักทายหลากหลาย, ระบบหยุดเสียงสมบูรณ์
  */
 
 window.localDatabase = null;
@@ -14,7 +14,7 @@ const GAS_URL = "https://script.google.com/macros/s/AKfycbz1bkIsQ588u-rpjY-8nMly
 
 let idleTimer = null; 
 let speechSafetyTimeout = null; 
-const IDLE_TIME_LIMIT = 30000; // 30 วินาทีสุดท้ายก่อน Reset
+const IDLE_TIME_LIMIT = 30000; 
 let video = document.getElementById('video');
 let cocoModel = null; 
 let isDetecting = true; 
@@ -28,15 +28,11 @@ const DETECTION_INTERVAL = 500;
  */
 function resetSystemState() {
     console.log("🧹 Resetting System State...");
-    window.speechSynthesis.cancel();
-    if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
-    window.isBusy = false;
-    updateLottie('idle');
+    stopAllSpeech();
 }
 
 function updateInteractionTime() {
     lastSeenTime = Date.now();
-    // จะเริ่มนับถอยหลังใหม่เฉพาะเมื่อไม่ได้อยู่หน้า Home และไม่มีใครขวาง
     if (!isAtHome) {
         restartIdleTimer();
     }
@@ -46,12 +42,9 @@ document.addEventListener('mousedown', updateInteractionTime);
 document.addEventListener('touchstart', updateInteractionTime);
 
 window.switchLanguage = function(lang) {
-    console.log(`🌐 Switching language to: ${lang}`);
     resetSystemState(); 
     window.currentLang = lang;
-    const welcomeMsg = (lang === 'th') 
-        ? "เปลี่ยนเป็นภาษาไทยแล้วครับ มีอะไรให้ช่วยไหม?" 
-        : "Switched to English. How can I help you?";
+    const welcomeMsg = (lang === 'th') ? "เปลี่ยนเป็นภาษาไทยแล้วครับ" : "Switched to English.";
     displayResponse(welcomeMsg);
     renderFAQButtons(); 
     isAtHome = false; 
@@ -61,22 +54,17 @@ window.switchLanguage = function(lang) {
 function forceUnmute() {
     window.isMuted = false;
     const muteBtn = document.getElementById('muteBtn');
-    const muteIcon = document.getElementById('muteIcon');
-    if (muteBtn) {
-        muteBtn.classList.remove('muted');
-        if (muteIcon) muteIcon.className = 'fas fa-volume-up';
-    }
+    if (muteBtn) muteBtn.classList.remove('muted');
 }
 
 /**
- * 2. ระบบ Reset หน้าจอ (Smart Reset - Fixed Loop)
+ * 2. ระบบ Reset หน้าจอ (Smart Reset)
  */
 function resetToHome() {
     const now = Date.now();
     const idleDuration = now - lastSeenTime;
     const noInteraction = (idleDuration >= IDLE_TIME_LIMIT);
 
-    // ป้องกันการ Reset หากยุ่งอยู่ หรือ AI ยังเห็นคนยืนแช่อยู่
     if (window.isBusy || personInFrameTime !== null || !noInteraction) {
         if (!isAtHome) restartIdleTimer(); 
         return;
@@ -84,15 +72,13 @@ function resetToHome() {
 
     if (isAtHome) return; 
 
-    console.log("✅ [SUCCESS] Returning to Home Screen.");
-    
     resetSystemState();
     forceUnmute(); 
     window.hasGreeted = false;      
     personInFrameTime = null;       
     isAtHome = true; 
 
-    const welcomeMsg = window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone to ask for information.";
+    const welcomeMsg = window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone.";
     displayResponse(welcomeMsg);
     renderFAQButtons(); 
 
@@ -105,7 +91,6 @@ function resetToHome() {
 function restartIdleTimer() {
     if (idleTimer) clearTimeout(idleTimer);
     if (!isAtHome) {
-        console.log("⏳ Starting 30s Reset Countdown...");
         idleTimer = setTimeout(resetToHome, IDLE_TIME_LIMIT); 
     }
 }
@@ -115,15 +100,10 @@ function restartIdleTimer() {
  */
 async function initCamera() {
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: "user", width: 320, height: 240 } 
-        });
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 320, height: 240 } });
         if (video) {
             video.srcObject = stream;
-            video.onloadedmetadata = () => { 
-                video.play(); 
-                requestAnimationFrame(detectPerson); 
-            };
+            video.onloadedmetadata = () => { video.play(); requestAnimationFrame(detectPerson); };
         }
     } catch (err) { console.error("❌ Camera Error:", err); }
 }
@@ -133,7 +113,6 @@ async function detectPerson() {
         setTimeout(() => requestAnimationFrame(detectPerson), 1000); 
         return; 
     }
-
     const now = Date.now();
     if (now - lastDetectionTime < DETECTION_INTERVAL) {
         requestAnimationFrame(detectPerson);
@@ -145,42 +124,24 @@ async function detectPerson() {
     const person = predictions.find(p => p.class === "person" && p.score > 0.75 && p.bbox[2] > 130); 
 
     if (person) {
-        // --- กรณีพบคน ---
         if (personInFrameTime === null) personInFrameTime = now;
-        
         const stayDuration = now - personInFrameTime;
 
-        // เงื่อนไข: ต้องยืนแช่เกิน 2 วินาที ถึงจะถือว่า "ตั้งใจใช้งาน"
         if (stayDuration >= 2000) { 
-            lastSeenTime = now; // อัปเดตเวลาโต้ตอบล่าสุด
-
+            lastSeenTime = now; 
             if (!isAtHome) {
-                // ถ้ามีคนยืนแช่หน้าคำตอบ ให้หยุดนาฬิกา Reset ทันที (ให้เขาอ่านต่อ)
-                if (idleTimer) {
-                    console.log("⏸️ Person Confirmed Staying. Stopping Reset Timer.");
-                    clearTimeout(idleTimer);
-                    idleTimer = null;
-                }
+                if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
             } else if (!window.isBusy && !window.hasGreeted && stayDuration >= 3000) {
-                // ถ้าอยู่หน้า Home และยืนนิ่งครบ 3 วิ ให้น้องทักทาย
                 greetUser();
             }
         }
     } else {
-        // --- กรณีไม่พบคน ---
         if (personInFrameTime !== null) {
             const timeSinceLastSeen = now - lastSeenTime;
-
-            // รอจนพื้นที่ว่างนิ่งๆ ครบ 5 วินาที ถึงจะยอมรับว่า "ไม่มีคนแล้ว"
             if (timeSinceLastSeen >= 5000) { 
-                console.log("🚫 Area truly empty for5s. Ready to start 30s Countdown.");
                 personInFrameTime = null;
                 window.hasGreeted = false;
-                
-                // เริ่มนับถอยหลังกลับ Home
-                if (!isAtHome) {
-                    restartIdleTimer(); 
-                }
+                if (!isAtHome) restartIdleTimer(); 
             }
         }
     }
@@ -191,13 +152,19 @@ function greetUser() {
     if (window.hasGreeted || window.isBusy) return; 
     forceUnmute();
     isAtHome = false; 
-    
     const hour = new Date().getHours();
     let thTime = hour < 12 ? "สวัสดีตอนเช้าครับ" : (hour < 18 ? "สวัสดีตอนบ่ายครับ" : "สวัสดีครับ");
+    
     const greetings = {
-        th: [`${thTime} มีอะไรให้น้องนำทางช่วยไหมครับ?`, "สำนักงานขนส่งพยัคฆภูมิพิสัยสวัสดีครับ"],
-        en: ["Welcome! How can I assist you today?"]
+        th: [
+            `${thTime} มีอะไรให้น้องนำทางช่วยไหมครับ?`, 
+            "สำนักงานขนส่งพยัคฆภูมิพิสัย ยินดีต้อนรับครับ!", 
+            "สวัสดีครับ สอบถามข้อมูลเรื่องทำใบขับขี่หรือภาษีรถกับน้องได้นะครับ",
+            "สวัสดีครับ วันนี้มาติดต่อราชการด้านไหนดีครับ?"
+        ],
+        en: ["Welcome! How can I assist you today?", "Hello! How can I help you?"]
     };
+    
     const list = greetings[window.currentLang] || greetings['th'];
     let finalGreet = list[Math.floor(Math.random() * list.length)];
     window.hasGreeted = true; 
@@ -206,7 +173,7 @@ function greetUser() {
 }
 
 /**
- * 4. ระบบประมวลผลคำตอบ
+ * 4. ระบบประมวลผลคำตอบ (Tiered Search - ตัดปุ่มยืนยันออก)
  */
 async function getResponse(userQuery) {
     if (!userQuery || window.isBusy || !window.localDatabase) return;
@@ -217,23 +184,13 @@ async function getResponse(userQuery) {
     window.isBusy = true;
     updateLottie('thinking');
     
-    const fetchTimeout = setTimeout(() => {
-        if (window.isBusy) {
-            window.isBusy = false;
-            displayResponse("ขออภัยครับ ระบบขัดข้องเล็กน้อย ลองใหม่อีกครั้งนะครับ");
-            updateLottie('idle');
-            restartIdleTimer();
-        }
-    }, 10000);
-
     try {
         fetch(`${GAS_URL}?query=${encodeURIComponent(userQuery.trim())}&action=logOnly`, { mode: 'no-cors' });
-
         const query = userQuery.toLowerCase().trim();
-        let bestMatch = { answer: "", score: 0, matchedKey: "" };
+        let bestMatch = { answer: "", score: 0 };
 
-        Object.keys(window.localDatabase).forEach(sheetName => {
-            if (["Lottie_State", "Config", "FAQ"].includes(sheetName)) return;
+        for (const sheetName of Object.keys(window.localDatabase)) {
+            if (["Lottie_State", "Config", "FAQ"].includes(sheetName)) continue;
             window.localDatabase[sheetName].forEach((item) => {
                 const rawKeys = item[0] ? item[0].toString().toLowerCase().trim() : "";
                 if (!rawKeys) return;
@@ -241,117 +198,65 @@ async function getResponse(userQuery) {
                 let ans = window.currentLang === 'th' ? (item[1] || "ไม่มีข้อมูล") : (item[2] || "No data");
                 
                 keyList.forEach(key => {
-                    let score = (query === key) ? 1.0 : (query.includes(key) && key.length > 3 ? 0.85 : calculateSimilarity(query, key));
+                    let score = (query === key) ? 1.0 : (query.includes(key) && key.length > 2 ? 0.9 : calculateSimilarity(query, key));
                     if (score > bestMatch.score) {
-                        bestMatch = { answer: ans, score: score, matchedKey: key };
+                        bestMatch = { answer: ans, score: score };
                     }
                 });
             });
-        });
+        }
 
-        clearTimeout(fetchTimeout);
-
-        if (bestMatch.score >= 0.8) {
+        if (bestMatch.score >= 0.75) { 
             displayResponse(bestMatch.answer);
             speak(bestMatch.answer);
-        } else if (bestMatch.score >= 0.35) {
-            const suggestMsg = window.currentLang === 'th' ? `น้องนำทางไม่แน่ใจว่าใช่เรื่อง "${bestMatch.matchedKey}" หรือเปล่าครับ?` : `Did you mean "${bestMatch.matchedKey}"?`;
-            displayResponse(suggestMsg);
-            speak(suggestMsg);
-            renderConfirmButtons(bestMatch.answer);
         } else {
-            const fallback = window.currentLang === 'th' ? "ขออภัย น้องนำทางไม่พบข้อมูลครับ" : "I couldn't find that information.";
+            const fallback = window.currentLang === 'th' ? "ขออภัยครับ น้องนำทางหาข้อมูลไม่พบ ลองเลือกจากหัวข้อด้านล่างนะครับ" : "I couldn't find that. Please try the topics below.";
             displayResponse(fallback);
             speak(fallback);
+            renderFAQButtons(); 
         }
-    } catch (err) {
-        console.error("Database Error:", err);
-        resetSystemState();
-        restartIdleTimer();
-    }
+    } catch (err) { resetSystemState(); restartIdleTimer(); }
 }
 
 /**
- * 5. ระบบปุ่มยืนยัน
- */
-function renderConfirmButtons(answer) {
-    const container = document.getElementById('faq-container');
-    if (!container) return;
-    container.innerHTML = ""; 
-
-    const btnYes = document.createElement('button');
-    btnYes.className = 'faq-btn';
-    btnYes.style.border = "2px solid #2ecc71";
-    btnYes.innerHTML = window.currentLang === 'th' ? '<i class="fas fa-check"></i> ใช่' : 'Yes';
-    btnYes.onclick = () => {
-        isAtHome = false;
-        updateInteractionTime();
-        resetSystemState();
-        displayResponse(answer);
-        container.innerHTML = ""; 
-        setTimeout(() => speak(answer), 250);
-    };
-
-    const btnNo = document.createElement('button');
-    btnNo.className = 'faq-btn';
-    btnNo.style.border = "2px solid #e74c3c";
-    btnNo.innerHTML = window.currentLang === 'th' ? '<i class="fas fa-times"></i> ไม่ใช่' : 'No';
-    btnNo.onclick = () => {
-        resetSystemState();
-        renderFAQButtons(); 
-        updateInteractionTime();
-    };
-
-    container.appendChild(btnYes);
-    container.appendChild(btnNo);
-}
-
-/**
- * 6. ระบบเสียง
+ * 5. ระบบเสียงและหยุดเสียง
  */
 function speak(text) {
     if (!text) return;
     window.speechSynthesis.cancel();
     forceUnmute();
-    
     const safetyTime = (text.length * 200) + 5000;
     if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
     
     speechSafetyTimeout = setTimeout(() => {
-        if (window.isBusy) {
-            window.isBusy = false;
-            updateLottie('idle');
-            restartIdleTimer();
-        }
+        if (window.isBusy) { window.isBusy = false; updateLottie('idle'); restartIdleTimer(); }
     }, safetyTime);
 
     const msg = new SpeechSynthesisUtterance(text.replace(/[*#-]/g, ""));
     msg.lang = (window.currentLang === 'th') ? 'th-TH' : 'en-US';
-    
-    msg.onstart = () => { 
-        window.isBusy = true; 
-        updateLottie('talking'); 
-    };
-    
+    msg.onstart = () => { window.isBusy = true; updateLottie('talking'); };
     msg.onend = () => { 
         if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
-        window.isBusy = false;
-        updateLottie('idle'); 
-        isAtHome = false; 
-        updateInteractionTime(); 
+        window.isBusy = false; updateLottie('idle'); updateInteractionTime(); 
     };
-
-    msg.onerror = (e) => {
-        window.isBusy = false;
-        updateLottie('idle');
-        restartIdleTimer();
-    };
-
     window.speechSynthesis.speak(msg);
 }
 
+const stopAllSpeech = () => {
+    window.speechSynthesis.pause(); 
+    window.speechSynthesis.cancel();
+    if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
+    window.isBusy = false;
+    updateLottie('idle');
+    console.log("🛑 Speech Stopped.");
+};
+
+window.addEventListener('pagehide', stopAllSpeech);
+window.addEventListener('beforeunload', stopAllSpeech);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') stopAllSpeech(); });
+
 /**
- * 7. ระบบเริ่มต้นและช่วยเหลือ
+ * 6. ระบบเริ่มต้นและช่วยเหลือ
  */
 async function initDatabase() {
     try {
@@ -360,11 +265,9 @@ async function initDatabase() {
         if (json.database) {
             window.localDatabase = json.database;
             cocoModel = await cocoSsd.load();
-            resetSystemState();
             renderFAQButtons();
             initCamera(); 
             displayResponse(window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone.");
-            console.log("🚀 System Online");
         }
     } catch (e) { setTimeout(initDatabase, 5000); }
 }
@@ -372,18 +275,14 @@ async function initDatabase() {
 function renderFAQButtons() {
     const container = document.getElementById('faq-container');
     if (!container || !window.localDatabase || !window.localDatabase["FAQ"]) return;
-    
     container.innerHTML = "";
     window.localDatabase["FAQ"].slice(1).forEach((row) => {
-        const qThai = row[0] ? row[0].toString().trim() : "";
-        const qEng  = row[1] ? row[1].toString().trim() : "";
-        let btnText = (window.currentLang === 'th') ? qThai : qEng;
-        
-        if (btnText !== "") {
+        const qText = (window.currentLang === 'th') ? row[0] : row[1];
+        if (qText) {
             const btn = document.createElement('button');
             btn.className = 'faq-btn';
-            btn.innerText = btnText;
-            btn.onclick = () => getResponse(btnText);
+            btn.innerText = qText;
+            btn.onclick = () => getResponse(qText);
             container.appendChild(btn);
         }
     });
@@ -420,8 +319,7 @@ function editDistance(s1, s2) {
             if (i === 0) costs[j] = j;
             else if (j > 0) {
                 let newVal = costs[j - 1];
-                if (s1.charAt(i - 1) !== s2.charAt(j - 1))
-                    newVal = Math.min(Math.min(newVal, lastValue), costs[j]) + 1;
+                if (s1.charAt(i - 1) !== s2.charAt(j - 1)) newVal = Math.min(Math.min(newVal, lastValue), costs[j]) + 1;
                 costs[j - 1] = lastValue; lastValue = newVal;
             }
         }
@@ -431,21 +329,3 @@ function editDistance(s1, s2) {
 }
 
 initDatabase();
-
-/**
- * 8. ระบบดักจับ Event พิเศษ
- */
-const stopAllSpeech = () => {
-    window.speechSynthesis.pause(); 
-    window.speechSynthesis.cancel();
-    if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
-    window.isBusy = false;
-    updateLottie('idle');
-};
-
-window.addEventListener('pagehide', stopAllSpeech);
-window.addEventListener('beforeunload', stopAllSpeech);
-document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') stopAllSpeech();
-});
-    
