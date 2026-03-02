@@ -121,7 +121,7 @@ async function detectPerson() {
     lastDetectionTime = now;
 
     const predictions = await cocoModel.detect(video);
-    const person = predictions.find(p => p.class === "person" && p.score > 0.8 && p.bbox[2] > 120);
+    const person = predictions.find(p => p.class === "person" && p.score > 0.75 && p.bbox[2] > 130);
 
     if (person) {
         updateInteractionTime();
