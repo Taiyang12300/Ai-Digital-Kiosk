@@ -1,6 +1,5 @@
 /**
  * สมองกลน้องนำทาง - เวอร์ชั่น Ultra Stable (Smart Local Brain)
- * แก้ไข: ป้องกันอาการค้าง, รองรับการสัมผัส, Did you mean? พร้อมปุ่มยืนยัน
  */
 
 window.localDatabase = null;
@@ -13,7 +12,7 @@ const GAS_URL = "https://script.google.com/macros/s/AKfycbz1bkIsQ588u-rpjY-8nMly
 
 let idleTimer; 
 let speechSafetyTimeout; 
-const IDLE_TIME_LIMIT = 45000; 
+const IDLE_TIME_LIMIT = 30000; 
 let video = document.getElementById('video');
 let cocoModel = null; 
 let isDetecting = true; 
@@ -107,7 +106,7 @@ async function initCamera() {
 }
 
 async function detectPerson() {
-    // ป้องกัน CPU Spike: ถ้าโมเดลไม่พร้อม ให้รอ 1 วินาทีแล้วค่อยเช็คใหม่
+    // 1. ป้องกัน CPU Spike
     if (!isDetecting || !cocoModel) { 
         setTimeout(() => requestAnimationFrame(detectPerson), 1000); 
         return; 
@@ -121,22 +120,46 @@ async function detectPerson() {
     lastDetectionTime = now;
 
     const predictions = await cocoModel.detect(video);
+    // กรองคน: มั่นใจ 75% ขึ้นไป และต้องอยู่ใกล้ตู้ (bbox[2] > 130)
     const person = predictions.find(p => p.class === "person" && p.score > 0.75 && p.bbox[2] > 130);
 
     if (person) {
-        updateInteractionTime();
-        if (personInFrameTime === null) personInFrameTime = Date.now();
-        if (!window.isBusy && !window.hasGreeted) {
-            if (Date.now() - personInFrameTime >= 1500) {
+        // บันทึกเวลาที่เจอคนครั้งแรก
+        if (personInFrameTime === null) {
+            personInFrameTime = now;
+        }
+
+        const stayDuration = now - personInFrameTime;
+
+        // --- กฎขาเข้า: ต้องยืนแช่เกิน 2 วินาที (2000ms) ---
+        // เพื่อป้องกันการจับคนเดินผ่าน หรือเงาแวบเดียว
+        if (stayDuration >= 2000) {
+            updateInteractionTime(); // ต่อเวลาหน้าจอ (Idle Timer) ให้เฉพาะคนที่อยู่จริง
+
+            // ถ้ายังไม่ได้ทักทาย และยืนแช่จนมั่นใจ (เช่น 3 วินาที) ค่อยทักทาย
+            if (!window.isBusy && !window.hasGreeted && stayDuration >= 3000) {
                 greetUser();
             }
         }
+        
+        // อัปเดตเวลาล่าสุดที่ตรวจพบคนจริงๆ ไว้ใช้เช็คตอนคนหาย
+        lastSeenTime = now; 
+
     } else {
-        if (personInFrameTime !== null && (Date.now() - lastSeenTime > 7000)) { 
-            personInFrameTime = null;
-            window.hasGreeted = false;
+        // --- กฎขาออก: ถ้าไม่เจอคน ต้องหายไปเกิน 5 วินาที (5000ms) ---
+        // เพื่อป้องกันกรณีกล้องหลุดชั่วคราว หรือ AI จับพลาดขณะคนยังอ่านอยู่
+        if (personInFrameTime !== null) {
+            const timeSinceLastSeen = now - lastSeenTime;
+
+            if (timeSinceLastSeen >= 5000) { 
+                // ยืนยันว่าคนเดินออกไปแล้วจริงๆ จึงรีเซ็ตสถานะ
+                personInFrameTime = null;
+                window.hasGreeted = false;
+                console.log("Confirmed: Person left after 5s grace period.");
+            }
         }
     }
+    
     requestAnimationFrame(detectPerson);
 }
 
