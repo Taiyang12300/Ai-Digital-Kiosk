@@ -308,4 +308,112 @@ function speak(text) {
     window.speechSynthesis.speak(msg);
 }
 
-// ... (ส่วนที่เหลือของ initDatabase และ FAQ Buttons เหมือนเดิม) ...
+/**
+ * 7. ระบบเริ่มต้น
+ */
+async function initDatabase() {
+    try {
+        const res = await fetch(GAS_URL, { redirect: 'follow' });
+        const json = await res.json();
+        if (json.database) {
+            window.localDatabase = json.database;
+            cocoModel = await cocoSsd.load();
+            resetSystemState();
+            renderFAQButtons();
+            initCamera(); 
+            displayResponse(window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone to ask for information.");
+        }
+    } catch (e) { 
+        setTimeout(initDatabase, 5000); 
+    }
+}
+
+function renderFAQButtons() {
+    const container = document.getElementById('faq-container');
+    if (!container || !window.localDatabase || !window.localDatabase["FAQ"]) return;
+    
+    container.innerHTML = "";
+    window.localDatabase["FAQ"].slice(1).forEach((row) => {
+        const qThai = row[0] ? row[0].toString().trim() : "";
+        const qEng  = row[1] ? row[1].toString().trim() : "";
+        let btnText = (window.currentLang === 'th') ? qThai : qEng;
+        
+        if (btnText !== "") {
+            const btn = document.createElement('button');
+            btn.className = 'faq-btn';
+            btn.innerText = btnText;
+            btn.onclick = () => getResponse(btnText);
+            container.appendChild(btn);
+        }
+    });
+}
+
+function updateLottie(state) {
+    const player = document.getElementById('lottie-canvas');
+    if (!player) return;
+    const assets = {
+        'idle': 'https://lottie.host/568e8594-a319-4491-bf10-a0f5c012fc76/6S3urqybG5.json',
+        'thinking': 'https://lottie.host/e742c203-f211-4521-a5aa-96cd5248d4b8/CKCd2cqmGj.json',
+        'talking': 'https://lottie.host/79a24a65-7d74-4ff7-8ac5-bb3eeaa49073/4BES9eWBuE.json'
+    };
+    player.load(assets[state]);
+}
+
+function displayResponse(text) {
+    const box = document.getElementById('response-text');
+    if (box) box.innerText = text;
+}
+
+function calculateSimilarity(s1, s2) {
+    let longer = s1.length < s2.length ? s2 : s1;
+    let shorter = s1.length < s2.length ? s1 : s2;
+    if (longer.length === 0) return 1.0;
+    return (longer.length - editDistance(longer, shorter)) / longer.length;
+}
+
+function editDistance(s1, s2) {
+    let costs = [];
+    for (let i = 0; i <= s1.length; i++) {
+        let lastValue = i;
+        for (let j = 0; j <= s2.length; j++) {
+            if (i === 0) costs[j] = j;
+            else if (j > 0) {
+                let newVal = costs[j - 1];
+                if (s1.charAt(i - 1) !== s2.charAt(j - 1))
+                    newVal = Math.min(Math.min(newVal, lastValue), costs[j]) + 1;
+                costs[j - 1] = lastValue; lastValue = newVal;
+            }
+        }
+        if (i > 0) costs[s2.length] = lastValue;
+    }
+    return costs[s2.length];
+}
+
+initDatabase();
+
+/**
+ * 8. ระบบดักจับ Event พิเศษ (ป้องกันเสียงค้างเมื่อปิด/รีเฟรชหน้าจอ)
+ */
+const stopAllSpeech = () => {
+    // หยุดการประมวลผลเสียงทันที
+    window.speechSynthesis.pause(); 
+    window.speechSynthesis.cancel();
+    
+    // ล้างสถานะ Timeout และตัวแปรควบคุม
+    if (typeof speechSafetyTimeout !== 'undefined') clearTimeout(speechSafetyTimeout);
+    window.isBusy = false;
+    
+    // คืนค่า Lottie เป็นท่าพัก (Idle)
+    if (typeof updateLottie === 'function') updateLottie('idle');
+    
+    console.log("System Speech Terminated.");
+};
+
+// ดักจับการปิดหน้าต่าง หรือสลับไปหน้าอื่น (ป้องกันเสียงหลอน)
+window.addEventListener('pagehide', stopAllSpeech);
+window.addEventListener('beforeunload', stopAllSpeech);
+
+// สำหรับตู้ Kiosk: หยุดเสียงเมื่อจอดับหรือสลับแอป
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') stopAllSpeech();
+});
