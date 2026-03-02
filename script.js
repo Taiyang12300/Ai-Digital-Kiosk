@@ -193,24 +193,76 @@ function greetUser() {
 }
 
 /**
- * 4. ระบบประมวลผลคำตอบ
+ * 4. ระบบประมวลผลคำตอบ (Complete Version)
  */
 async function getResponse(userQuery) {
     if (!userQuery || window.isBusy || !window.localDatabase) return;
     
-    isAtHome = false; // มีการถามคำถาม เปลี่ยนสถานะเป็นไม่ว่าง
+    isAtHome = false; // ป้องกันการ Reset ขณะประมวลผล
     updateInteractionTime(); 
     resetSystemState(); 
     window.isBusy = true;
     updateLottie('thinking');
     
-    // ... (ส่วนที่เหลือของ getResponse เหมือนเดิม) ...
-    // [ระลึกว่าต้องรันส่วน logic ค้นหาคำตอบที่นี่]
-    // สมมติว่าเจอคำตอบแล้วเรียก speak(answer)
+    // ตั้งเวลา Timeout กรณีเชื่อมต่อ Database ช้า
+    const fetchTimeout = setTimeout(() => {
+        if (window.isBusy) {
+            window.isBusy = false;
+            displayResponse("ขออภัยครับ ระบบขัดข้องเล็กน้อย ลองใหม่อีกครั้งนะครับ");
+            updateLottie('idle');
+            restartIdleTimer();
+        }
+    }, 10000);
+
+    try {
+        // บันทึก Log ไปยัง GAS (Optional)
+        fetch(`${GAS_URL}?query=${encodeURIComponent(userQuery.trim())}&action=logOnly`, { mode: 'no-cors' });
+
+        const query = userQuery.toLowerCase().trim();
+        let bestMatch = { answer: "", score: 0, matchedKey: "" };
+
+        // Logic การค้นหาใน Database
+        Object.keys(window.localDatabase).forEach(sheetName => {
+            if (["Lottie_State", "Config", "FAQ"].includes(sheetName)) return;
+            window.localDatabase[sheetName].forEach((item) => {
+                const rawKeys = item[0] ? item[0].toString().toLowerCase().trim() : "";
+                if (!rawKeys) return;
+                const keyList = rawKeys.split(/[,|]/).map(k => k.trim());
+                let ans = window.currentLang === 'th' ? (item[1] || "ไม่มีข้อมูล") : (item[2] || "No data");
+                
+                keyList.forEach(key => {
+                    let score = (query === key) ? 1.0 : (query.includes(key) && key.length > 3 ? 0.85 : calculateSimilarity(query, key));
+                    if (score > bestMatch.score) {
+                        bestMatch = { answer: ans, score: score, matchedKey: key };
+                    }
+                });
+            });
+        });
+
+        clearTimeout(fetchTimeout);
+
+        if (bestMatch.score >= 0.8) {
+            displayResponse(bestMatch.answer);
+            speak(bestMatch.answer);
+        } else if (bestMatch.score >= 0.35) {
+            const suggestMsg = window.currentLang === 'th' ? `น้องนำทางไม่แน่ใจว่าใช่เรื่อง "${bestMatch.matchedKey}" หรือเปล่าครับ?` : `Did you mean "${bestMatch.matchedKey}"?`;
+            displayResponse(suggestMsg);
+            speak(suggestMsg);
+            renderConfirmButtons(bestMatch.answer);
+        } else {
+            const fallback = window.currentLang === 'th' ? "ขออภัย น้องนำทางไม่พบข้อมูลครับ" : "I couldn't find that information.";
+            displayResponse(fallback);
+            speak(fallback);
+        }
+    } catch (err) {
+        console.error("Database Error:", err);
+        resetSystemState();
+        restartIdleTimer();
+    }
 }
 
 /**
- * 6. ระบบเสียง (Speech)
+ * 6. ระบบเสียง (Speech with Error Handling)
  */
 function speak(text) {
     if (!text) return;
@@ -224,22 +276,35 @@ function speak(text) {
         if (window.isBusy) {
             window.isBusy = false;
             updateLottie('idle');
+            restartIdleTimer();
         }
     }, safetyTime);
 
     const msg = new SpeechSynthesisUtterance(text.replace(/[*#-]/g, ""));
     msg.lang = (window.currentLang === 'th') ? 'th-TH' : 'en-US';
-    msg.onstart = () => { window.isBusy = true; updateLottie('talking'); };
+    
+    msg.onstart = () => { 
+        window.isBusy = true; 
+        updateLottie('talking'); 
+    };
+    
     msg.onend = () => { 
         console.log("🔊 Speech Finished");
         if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
         window.isBusy = false;
         updateLottie('idle'); 
-        
-        // พูดจบปุ๊บ เริ่มนับถอยหลังเพื่อเตรียมกลับ Home (30 วิ)
         isAtHome = false; 
         updateInteractionTime(); 
     };
+
+    // เพิ่มการดักจับ Error
+    msg.onerror = (e) => {
+        console.error("Speech Error:", e);
+        window.isBusy = false;
+        updateLottie('idle');
+        restartIdleTimer();
+    };
+
     window.speechSynthesis.speak(msg);
 }
 
