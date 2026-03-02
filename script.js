@@ -1,5 +1,6 @@
 /**
  * สมองกลน้องนำทาง - เวอร์ชั่น Ultra Stable (Final Fix Reset Loop)
+ * ปรับปรุงล่าสุด: ป้องกัน Loop Reset, ระบบเสียงค้าง และจัดการ State หน้าหลัก
  */
 
 window.localDatabase = null;
@@ -7,7 +8,7 @@ window.currentLang = 'th';
 window.isMuted = false; 
 window.isBusy = false; 
 window.hasGreeted = false;
-let isAtHome = true; // เพิ่มเพื่อเช็คว่าอยู่หน้าหลักหรือไม่ ป้องกัน Loop
+let isAtHome = true; // ควบคุมสถานะหน้าหลักเพื่อหยุด Loop
 
 const GAS_URL = "https://script.google.com/macros/s/AKfycbz1bkIsQ588u-rpjY-8nMlya5_c0DsIabRvyPyCC_sPs5vyeJ_1wcOBaqKfg7cvlM3XJw/exec"; 
 
@@ -35,7 +36,7 @@ function resetSystemState() {
 
 function updateInteractionTime() {
     lastSeenTime = Date.now();
-    // ถ้าไม่อยู่หน้า Home ให้เริ่มนับถอยหลังเพื่อเตรียมกลับ Home
+    // เริ่มนับถอยหลังใหม่เฉพาะเมื่อไม่ได้อยู่หน้า Home
     if (!isAtHome) {
         restartIdleTimer();
     }
@@ -53,7 +54,7 @@ window.switchLanguage = function(lang) {
         : "Switched to English. How can I help you?";
     displayResponse(welcomeMsg);
     renderFAQButtons(); 
-    isAtHome = false; // เมื่อเปลี่ยนภาษา ถือว่ามีการใช้งาน ไม่ใช่หน้า Home ปกติ
+    isAtHome = false; 
     updateInteractionTime();
 };
 
@@ -75,15 +76,13 @@ function resetToHome() {
     const idleDuration = now - lastSeenTime;
     const noInteraction = (idleDuration >= IDLE_TIME_LIMIT);
 
-    // หากยังไม่พร้อม Reset (ยุ่งอยู่ หรือ มีคนอยู่ หรือ เวลายังไม่ครบ)
+    // ป้องกันการ Reset หากยังยุ่งอยู่ หรือมีคนอยู่
     if (window.isBusy || personInFrameTime !== null || !noInteraction) {
-        // ถ้าเงื่อนไขยังไม่ครบ ให้มาเช็คใหม่ในอีก 5 วินาที
         restartIdleTimer(); 
         return;
     }
 
-    // --- ส่วนที่ทำงานเมื่อต้องการกลับหน้า Home จริงๆ เท่านั้น ---
-    if (isAtHome) return; // ถ้าอยู่หน้า Home อยู่แล้ว ไม่ต้องรันซ้ำ
+    if (isAtHome) return; 
 
     console.log("✅ [SUCCESS] Returning to Home Screen. Stopping Timer.");
     
@@ -91,13 +90,13 @@ function resetToHome() {
     forceUnmute(); 
     window.hasGreeted = false;      
     personInFrameTime = null;       
-    isAtHome = true; // ตั้งสถานะว่าอยู่หน้า Home แล้ว
+    isAtHome = true; 
 
     const welcomeMsg = window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone to ask for information.";
     displayResponse(welcomeMsg);
     renderFAQButtons(); 
 
-    // หยุด Timer ทันที
+    // หยุด Timer ทันทีเพื่อไม่ให้เกิด Infinite Loop
     if (idleTimer) {
         clearTimeout(idleTimer);
         idleTimer = null;
@@ -106,8 +105,10 @@ function resetToHome() {
 
 function restartIdleTimer() {
     if (idleTimer) clearTimeout(idleTimer);
-    // เช็คสถานะทุก 5 วินาที
-    idleTimer = setTimeout(resetToHome, 5000); 
+    // รัน Timer เฉพาะเมื่อมีการใช้งาน (isAtHome = false)
+    if (!isAtHome) {
+        idleTimer = setTimeout(resetToHome, 5000); 
+    }
 }
 
 /**
@@ -150,7 +151,6 @@ async function detectPerson() {
             personInFrameTime = now;
         }
         
-        // ถ้าเจอคน ให้รีเซ็ตเวลาความเคลื่อนไหว และถ้าอยู่นิ่งๆ นานพอให้ทักทาย
         lastSeenTime = now;
         if (isAtHome) {
             const stayDuration = now - personInFrameTime;
@@ -158,7 +158,6 @@ async function detectPerson() {
                 greetUser();
             }
         } else {
-            // ถ้าไม่ได้อยู่หน้า Home (หน้าคำตอบ) ให้ต่อเวลา Reset ออกไป
             updateInteractionTime();
         }
     } else {
@@ -177,7 +176,7 @@ async function detectPerson() {
 function greetUser() {
     if (window.hasGreeted || window.isBusy) return; 
     forceUnmute();
-    isAtHome = false; // เมื่อเริ่มทักทาย ถือว่าเข้าสู่สถานะปฏิสัมพันธ์
+    isAtHome = false; 
     
     const hour = new Date().getHours();
     let thTime = hour < 12 ? "สวัสดีตอนเช้าครับ" : (hour < 18 ? "สวัสดีตอนบ่ายครับ" : "สวัสดีครับ");
@@ -193,18 +192,17 @@ function greetUser() {
 }
 
 /**
- * 4. ระบบประมวลผลคำตอบ (Complete Version)
+ * 4. ระบบประมวลผลคำตอบ
  */
 async function getResponse(userQuery) {
     if (!userQuery || window.isBusy || !window.localDatabase) return;
     
-    isAtHome = false; // ป้องกันการ Reset ขณะประมวลผล
+    isAtHome = false; 
     updateInteractionTime(); 
     resetSystemState(); 
     window.isBusy = true;
     updateLottie('thinking');
     
-    // ตั้งเวลา Timeout กรณีเชื่อมต่อ Database ช้า
     const fetchTimeout = setTimeout(() => {
         if (window.isBusy) {
             window.isBusy = false;
@@ -215,13 +213,11 @@ async function getResponse(userQuery) {
     }, 10000);
 
     try {
-        // บันทึก Log ไปยัง GAS (Optional)
         fetch(`${GAS_URL}?query=${encodeURIComponent(userQuery.trim())}&action=logOnly`, { mode: 'no-cors' });
 
         const query = userQuery.toLowerCase().trim();
         let bestMatch = { answer: "", score: 0, matchedKey: "" };
 
-        // Logic การค้นหาใน Database
         Object.keys(window.localDatabase).forEach(sheetName => {
             if (["Lottie_State", "Config", "FAQ"].includes(sheetName)) return;
             window.localDatabase[sheetName].forEach((item) => {
@@ -262,7 +258,42 @@ async function getResponse(userQuery) {
 }
 
 /**
- * 6. ระบบเสียง (Speech with Error Handling)
+ * 5. ระบบปุ่มยืนยัน
+ */
+function renderConfirmButtons(answer) {
+    const container = document.getElementById('faq-container');
+    if (!container) return;
+    container.innerHTML = ""; 
+
+    const btnYes = document.createElement('button');
+    btnYes.className = 'faq-btn';
+    btnYes.style.border = "2px solid #2ecc71";
+    btnYes.innerHTML = window.currentLang === 'th' ? '<i class="fas fa-check"></i> ใช่' : 'Yes';
+    btnYes.onclick = () => {
+        isAtHome = false;
+        updateInteractionTime();
+        resetSystemState();
+        displayResponse(answer);
+        container.innerHTML = ""; 
+        setTimeout(() => speak(answer), 250);
+    };
+
+    const btnNo = document.createElement('button');
+    btnNo.className = 'faq-btn';
+    btnNo.style.border = "2px solid #e74c3c";
+    btnNo.innerHTML = window.currentLang === 'th' ? '<i class="fas fa-times"></i> ไม่ใช่' : 'No';
+    btnNo.onclick = () => {
+        resetSystemState();
+        renderFAQButtons(); 
+        updateInteractionTime();
+    };
+
+    container.appendChild(btnYes);
+    container.appendChild(btnNo);
+}
+
+/**
+ * 6. ระบบเสียง (Speech with Safety Timeout)
  */
 function speak(text) {
     if (!text) return;
@@ -297,7 +328,6 @@ function speak(text) {
         updateInteractionTime(); 
     };
 
-    // เพิ่มการดักจับ Error
     msg.onerror = (e) => {
         console.error("Speech Error:", e);
         window.isBusy = false;
@@ -309,7 +339,7 @@ function speak(text) {
 }
 
 /**
- * 7. ระบบเริ่มต้น
+ * 7. ระบบเริ่มต้นและช่วยเหลือ
  */
 async function initDatabase() {
     try {
@@ -321,11 +351,10 @@ async function initDatabase() {
             resetSystemState();
             renderFAQButtons();
             initCamera(); 
-            displayResponse(window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone to ask for information.");
+            displayResponse(window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone.");
+            console.log("🚀 System Online");
         }
-    } catch (e) { 
-        setTimeout(initDatabase, 5000); 
-    }
+    } catch (e) { setTimeout(initDatabase, 5000); }
 }
 
 function renderFAQButtons() {
@@ -392,28 +421,19 @@ function editDistance(s1, s2) {
 initDatabase();
 
 /**
- * 8. ระบบดักจับ Event พิเศษ (ป้องกันเสียงค้างเมื่อปิด/รีเฟรชหน้าจอ)
+ * 8. ระบบดักจับ Event พิเศษ
  */
 const stopAllSpeech = () => {
-    // หยุดการประมวลผลเสียงทันที
     window.speechSynthesis.pause(); 
     window.speechSynthesis.cancel();
-    
-    // ล้างสถานะ Timeout และตัวแปรควบคุม
-    if (typeof speechSafetyTimeout !== 'undefined') clearTimeout(speechSafetyTimeout);
+    if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
     window.isBusy = false;
-    
-    // คืนค่า Lottie เป็นท่าพัก (Idle)
-    if (typeof updateLottie === 'function') updateLottie('idle');
-    
+    updateLottie('idle');
     console.log("System Speech Terminated.");
 };
 
-// ดักจับการปิดหน้าต่าง หรือสลับไปหน้าอื่น (ป้องกันเสียงหลอน)
 window.addEventListener('pagehide', stopAllSpeech);
 window.addEventListener('beforeunload', stopAllSpeech);
-
-// สำหรับตู้ Kiosk: หยุดเสียงเมื่อจอดับหรือสลับแอป
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') stopAllSpeech();
 });
