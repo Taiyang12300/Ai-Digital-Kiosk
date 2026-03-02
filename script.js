@@ -1,6 +1,6 @@
 /**
- * สมองกลน้องนำทาง - เวอร์ชั่น Ultra Stable (Final Fix Reset Loop)
- * ปรับปรุงล่าสุด: ป้องกัน Loop Reset, ระบบเสียงค้าง และจัดการ State หน้าหลัก
+ * สมองกลน้องนำทาง - เวอร์ชั่น Ultra Stable (Presence-Aware Edition)
+ * ปรับปรุงล่าสุด: แยกแยะคนเดินผ่าน/ยืนแช่, พื้นที่ว่าง 10s ก่อนเริ่ม Countdown
  */
 
 window.localDatabase = null;
@@ -8,13 +8,13 @@ window.currentLang = 'th';
 window.isMuted = false; 
 window.isBusy = false; 
 window.hasGreeted = false;
-let isAtHome = true; // ควบคุมสถานะหน้าหลักเพื่อหยุด Loop
+let isAtHome = true; 
 
 const GAS_URL = "https://script.google.com/macros/s/AKfycbz1bkIsQ588u-rpjY-8nMlya5_c0DsIabRvyPyCC_sPs5vyeJ_1wcOBaqKfg7cvlM3XJw/exec"; 
 
 let idleTimer = null; 
 let speechSafetyTimeout = null; 
-const IDLE_TIME_LIMIT = 30000; 
+const IDLE_TIME_LIMIT = 30000; // 30 วินาทีสุดท้ายก่อน Reset
 let video = document.getElementById('video');
 let cocoModel = null; 
 let isDetecting = true; 
@@ -36,7 +36,7 @@ function resetSystemState() {
 
 function updateInteractionTime() {
     lastSeenTime = Date.now();
-    // เริ่มนับถอยหลังใหม่เฉพาะเมื่อไม่ได้อยู่หน้า Home
+    // จะเริ่มนับถอยหลังใหม่เฉพาะเมื่อไม่ได้อยู่หน้า Home และไม่มีใครขวาง
     if (!isAtHome) {
         restartIdleTimer();
     }
@@ -76,15 +76,15 @@ function resetToHome() {
     const idleDuration = now - lastSeenTime;
     const noInteraction = (idleDuration >= IDLE_TIME_LIMIT);
 
-    // ป้องกันการ Reset หากยังยุ่งอยู่ หรือมีคนอยู่
+    // ป้องกันการ Reset หากยุ่งอยู่ หรือ AI ยังเห็นคนยืนแช่อยู่
     if (window.isBusy || personInFrameTime !== null || !noInteraction) {
-        restartIdleTimer(); 
+        if (!isAtHome) restartIdleTimer(); 
         return;
     }
 
     if (isAtHome) return; 
 
-    console.log("✅ [SUCCESS] Returning to Home Screen. Stopping Timer.");
+    console.log("✅ [SUCCESS] Returning to Home Screen.");
     
     resetSystemState();
     forceUnmute(); 
@@ -96,7 +96,6 @@ function resetToHome() {
     displayResponse(welcomeMsg);
     renderFAQButtons(); 
 
-    // หยุด Timer ทันทีเพื่อไม่ให้เกิด Infinite Loop
     if (idleTimer) {
         clearTimeout(idleTimer);
         idleTimer = null;
@@ -105,14 +104,14 @@ function resetToHome() {
 
 function restartIdleTimer() {
     if (idleTimer) clearTimeout(idleTimer);
-    // รัน Timer เฉพาะเมื่อมีการใช้งาน (isAtHome = false)
     if (!isAtHome) {
-        idleTimer = setTimeout(resetToHome, 5000); 
+        console.log("⏳ Starting 30s Reset Countdown...");
+        idleTimer = setTimeout(resetToHome, IDLE_TIME_LIMIT); 
     }
 }
 
 /**
- * 3. ระบบดวงตา AI
+ * 3. ระบบดวงตา AI (แยกคนเดินผ่าน/ยืนแช่)
  */
 async function initCamera() {
     try {
@@ -143,30 +142,45 @@ async function detectPerson() {
     lastDetectionTime = now;
 
     const predictions = await cocoModel.detect(video);
-    const person = predictions.find(p => p.class === "person" && p.score > 0.75);
+    const person = predictions.find(p => p.class === "person" && p.score > 0.75 && p.bbox[2] > 130); 
 
     if (person) {
-        if (personInFrameTime === null) {
-            console.log("👤 Person Detected");
-            personInFrameTime = now;
-        }
+        // --- กรณีพบคน ---
+        if (personInFrameTime === null) personInFrameTime = now;
         
-        lastSeenTime = now;
-        if (isAtHome) {
-            const stayDuration = now - personInFrameTime;
-            if (!window.isBusy && !window.hasGreeted && stayDuration >= 3000) {
+        const stayDuration = now - personInFrameTime;
+
+        // เงื่อนไข: ต้องยืนแช่เกิน 2 วินาที ถึงจะถือว่า "ตั้งใจใช้งาน"
+        if (stayDuration >= 2000) { 
+            lastSeenTime = now; // อัปเดตเวลาโต้ตอบล่าสุด
+
+            if (!isAtHome) {
+                // ถ้ามีคนยืนแช่หน้าคำตอบ ให้หยุดนาฬิกา Reset ทันที (ให้เขาอ่านต่อ)
+                if (idleTimer) {
+                    console.log("⏸️ Person Confirmed Staying. Stopping Reset Timer.");
+                    clearTimeout(idleTimer);
+                    idleTimer = null;
+                }
+            } else if (!window.isBusy && !window.hasGreeted && stayDuration >= 3000) {
+                // ถ้าอยู่หน้า Home และยืนนิ่งครบ 3 วิ ให้น้องทักทาย
                 greetUser();
             }
-        } else {
-            updateInteractionTime();
         }
     } else {
+        // --- กรณีไม่พบคน ---
         if (personInFrameTime !== null) {
             const timeSinceLastSeen = now - lastSeenTime;
-            if (timeSinceLastSeen >= 5000) { 
-                console.log("🚫 Area Cleared");
+
+            // รอจนพื้นที่ว่างนิ่งๆ ครบ 10 วินาที ถึงจะยอมรับว่า "ไม่มีคนแล้ว"
+            if (timeSinceLastSeen >= 10000) { 
+                console.log("🚫 Area truly empty for 10s. Ready to start 30s Countdown.");
                 personInFrameTime = null;
                 window.hasGreeted = false;
+                
+                // เริ่มนับถอยหลังกลับ Home
+                if (!isAtHome) {
+                    restartIdleTimer(); 
+                }
             }
         }
     }
@@ -293,7 +307,7 @@ function renderConfirmButtons(answer) {
 }
 
 /**
- * 6. ระบบเสียง (Speech with Safety Timeout)
+ * 6. ระบบเสียง
  */
 function speak(text) {
     if (!text) return;
@@ -320,7 +334,6 @@ function speak(text) {
     };
     
     msg.onend = () => { 
-        console.log("🔊 Speech Finished");
         if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
         window.isBusy = false;
         updateLottie('idle'); 
@@ -329,7 +342,6 @@ function speak(text) {
     };
 
     msg.onerror = (e) => {
-        console.error("Speech Error:", e);
         window.isBusy = false;
         updateLottie('idle');
         restartIdleTimer();
@@ -429,7 +441,6 @@ const stopAllSpeech = () => {
     if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
     window.isBusy = false;
     updateLottie('idle');
-    console.log("System Speech Terminated.");
 };
 
 window.addEventListener('pagehide', stopAllSpeech);
@@ -437,3 +448,4 @@ window.addEventListener('beforeunload', stopAllSpeech);
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') stopAllSpeech();
 });
+    
