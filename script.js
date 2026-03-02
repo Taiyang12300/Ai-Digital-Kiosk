@@ -417,3 +417,31 @@ function editDistance(s1, s2) {
 }
 
 initDatabase();
+
+/**
+ * 8. ระบบดักจับ Event พิเศษ (ป้องกันเสียงค้างเมื่อปิด/รีเฟรชหน้าจอ)
+ */
+const stopAllSpeech = () => {
+    // หยุดการประมวลผลเสียงทันที
+    window.speechSynthesis.pause(); 
+    window.speechSynthesis.cancel();
+    
+    // ล้างสถานะ Timeout และตัวแปรควบคุม
+    if (typeof speechSafetyTimeout !== 'undefined') clearTimeout(speechSafetyTimeout);
+    window.isBusy = false;
+    
+    // คืนค่า Lottie เป็นท่าพัก (Idle)
+    if (typeof updateLottie === 'function') updateLottie('idle');
+    
+    console.log("System Speech Terminated.");
+};
+
+// ดักจับการปิดหน้าต่าง หรือสลับไปหน้าอื่น (ป้องกันเสียงหลอน)
+window.addEventListener('pagehide', stopAllSpeech);
+window.addEventListener('beforeunload', stopAllSpeech);
+
+// สำหรับตู้ Kiosk: หยุดเสียงเมื่อจอดับหรือสลับแอป
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') stopAllSpeech();
+});
+
