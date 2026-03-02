@@ -246,7 +246,6 @@ function renderConfirmButtons(answer) {
     if (!container) return;
     container.innerHTML = ""; 
 
-    // ปุ่ม "ใช่"
     const btnYes = document.createElement('button');
     btnYes.className = 'faq-btn';
     btnYes.style.border = "2px solid #2ecc71";
@@ -254,25 +253,29 @@ function renderConfirmButtons(answer) {
     btnYes.innerHTML = (window.currentLang === 'th') ? '<i class="fas fa-check"></i> ใช่' : '<i class="fas fa-check"></i> Yes';
     
     btnYes.onclick = () => {
-        // --- ส่วนที่ป้องกันการค้าง ---
-        window.speechSynthesis.cancel(); // หยุดเสียงที่กำลังพูดอยู่ทันที
-        clearTimeout(speechSafetyTimeout); // ล้างคิว Safety เดิม
-        window.isBusy = false; // ปลดล็อคสถานะ Busy ทันทีเพื่อให้ speak ทำงานได้
+        // --- Hard Reset ระบบเสียงและสถานะ ---
+        window.speechSynthesis.pause(); // หยุดชั่วคราวก่อน
+        window.speechSynthesis.cancel(); // ล้างคิวทั้งหมด
+        clearTimeout(speechSafetyTimeout);
         
+        // บังคับปลดล็อคสถานะเพื่อให้พร้อมทำงานใหม่
+        window.isBusy = false; 
+        updateLottie('idle');
+
         displayResponse(answer);
         
-        // หน่วงเวลาเล็กน้อยเพื่อให้ระบบเสียงเดิมหยุดสนิทก่อนเริ่มประโยคใหม่
+        // ปิดปุ่มทันทีเพื่อกันคนกดซ้ำระหว่างรอเสียง
+        container.innerHTML = ""; 
+
+        // หน่วงเวลา 250ms เพื่อให้ Browser เคลียร์ทรัพยากรเสียงเดิมทิ้งจริงๆ
         setTimeout(() => {
             speak(answer);
-        }, 150);
+        }, 250);
 
-        // แสดงคำตอบทิ้งไว้ 8 วินาที แล้วกลับหน้า FAQ หลัก
-        // (เราล้าง container.innerHTML เพื่อไม่ให้กดซ้ำได้ระหว่างประมวลผล)
-        container.innerHTML = ""; 
+        // กลับหน้าหลักหลังพูดจบ (ประมาณ 8 วิ)
         setTimeout(renderFAQButtons, 8000); 
     };
 
-    // ปุ่ม "ไม่ใช่"
     const btnNo = document.createElement('button');
     btnNo.className = 'faq-btn';
     btnNo.style.border = "2px solid #e74c3c";
@@ -280,14 +283,9 @@ function renderConfirmButtons(answer) {
     btnNo.innerHTML = (window.currentLang === 'th') ? '<i class="fas fa-times"></i> ไม่ใช่' : '<i class="fas fa-times"></i> No';
     
     btnNo.onclick = () => {
-        // --- ส่วนที่ป้องกันการค้าง ---
-        window.speechSynthesis.cancel(); // หยุดเสียงที่กำลังถามอยู่
-        clearTimeout(speechSafetyTimeout);
+        window.speechSynthesis.cancel();
         window.isBusy = false;
-
         displayResponse((window.currentLang === 'th') ? "ขออภัยครับ ลองถามใหม่อีกครั้งนะ" : "Sorry, please try asking again.");
-        
-        // กลับไปหน้า FAQ หลักทันที
         renderFAQButtons(); 
     };
 
@@ -300,9 +298,12 @@ function renderConfirmButtons(answer) {
  */
 function speak(text) {
     if (!text) return;
-    window.speechSynthesis.cancel(); // ล้างคิวเก่าทุกครั้งก่อนพูดเพื่อกันค้าง
+
+    // ล้างสถานะเก่าก่อนเริ่มใหม่
+    window.speechSynthesis.cancel();
     forceUnmute();
     
+    // ตั้งค่าความปลอดภัย (Unlock)
     const safetyTime = (text.length * 200) + 5000;
     clearTimeout(speechSafetyTimeout);
     speechSafetyTimeout = setTimeout(() => {
@@ -325,7 +326,11 @@ function speak(text) {
         restartIdleTimer(); 
     };
 
-    msg.onerror = () => { resetSystemState(); };
+    // หากเกิด Error ให้ปลด Busy ทันที
+    msg.onerror = () => {
+        console.error("Speech Error");
+        resetSystemState();
+    };
 
     window.speechSynthesis.speak(msg);
 }
