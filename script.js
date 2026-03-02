@@ -244,29 +244,51 @@ async function getResponse(userQuery) {
 function renderConfirmButtons(answer) {
     const container = document.getElementById('faq-container');
     if (!container) return;
-    container.innerHTML = ""; // ล้างปุ่ม FAQ เดิม
+    container.innerHTML = ""; 
 
-    // ปุ่ม "ใช่" (สีเขียว)
+    // ปุ่ม "ใช่"
     const btnYes = document.createElement('button');
     btnYes.className = 'faq-btn';
     btnYes.style.border = "2px solid #2ecc71";
     btnYes.style.background = "#f1fdf6";
     btnYes.innerHTML = (window.currentLang === 'th') ? '<i class="fas fa-check"></i> ใช่' : '<i class="fas fa-check"></i> Yes';
+    
     btnYes.onclick = () => {
+        // --- ส่วนที่ป้องกันการค้าง ---
+        window.speechSynthesis.cancel(); // หยุดเสียงที่กำลังพูดอยู่ทันที
+        clearTimeout(speechSafetyTimeout); // ล้างคิว Safety เดิม
+        window.isBusy = false; // ปลดล็อคสถานะ Busy ทันทีเพื่อให้ speak ทำงานได้
+        
         displayResponse(answer);
-        speak(answer);
-        setTimeout(renderFAQButtons, 5000); // แสดงคำตอบ 5 วิแล้วกลับไปปุ่มปกติ
+        
+        // หน่วงเวลาเล็กน้อยเพื่อให้ระบบเสียงเดิมหยุดสนิทก่อนเริ่มประโยคใหม่
+        setTimeout(() => {
+            speak(answer);
+        }, 150);
+
+        // แสดงคำตอบทิ้งไว้ 8 วินาที แล้วกลับหน้า FAQ หลัก
+        // (เราล้าง container.innerHTML เพื่อไม่ให้กดซ้ำได้ระหว่างประมวลผล)
+        container.innerHTML = ""; 
+        setTimeout(renderFAQButtons, 8000); 
     };
 
-    // ปุ่ม "ไม่ใช่" (สีแดง)
+    // ปุ่ม "ไม่ใช่"
     const btnNo = document.createElement('button');
     btnNo.className = 'faq-btn';
     btnNo.style.border = "2px solid #e74c3c";
     btnNo.style.background = "#fdf2f1";
     btnNo.innerHTML = (window.currentLang === 'th') ? '<i class="fas fa-times"></i> ไม่ใช่' : '<i class="fas fa-times"></i> No';
+    
     btnNo.onclick = () => {
-        displayResponse((window.currentLang === 'th') ? "ลองถามใหม่อีกครั้งนะครับ" : "Please try asking again.");
-        renderFAQButtons(); // คืนค่าปุ่ม FAQ ทันที
+        // --- ส่วนที่ป้องกันการค้าง ---
+        window.speechSynthesis.cancel(); // หยุดเสียงที่กำลังถามอยู่
+        clearTimeout(speechSafetyTimeout);
+        window.isBusy = false;
+
+        displayResponse((window.currentLang === 'th') ? "ขออภัยครับ ลองถามใหม่อีกครั้งนะ" : "Sorry, please try asking again.");
+        
+        // กลับไปหน้า FAQ หลักทันที
+        renderFAQButtons(); 
     };
 
     container.appendChild(btnYes);
