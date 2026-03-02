@@ -171,9 +171,9 @@ async function detectPerson() {
         if (personInFrameTime !== null) {
             const timeSinceLastSeen = now - lastSeenTime;
 
-            // รอจนพื้นที่ว่างนิ่งๆ ครบ 10 วินาที ถึงจะยอมรับว่า "ไม่มีคนแล้ว"
-            if (timeSinceLastSeen >= 10000) { 
-                console.log("🚫 Area truly empty for 10s. Ready to start 30s Countdown.");
+            // รอจนพื้นที่ว่างนิ่งๆ ครบ 5 วินาที ถึงจะยอมรับว่า "ไม่มีคนแล้ว"
+            if (timeSinceLastSeen >= 5000) { 
+                console.log("🚫 Area truly empty for5s. Ready to start 30s Countdown.");
                 personInFrameTime = null;
                 window.hasGreeted = false;
                 
