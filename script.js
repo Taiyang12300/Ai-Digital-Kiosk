@@ -156,7 +156,7 @@ async function getResponse(userQuery) {
     window.isBusy = true;
     updateLottie('thinking');
 
-    // ล้างอักขระพิเศษและคำเชื่อมที่ไม่จำเป็นเบื้องต้น
+    // ล้างอักขระพิเศษและคำเชื่อมที่ไม่จำเป็น
     const query = userQuery.toLowerCase().trim().replace(/[?？!！]/g, "");
 
     // --- [1. Conversation Flow: คัดกรองคำถามกว้าง] ---
@@ -164,7 +164,6 @@ async function getResponse(userQuery) {
                            (!query.includes("ชั่วคราว") && !query.includes("5 ปี") && !query.includes("2 ปี"));
 
     if (isBroadLicense) {
-        // ... (ส่วนการคัดกรองเหมือนเดิม) ...
         const askMsg = "ไม่ทราบว่าใบขับขี่ของท่านเป็นแบบชั่วคราว หรือแบบ 5 ปีครับ?";
         displayResponse(askMsg);
         speak(askMsg);
@@ -200,33 +199,32 @@ async function getResponse(userQuery) {
                     const lowerKey = key.toLowerCase();
                     
                     if (query === lowerKey) {
-                        score = 2.0; 
+                        score = 3.0; // เพิ่มน้ำหนักให้ Exact Match มากขึ้น
                         foundExact = true;
                     } else {
-                        // แยกคำที่ความยาวมากกว่า 1 (เพื่อเอาใจความสำคัญ)
-                        const keyTokens = lowerKey.split(/[\s,/-]+/).filter(t => t.length > 1);
-                        const queryTokens = query.split(/[\s,/-]+/).filter(t => t.length > 1);
+                        // --- [เพิ่ม Logic: ล็อกประเภทปีใบขับขี่] ---
+                        let yearBonus = 0;
+                        const isQuery5Year = query.includes("5 ปี") || query.includes("5ปี");
+                        const isQuery2Year = query.includes("2 ปี") || query.includes("2ปี") || query.includes("ชั่วคราว");
+                        const isKey5Year = lowerKey.includes("5 ปี") || lowerKey.includes("5ปี");
+                        const isKey2Year = lowerKey.includes("2 ปี") || lowerKey.includes("2ปี") || lowerKey.includes("ชั่วคราว");
 
-                        // 1. Keyword Hit Score (นับคำสำคัญที่ตรงกัน)
+                        if (isQuery5Year && isKey5Year) yearBonus = 1.0;
+                        if (isQuery2Year && isKey2Year) yearBonus = 1.0;
+                        // ถ้าคนถามถาม 5 ปี แต่ Key เป็น 2 ปี ให้ติดลบเพื่อป้องกันการสลับ
+                        if (isQuery5Year && isKey2Year) yearBonus = -1.0;
+                        if (isQuery2Year && isKey5Year) yearBonus = -1.0;
+
+                        // แยกคำเพื่อหาความสำคัญ (Tokens)
+                        const keyTokens = lowerKey.split(/[\s,/-]+/).filter(t => t.length > 1);
                         let matchCount = 0;
                         keyTokens.forEach(kt => { if (query.includes(kt)) matchCount++; });
                         const tokenScore = keyTokens.length > 0 ? (matchCount / keyTokens.length) : 0;
 
-                        // 2. Intent Alignment (เน้นจุดประสงค์เรื่อง เวลา/วันเปิด)
-                        let intentBonus = 0;
-                        const timeKeywords = ["เปิด", "วันไหน", "กี่โมง", "เมื่อไหร่", "จันทร์", "อังคาร", "พุธ", "พฤหัส", "ศุกร์"];
-                        const isQueryTime = timeKeywords.some(w => query.includes(w));
-                        const isKeyTime = timeKeywords.some(w => lowerKey.includes(w));
-                        
-                        // ถ้าคนถามถามเรื่องเวลา และหัวข้อใน Sheet เกี่ยวกับเวลา ให้โบนัสพิเศษ (+0.5)
-                        if (isQueryTime && isKeyTime) {
-                            intentBonus = 0.5;
-                        }
-
                         const simScore = calculateSimilarity(query, lowerKey);
                         
-                        // รวมคะแนน: โบนัสความตั้งใจสำคัญที่สุด (50%) ตามด้วยคำสำคัญ (40%) และความคล้าย (10%)
-                        score = (intentBonus) + (tokenScore * 0.8) + (simScore * 0.2);
+                        // รวมคะแนนใหม่ (ใช้ Year Bonus เป็นตัวตัดสินเด็ดขาด)
+                        score = (tokenScore * 0.7) + (simScore * 0.3) + yearBonus;
                     }
 
                     if (score > bestMatch.score) {
@@ -238,8 +236,7 @@ async function getResponse(userQuery) {
         }
 
         // --- [3. การตอบกลับ] ---
-        // ปรับเกณฑ์ตัดสินใจ (Threshold) เป็น 0.55 เพื่อความแม่นยำ
-        if (bestMatch.score >= 0.55) { 
+        if (bestMatch.score >= 0.5) { // ปรับ Threshold ลงเล็กน้อยหลังเพิ่ม Year Bonus
             displayResponse(bestMatch.answer);
             speak(bestMatch.answer);
         } else {
@@ -248,7 +245,11 @@ async function getResponse(userQuery) {
             speak(fallback);
             renderFAQButtons(); 
         }
-    } catch (err) { resetSystemState(); restartIdleTimer(); }
+    } catch (err) { 
+        console.error(err);
+        resetSystemState(); 
+        restartIdleTimer(); 
+    }
 }
 
 /**
