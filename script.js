@@ -156,7 +156,7 @@ async function getResponse(userQuery) {
     window.isBusy = true;
     updateLottie('thinking');
 
-    // ล้างอักขระพิเศษเพื่อให้เปรียบเทียบคำได้ง่ายขึ้น
+    // ล้างอักขระพิเศษและคำเชื่อมที่ไม่จำเป็นเบื้องต้น
     const query = userQuery.toLowerCase().trim().replace(/[?？!！]/g, "");
 
     // --- [1. Conversation Flow: คัดกรองคำถามกว้าง] ---
@@ -164,6 +164,7 @@ async function getResponse(userQuery) {
                            (!query.includes("ชั่วคราว") && !query.includes("5 ปี") && !query.includes("2 ปี"));
 
     if (isBroadLicense) {
+        // ... (ส่วนการคัดกรองเหมือนเดิม) ...
         const askMsg = "ไม่ทราบว่าใบขับขี่ของท่านเป็นแบบชั่วคราว หรือแบบ 5 ปีครับ?";
         displayResponse(askMsg);
         speak(askMsg);
@@ -175,14 +176,13 @@ async function getResponse(userQuery) {
         return; 
     }
 
-    // --- [2. Smart Search: VIP & Intent-Based Scoring] ---
+    // --- [2. Smart Search: High Intelligence Logic] ---
     try {
         fetch(`${GAS_URL}?query=${encodeURIComponent(query)}&action=logOnly`, { mode: 'no-cors' });
         let bestMatch = { answer: "", score: 0 };
         let foundExact = false;
 
-        const sheetNames = Object.keys(window.localDatabase);
-        for (const sheetName of sheetNames) {
+        for (const sheetName of Object.keys(window.localDatabase)) {
             if (["Lottie_State", "Config", "FAQ"].includes(sheetName) || foundExact) continue;
 
             const rows = window.localDatabase[sheetName];
@@ -199,38 +199,34 @@ async function getResponse(userQuery) {
                     let score = 0;
                     const lowerKey = key.toLowerCase();
                     
-                    // --- อันดับ 1: ตรงเป๊ะ (VIP) ---
                     if (query === lowerKey) {
                         score = 2.0; 
                         foundExact = true;
                     } else {
-                        // --- อันดับ 2: วิเคราะห์ใจความ (NLP Hybrid) ---
-                        // 1. แยกคำสำคัญ (ลบคำสั้นๆ ออกเพื่อให้เหลือใจความหลัก)
+                        // แยกคำที่ความยาวมากกว่า 1 (เพื่อเอาใจความสำคัญ)
                         const keyTokens = lowerKey.split(/[\s,/-]+/).filter(t => t.length > 1);
                         const queryTokens = query.split(/[\s,/-]+/).filter(t => t.length > 1);
 
-                        // Match Score: คีย์เวิร์ดใน Sheet ปรากฏในคำถามกี่ %
+                        // 1. Keyword Hit Score (นับคำสำคัญที่ตรงกัน)
                         let matchCount = 0;
                         keyTokens.forEach(kt => { if (query.includes(kt)) matchCount++; });
                         const tokenScore = keyTokens.length > 0 ? (matchCount / keyTokens.length) : 0;
 
-                        // Coverage Score: คำถามถูก Keyword นี้ครอบคลุมกี่ % 
-                        let coverageCount = 0;
-                        queryTokens.forEach(qt => { if (lowerKey.includes(qt)) coverageCount++; });
-                        const coverageScore = queryTokens.length > 0 ? (coverageCount / queryTokens.length) : 0;
-
-                        // Intent Bonus: โบนัสสำหรับคำระบุความต้องการ (เปิด, วันไหน, กี่โมง)
+                        // 2. Intent Alignment (เน้นจุดประสงค์เรื่อง เวลา/วันเปิด)
                         let intentBonus = 0;
-                        const intentWords = ["เปิด", "วันไหน", "วันใด", "กี่โมง", "เมื่อไหร่", "จันทร์", "อังคาร", "พุธ", "พฤหัส", "ศุกร์"];
-                        intentWords.forEach(word => {
-                            if (query.includes(word) && lowerKey.includes(word)) intentBonus += 0.2;
-                        });
+                        const timeKeywords = ["เปิด", "วันไหน", "กี่โมง", "เมื่อไหร่", "จันทร์", "อังคาร", "พุธ", "พฤหัส", "ศุกร์"];
+                        const isQueryTime = timeKeywords.some(w => query.includes(w));
+                        const isKeyTime = timeKeywords.some(w => lowerKey.includes(w));
+                        
+                        // ถ้าคนถามถามเรื่องเวลา และหัวข้อใน Sheet เกี่ยวกับเวลา ให้โบนัสพิเศษ (+0.5)
+                        if (isQueryTime && isKeyTime) {
+                            intentBonus = 0.5;
+                        }
 
                         const simScore = calculateSimilarity(query, lowerKey);
                         
-                        // รวมคะแนน: เน้นทั้งความหมาย (Token) และเจตนา (Intent Bonus)
-                        const combinedScore = (tokenScore * 0.5) + (coverageScore * 0.5);
-                        score = (combinedScore * 0.7) + (simScore * 0.1) + intentBonus;
+                        // รวมคะแนน: โบนัสความตั้งใจสำคัญที่สุด (50%) ตามด้วยคำสำคัญ (40%) และความคล้าย (10%)
+                        score = (intentBonus) + (tokenScore * 0.8) + (simScore * 0.2);
                     }
 
                     if (score > bestMatch.score) {
@@ -242,8 +238,8 @@ async function getResponse(userQuery) {
         }
 
         // --- [3. การตอบกลับ] ---
-        // ปรับ Threshold ลงเล็กน้อย (0.5) เพื่อให้เจอง่ายขึ้นในภาษาไทยที่ไม่มีการเว้นวรรค
-        if (bestMatch.score >= 0.5) { 
+        // ปรับเกณฑ์ตัดสินใจ (Threshold) เป็น 0.55 เพื่อความแม่นยำ
+        if (bestMatch.score >= 0.55) { 
             displayResponse(bestMatch.answer);
             speak(bestMatch.answer);
         } else {
@@ -252,11 +248,7 @@ async function getResponse(userQuery) {
             speak(fallback);
             renderFAQButtons(); 
         }
-    } catch (err) { 
-        console.error("Search Error:", err);
-        resetSystemState(); 
-        restartIdleTimer(); 
-    }
+    } catch (err) { resetSystemState(); restartIdleTimer(); }
 }
 
 /**
