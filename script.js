@@ -392,4 +392,3 @@ function renderOptionButtons(options) {
         container.appendChild(btn);
     });
 }
-}
