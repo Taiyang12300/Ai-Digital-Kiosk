@@ -306,23 +306,79 @@ async function getResponse(userQuery) {
                         const keyTokens = lowerKey.split(/[\s,/-]+/).filter(t => t.length > 0);
                         const queryTokens = query.split(/[\s,/-]+/).filter(t => t.length > 0);
 
-                        // 1. Token Score: Keyword ใน Sheet ปรากฏในคำถามกี่ %
+async function getResponse(userQuery) {
+    if (!userQuery || window.isBusy || !window.localDatabase) return;
+    
+    isAtHome = false; 
+    updateInteractionTime(); 
+    resetSystemState(); 
+    window.isBusy = true;
+    updateLottie('thinking');
+
+    const query = userQuery.toLowerCase().trim();
+
+    // --- [1. Conversation Flow: คัดกรองคำถามกว้าง] ---
+    const isBroadLicense = (query === "ต่อใบขับขี่" || query === "ใบขับขี่หมดอายุ") && 
+                           (!query.includes("ชั่วคราว") && !query.includes("5 ปี") && !query.includes("2 ปี"));
+
+    if (isBroadLicense) {
+        const askMsg = "ไม่ทราบว่าใบขับขี่ของท่านเป็นแบบชั่วคราว หรือแบบ 5 ปีครับ?";
+        displayResponse(askMsg);
+        speak(askMsg);
+        renderOptionButtons([
+            { t: "แบบชั่วคราว (2 ปี)", s: "ต่อใบขับขี่ชั่วคราว" },
+            { t: "แบบ 5 ปี เป็น 5 ปี", s: "ต่อใบขับขี่ 5 ปี" }
+        ]);
+        window.isBusy = false; 
+        return; 
+    }
+
+    // --- [2. Smart Search: VIP & Coverage Score Logic] ---
+    try {
+        fetch(`${GAS_URL}?query=${encodeURIComponent(query)}&action=logOnly`, { mode: 'no-cors' });
+        let bestMatch = { answer: "", score: 0 };
+        let foundExact = false;
+
+        for (const sheetName of Object.keys(window.localDatabase)) {
+            if (["Lottie_State", "Config", "FAQ"].includes(sheetName) || foundExact) continue;
+
+            for (const item of window.localDatabase[sheetName]) {
+                if (foundExact) break;
+                const rawKeys = item[0] ? item[0].toString().toLowerCase().trim() : "";
+                if (!rawKeys) continue;
+                
+                const keyList = rawKeys.split(/[,|]/).map(k => k.trim());
+                let ans = window.currentLang === 'th' ? (item[1] || "ไม่มีข้อมูล") : (item[2] || "No data");
+                
+                for (const key of keyList) {
+                    let score = 0;
+                    const lowerKey = key.toLowerCase();
+                    
+                    // --- อันดับ 1: ตรงเป๊ะ (VIP) ---
+                    if (query === lowerKey) {
+                        score = 2.0; 
+                        foundExact = true;
+                    } else {
+                        // --- อันดับ 2: วิเคราะห์ใจความ (NLP Hybrid) ---
+                        const keyTokens = lowerKey.split(/[\s,/-]+/).filter(t => t.length > 0);
+                        const queryTokens = query.split(/[\s,/-]+/).filter(t => t.length > 0);
+
+                        // Match Score: Keyword ใน Sheet ปรากฏในคำถามกี่ %
                         let matchCount = 0;
                         keyTokens.forEach(kt => { if (query.includes(kt)) matchCount++; });
                         const tokenScore = matchCount / keyTokens.length;
 
-                        // 2. Coverage Score: คำถามถูก Keyword นี้ครอบคลุมกี่ % 
-                        // (ช่วยป้องกันไม่ให้ "ทำใบขับขี่ใหม่" มาแย่งตอบ "ทำใบขับขี่ใหม่เปิดวันไหน")
+                        // Coverage Score: คำถามถูก Keyword นี้ครอบคลุมกี่ % 
+                        // (ช่วยกันไม่ให้ประโยคสั้น มาแย่งตอบคำถามที่ยาวกว่า)
                         let coverageCount = 0;
                         queryTokens.forEach(qt => { if (lowerKey.includes(qt)) coverageCount++; });
                         const coverageScore = coverageCount / queryTokens.length;
 
-                        // 3. ความคล้ายระดับตัวอักษร
                         const simScore = calculateSimilarity(query, lowerKey);
                         
-                        // รวมคะแนน (ให้น้ำหนัก Coverage เพื่อคัดกรองคำตอบที่ตรงประเด็นที่สุด)
-                        const finalTokenScore = (tokenScore * 0.6) + (coverageScore * 0.4);
-                        score = (finalTokenScore * 0.8) + (simScore * 0.2);
+                        // ถ่วงน้ำหนักคะแนน (เน้น Coverage เพื่อแยกแยะ "ทำใบขับขี่ใหม่" vs "ทำใบขับขี่ใหม่เปิดวันไหน")
+                        const combinedScore = (tokenScore * 0.6) + (coverageScore * 0.4);
+                        score = (combinedScore * 0.85) + (simScore * 0.15);
                     }
 
                     if (score > bestMatch.score) {
@@ -343,11 +399,7 @@ async function getResponse(userQuery) {
             speak(fallback);
             renderFAQButtons(); 
         }
-    } catch (err) { 
-        console.error("Search Error:", err);
-        resetSystemState(); 
-        restartIdleTimer(); 
-    }
+    } catch (err) { resetSystemState(); restartIdleTimer(); }
 }
 
 /**
