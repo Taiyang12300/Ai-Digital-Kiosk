@@ -128,17 +128,31 @@ async function detectPerson() {
 
 function greetUser() {
     if (window.hasGreeted || window.isBusy) return; 
+    
     forceUnmute();
-    isAtHome = false; 
+    isAtHome = false; // เพิ่มบรรทัดนี้เพื่อให้ระบบหยุดสถานะ Home ทันทีที่เริ่มทักทาย
+    
     const hour = new Date().getHours();
     let thTime = hour < 12 ? "สวัสดีตอนเช้าครับ" : (hour < 18 ? "สวัสดีตอนบ่ายครับ" : "สวัสดีครับ");
-    const list = [
-        `${thTime} มีอะไรให้น้องนำทางช่วยไหมครับ?`, 
-        "สำนักงานขนส่งพยัคฆภูมิพิสัย ยินดีต้อนรับครับ!", 
-        "สวัสดีครับ สอบถามข้อมูลเรื่องทำใบขับขี่หรือภาษีรถกับน้องได้นะครับ",
-        "สวัสดีครับ วันนี้มาติดต่อราชการด้านไหนดีครับ?"
-    ];
+    let enTime = hour < 12 ? "Good morning" : (hour < 18 ? "Good afternoon" : "Good day");
+
+    const greetings = {
+        th: [
+            `${thTime} มีอะไรให้น้องนำทางช่วยไหมครับ?`, 
+            "สำนักงานขนส่งพยัคฆภูมิพิสัยสวัสดีครับ", 
+            "สอบถามข้อมูลกับน้องนำทางได้นะครับ"
+        ],
+        en: [
+            `${enTime}! How can I help you?`, 
+            "Welcome! How can I assist you today?",
+            "Hello! I am here to help with your inquiries."
+        ]
+    };
+    
+    // เลือก List ตามภาษาปัจจุบัน (Default เป็นภาษาไทย)
+    const list = greetings[window.currentLang] || greetings['th'];
     let finalGreet = list[Math.floor(Math.random() * list.length)];
+    
     window.hasGreeted = true; 
     displayResponse(finalGreet);
     speak(finalGreet);
