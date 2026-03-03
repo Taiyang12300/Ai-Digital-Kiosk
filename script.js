@@ -370,24 +370,30 @@ function renderOptionButtons(options) {
     const container = document.getElementById('faq-container');
     if (!container) return;
     
-    // ล้างปุ่ม FAQ เดิมออกก่อนเพื่อแสดงตัวเลือกใหม่
+    // 1. ล้างปุ่ม FAQ เดิมออกเพื่อแสดงตัวเลือก (2 ปี / 5 ปี)
     container.innerHTML = ""; 
     
     options.forEach(opt => {
         const btn = document.createElement('button');
-        btn.className = 'faq-btn'; // ใช้ Class เดียวกับปุ่ม FAQ เพื่อความสวยงาม
         
-        // ปรับแต่งสไตล์เพิ่มเติมให้เด่นกว่าปกติ (Optional)
-        btn.style.border = "2px solid #3498db";
-        btn.style.backgroundColor = "#ebf5fb";
-        btn.style.fontWeight = "bold";
-        btn.style.color = "#2c3e50";
+        // 2. ใช้ Class 'faq-btn' เพื่อให้สีและตัวหนังสือเหมือนปุ่ม FAQ ทุกประการ
+        btn.className = 'faq-btn'; 
         
-        btn.innerText = opt.t; // ข้อความบนปุ่ม (เช่น "แบบชั่วคราว (2 ปี)")
+        // เพิ่มสไตล์เล็กน้อยเพื่อให้เด่นว่าเป็น "ตัวเลือก" (Optional)
+        btn.style.border = "2px solid var(--primary)"; 
+        btn.style.backgroundColor = "#f0edff"; 
         
-        // เมื่อคลิก ให้ส่งค่า s (คำค้นหา) ไปที่ getResponse อีกครั้ง
+        btn.innerText = opt.t; 
+        
         btn.onclick = () => {
+            // 3. ส่งคำถามไปประมวลผล
             getResponse(opt.s); 
+            
+            // 4. ล้างปุ่มตัวเลือกและดึงปุ่ม FAQ หลักกลับมาแสดงทันที
+            // ใช้ setTimeout เล็กน้อยเพื่อให้ดูนุ่มนวล
+            setTimeout(() => {
+                renderFAQButtons();
+            }, 800); 
         };
         
         container.appendChild(btn);
