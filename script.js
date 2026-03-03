@@ -325,7 +325,10 @@ function updateLottie(state) {
 
 function displayResponse(text) {
     const box = document.getElementById('response-text');
-    if (box) box.innerText = text;
+    if (box) {
+        // รองรับการเว้นบรรทัดจาก Google Sheets ให้แสดงผลสวยงาม
+        box.innerHTML = text.replace(/\n/g, '<br>');
+    }
 }
 
 function calculateSimilarity(s1, s2) {
