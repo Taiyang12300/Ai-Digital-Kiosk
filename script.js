@@ -114,7 +114,7 @@ async function detectPerson() {
         if (personInFrameTime === null) personInFrameTime = now;
         if (now - personInFrameTime >= 2000) {
             lastSeenTime = now; 
-            if (isAtHome && !window.isBusy && !window.hasGreeted && (now - personInFrameTime >= 3000)) {
+            if (isAtHome && !window.isBusy && !window.hasGreeted && (now - personInFrameTime >= 1500)) {
                 greetUser();
             }
         }
