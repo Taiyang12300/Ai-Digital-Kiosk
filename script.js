@@ -365,3 +365,25 @@ function editDistance(s1, s2) {
 
 initDatabase();
                         
+function renderOptionButtons(options) {
+    const container = document.getElementById('faq-container');
+    if (!container) return;
+    
+    container.innerHTML = ""; // ล้างปุ่ม FAQ เดิมออก
+    
+    options.forEach(opt => {
+        const btn = document.createElement('button');
+        btn.className = 'faq-btn';
+        // ตกแต่งปุ่มให้ดูเด่นกว่าปุ่ม FAQ ปกติ (ถ้าต้องการ)
+        btn.style.backgroundColor = "#e8f4fd";
+        btn.style.borderColor = "#3498db";
+        btn.style.color = "#2c3e50";
+        btn.style.fontWeight = "bold";
+        
+        btn.innerText = opt.t; // ข้อความบนปุ่ม
+        btn.onclick = () => {
+            getResponse(opt.s); // เมื่อกดให้ส่งคำค้นหาที่เตรียมไว้ (s) ไปประมวลผล
+        };
+        container.appendChild(btn);
+    });
+}
