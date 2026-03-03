@@ -149,7 +149,11 @@ function greetUser() {
  */
 async function getResponse(userQuery) {
     if (!userQuery || window.isBusy || !window.localDatabase) return;
-    
+
+    if (window.isBusy) {
+        stopAllSpeech(); 
+    }
+ 
     isAtHome = false; 
     updateInteractionTime(); 
     resetSystemState(); 
@@ -369,33 +373,27 @@ initDatabase();
 function renderOptionButtons(options) {
     const container = document.getElementById('faq-container');
     if (!container) return;
-    
-    // 1. ล้างปุ่ม FAQ เดิมออกเพื่อแสดงตัวเลือก (2 ปี / 5 ปี)
     container.innerHTML = ""; 
     
     options.forEach(opt => {
         const btn = document.createElement('button');
-        
-        // 2. ใช้ Class 'faq-btn' เพื่อให้สีและตัวหนังสือเหมือนปุ่ม FAQ ทุกประการ
         btn.className = 'faq-btn'; 
-        
-        // เพิ่มสไตล์เล็กน้อยเพื่อให้เด่นว่าเป็น "ตัวเลือก" (Optional)
         btn.style.border = "2px solid var(--primary)"; 
         btn.style.backgroundColor = "#f0edff"; 
-        
         btn.innerText = opt.t; 
         
         btn.onclick = () => {
-            // 3. ส่งคำถามไปประมวลผล
+            // --- ส่วนที่แก้ไขเพิ่ม ---
+            stopAllSpeech();      // 1. หยุดเสียงที่กำลังพูดอยู่ทั้งหมด
+            window.isBusy = false; // 2. ปลดล็อกสถานะเพื่อให้ getResponse ทำงานได้
+            // -----------------------
+            
             getResponse(opt.s); 
             
-            // 4. ล้างปุ่มตัวเลือกและดึงปุ่ม FAQ หลักกลับมาแสดงทันที
-            // ใช้ setTimeout เล็กน้อยเพื่อให้ดูนุ่มนวล
             setTimeout(() => {
                 renderFAQButtons();
             }, 800); 
         };
-        
         container.appendChild(btn);
     });
 }
