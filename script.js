@@ -156,7 +156,8 @@ async function getResponse(userQuery) {
     window.isBusy = true;
     updateLottie('thinking');
 
-    const query = userQuery.toLowerCase().trim();
+    // ล้างอักขระพิเศษเพื่อให้เปรียบเทียบคำได้ง่ายขึ้น
+    const query = userQuery.toLowerCase().trim().replace(/[?？!！]/g, "");
 
     // --- [1. Conversation Flow: คัดกรองคำถามกว้าง] ---
     const isBroadLicense = (query === "ต่อใบขับขี่" || query === "ใบขับขี่หมดอายุ") && 
@@ -174,17 +175,20 @@ async function getResponse(userQuery) {
         return; 
     }
 
-    // --- [2. Smart Search: VIP & Coverage Score Logic] ---
+    // --- [2. Smart Search: VIP & Intent-Based Scoring] ---
     try {
         fetch(`${GAS_URL}?query=${encodeURIComponent(query)}&action=logOnly`, { mode: 'no-cors' });
         let bestMatch = { answer: "", score: 0 };
         let foundExact = false;
 
-        for (const sheetName of Object.keys(window.localDatabase)) {
+        const sheetNames = Object.keys(window.localDatabase);
+        for (const sheetName of sheetNames) {
             if (["Lottie_State", "Config", "FAQ"].includes(sheetName) || foundExact) continue;
 
-            for (const item of window.localDatabase[sheetName]) {
+            const rows = window.localDatabase[sheetName];
+            for (const item of rows) {
                 if (foundExact) break;
+
                 const rawKeys = item[0] ? item[0].toString().toLowerCase().trim() : "";
                 if (!rawKeys) continue;
                 
@@ -201,25 +205,32 @@ async function getResponse(userQuery) {
                         foundExact = true;
                     } else {
                         // --- อันดับ 2: วิเคราะห์ใจความ (NLP Hybrid) ---
-                        const keyTokens = lowerKey.split(/[\s,/-]+/).filter(t => t.length > 0);
-                        const queryTokens = query.split(/[\s,/-]+/).filter(t => t.length > 0);
+                        // 1. แยกคำสำคัญ (ลบคำสั้นๆ ออกเพื่อให้เหลือใจความหลัก)
+                        const keyTokens = lowerKey.split(/[\s,/-]+/).filter(t => t.length > 1);
+                        const queryTokens = query.split(/[\s,/-]+/).filter(t => t.length > 1);
 
-                        // Match Score: Keyword ใน Sheet ปรากฏในคำถามกี่ %
+                        // Match Score: คีย์เวิร์ดใน Sheet ปรากฏในคำถามกี่ %
                         let matchCount = 0;
                         keyTokens.forEach(kt => { if (query.includes(kt)) matchCount++; });
-                        const tokenScore = matchCount / keyTokens.length;
+                        const tokenScore = keyTokens.length > 0 ? (matchCount / keyTokens.length) : 0;
 
                         // Coverage Score: คำถามถูก Keyword นี้ครอบคลุมกี่ % 
-                        // (ช่วยกันไม่ให้ประโยคสั้น มาแย่งตอบคำถามที่ยาวกว่า)
                         let coverageCount = 0;
                         queryTokens.forEach(qt => { if (lowerKey.includes(qt)) coverageCount++; });
-                        const coverageScore = coverageCount / queryTokens.length;
+                        const coverageScore = queryTokens.length > 0 ? (coverageCount / queryTokens.length) : 0;
+
+                        // Intent Bonus: โบนัสสำหรับคำระบุความต้องการ (เปิด, วันไหน, กี่โมง)
+                        let intentBonus = 0;
+                        const intentWords = ["เปิด", "วันไหน", "วันใด", "กี่โมง", "เมื่อไหร่", "จันทร์", "อังคาร", "พุธ", "พฤหัส", "ศุกร์"];
+                        intentWords.forEach(word => {
+                            if (query.includes(word) && lowerKey.includes(word)) intentBonus += 0.2;
+                        });
 
                         const simScore = calculateSimilarity(query, lowerKey);
                         
-                        // ถ่วงน้ำหนักคะแนน (เน้น Coverage เพื่อแยกแยะ "ทำใบขับขี่ใหม่" vs "ทำใบขับขี่ใหม่เปิดวันไหน")
-                        const combinedScore = (tokenScore * 0.6) + (coverageScore * 0.4);
-                        score = (combinedScore * 0.85) + (simScore * 0.15);
+                        // รวมคะแนน: เน้นทั้งความหมาย (Token) และเจตนา (Intent Bonus)
+                        const combinedScore = (tokenScore * 0.5) + (coverageScore * 0.5);
+                        score = (combinedScore * 0.7) + (simScore * 0.1) + intentBonus;
                     }
 
                     if (score > bestMatch.score) {
@@ -231,7 +242,8 @@ async function getResponse(userQuery) {
         }
 
         // --- [3. การตอบกลับ] ---
-        if (bestMatch.score >= 0.65) { 
+        // ปรับ Threshold ลงเล็กน้อย (0.5) เพื่อให้เจอง่ายขึ้นในภาษาไทยที่ไม่มีการเว้นวรรค
+        if (bestMatch.score >= 0.5) { 
             displayResponse(bestMatch.answer);
             speak(bestMatch.answer);
         } else {
@@ -240,7 +252,11 @@ async function getResponse(userQuery) {
             speak(fallback);
             renderFAQButtons(); 
         }
-    } catch (err) { resetSystemState(); restartIdleTimer(); }
+    } catch (err) { 
+        console.error("Search Error:", err);
+        resetSystemState(); 
+        restartIdleTimer(); 
+    }
 }
 
 /**
