@@ -185,43 +185,59 @@ async function getResponse(userQuery) {
         return; 
     }
 
-    // --- [Smart Search: ค้นหาด้วยวิธี Token Matching] ---
+    // --- [Smart Search: คัดกรองแบบ VIP Score] ---
     try {
         fetch(`${GAS_URL}?query=${encodeURIComponent(query)}&action=logOnly`, { mode: 'no-cors' });
         let bestMatch = { answer: "", score: 0 };
+        let foundExact = false;
 
-        for (const sheetName of Object.keys(window.localDatabase)) {
-            if (["Lottie_State", "Config", "FAQ"].includes(sheetName)) continue;
-            window.localDatabase[sheetName].forEach((item) => {
+        const sheetNames = Object.keys(window.localDatabase);
+        for (const sheetName of sheetNames) {
+            if (["Lottie_State", "Config", "FAQ"].includes(sheetName) || foundExact) continue;
+
+            const rows = window.localDatabase[sheetName];
+            for (const item of rows) {
+                if (foundExact) break; // ถ้าเจอตรงเป๊ะแล้ว หยุดหาในแถวอื่นๆ ทันที
+
                 const rawKeys = item[0] ? item[0].toString().toLowerCase().trim() : "";
-                if (!rawKeys) return;
+                if (!rawKeys) continue;
                 
                 const keyList = rawKeys.split(/[,|]/).map(k => k.trim());
                 let ans = window.currentLang === 'th' ? (item[1] || "ไม่มีข้อมูล") : (item[2] || "No data");
                 
-                keyList.forEach(key => {
+                for (const key of keyList) {
                     let score = 0;
                     const lowerKey = key.toLowerCase();
                     
                     if (query === lowerKey) {
-                        score = 1.0;
+                        // --- อันดับ 1: ตรงเป๊ะ (VIP) ---
+                        score = 2.0; 
+                        foundExact = true;
                     } else {
-                        // แยกคำเป็นชิ้นๆ (Tokenization)
+                        // --- อันดับ 2: จับใจความ (Token) ---
                         const keyTokens = lowerKey.split(/[\s,/-]+/).filter(t => t.length > 0);
                         let matchCount = 0;
                         keyTokens.forEach(kt => { if (query.includes(kt)) matchCount++; });
                         
                         const tokenScore = matchCount / keyTokens.length;
                         const simScore = calculateSimilarity(query, lowerKey);
-                        score = (tokenScore * 0.8) + (simScore * 0.2); // ให้น้ำหนัก Token เป็นหลัก
+                        
+                        // ระบบ Length Penalty: ถ้าคำถามสั้น แต่ Key ใน Sheet ยาวมาก ให้ลดคะแนนลง
+                        const lengthDiff = Math.abs(query.length - lowerKey.length);
+                        const lengthPenalty = 1 / (1 + lengthDiff * 0.02); 
+
+                        score = ((tokenScore * 0.8) + (simScore * 0.2)) * lengthPenalty;
                     }
 
-                    if (score > bestMatch.score) bestMatch = { answer: ans, score: score };
-                });
-            });
+                    if (score > bestMatch.score) {
+                        bestMatch = { answer: ans, score: score };
+                    }
+                    if (foundExact) break;
+                }
+            }
         }
 
-        if (bestMatch.score >= 0.65) { // ปรับ Threshold ให้ยืดหยุ่นขึ้น
+        if (bestMatch.score >= 0.65) { 
             displayResponse(bestMatch.answer);
             speak(bestMatch.answer);
         } else {
