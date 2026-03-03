@@ -369,21 +369,27 @@ function renderOptionButtons(options) {
     const container = document.getElementById('faq-container');
     if (!container) return;
     
-    container.innerHTML = ""; // ล้างปุ่ม FAQ เดิมออก
+    // ล้างปุ่ม FAQ เดิมออกก่อนเพื่อแสดงตัวเลือกใหม่
+    container.innerHTML = ""; 
     
     options.forEach(opt => {
         const btn = document.createElement('button');
-        btn.className = 'faq-btn';
-        // ตกแต่งปุ่มให้ดูเด่นกว่าปุ่ม FAQ ปกติ (ถ้าต้องการ)
-        btn.style.backgroundColor = "#e8f4fd";
-        btn.style.borderColor = "#3498db";
-        btn.style.color = "#2c3e50";
-        btn.style.fontWeight = "bold";
+        btn.className = 'faq-btn'; // ใช้ Class เดียวกับปุ่ม FAQ เพื่อความสวยงาม
         
-        btn.innerText = opt.t; // ข้อความบนปุ่ม
+        // ปรับแต่งสไตล์เพิ่มเติมให้เด่นกว่าปกติ (Optional)
+        btn.style.border = "2px solid #3498db";
+        btn.style.backgroundColor = "#ebf5fb";
+        btn.style.fontWeight = "bold";
+        btn.style.color = "#2c3e50";
+        
+        btn.innerText = opt.t; // ข้อความบนปุ่ม (เช่น "แบบชั่วคราว (2 ปี)")
+        
+        // เมื่อคลิก ให้ส่งค่า s (คำค้นหา) ไปที่ getResponse อีกครั้ง
         btn.onclick = () => {
-            getResponse(opt.s); // เมื่อกดให้ส่งคำค้นหาที่เตรียมไว้ (s) ไปประมวลผล
+            getResponse(opt.s); 
         };
+        
         container.appendChild(btn);
     });
+}
 }
