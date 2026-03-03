@@ -1,6 +1,6 @@
 /**
- * สมองกลน้องนำทาง - เวอร์ชั่น Ultra Stable (Direct Response Edition)
- * ปรับปรุงล่าสุด: ตัดระบบยืนยัน/What do you mean, เพิ่มคำทักทายหลากหลาย, ระบบหยุดเสียงสมบูรณ์
+ * สมองกลน้องนำทาง - เวอร์ชั่น AI Smart Search & Conversation Flow
+ * ปรับปรุงล่าสุด: ระบบค้นหาแบบ Token Matching (ฉลาดขึ้น), ถามคัดกรองใบขับขี่, และระบบหยุดเสียงสมบูรณ์
  */
 
 window.localDatabase = null;
@@ -33,9 +33,7 @@ function resetSystemState() {
 
 function updateInteractionTime() {
     lastSeenTime = Date.now();
-    if (!isAtHome) {
-        restartIdleTimer();
-    }
+    if (!isAtHome) restartIdleTimer();
 }
 
 document.addEventListener('mousedown', updateInteractionTime);
@@ -58,18 +56,14 @@ function forceUnmute() {
 }
 
 /**
- * 2. ระบบ Reset หน้าจอ (Smart Reset)
+ * 2. ระบบ Reset หน้าจอ
  */
 function resetToHome() {
     const now = Date.now();
-    const idleDuration = now - lastSeenTime;
-    const noInteraction = (idleDuration >= IDLE_TIME_LIMIT);
-
-    if (window.isBusy || personInFrameTime !== null || !noInteraction) {
+    if (window.isBusy || personInFrameTime !== null || (now - lastSeenTime < IDLE_TIME_LIMIT)) {
         if (!isAtHome) restartIdleTimer(); 
         return;
     }
-
     if (isAtHome) return; 
 
     resetSystemState();
@@ -78,25 +72,18 @@ function resetToHome() {
     personInFrameTime = null;       
     isAtHome = true; 
 
-    const welcomeMsg = window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone.";
-    displayResponse(welcomeMsg);
+    displayResponse(window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone.");
     renderFAQButtons(); 
-
-    if (idleTimer) {
-        clearTimeout(idleTimer);
-        idleTimer = null;
-    }
+    if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
 }
 
 function restartIdleTimer() {
     if (idleTimer) clearTimeout(idleTimer);
-    if (!isAtHome) {
-        idleTimer = setTimeout(resetToHome, IDLE_TIME_LIMIT); 
-    }
+    if (!isAtHome) idleTimer = setTimeout(resetToHome, IDLE_TIME_LIMIT); 
 }
 
 /**
- * 3. ระบบดวงตา AI (แยกคนเดินผ่าน/ยืนแช่)
+ * 3. ระบบดวงตา AI
  */
 async function initCamera() {
     try {
@@ -125,25 +112,16 @@ async function detectPerson() {
 
     if (person) {
         if (personInFrameTime === null) personInFrameTime = now;
-        const stayDuration = now - personInFrameTime;
-
-        if (stayDuration >= 2000) { 
+        if (now - personInFrameTime >= 2000) {
             lastSeenTime = now; 
-            if (!isAtHome) {
-                if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
-            } else if (!window.isBusy && !window.hasGreeted && stayDuration >= 3000) {
+            if (isAtHome && !window.isBusy && !window.hasGreeted && (now - personInFrameTime >= 3000)) {
                 greetUser();
             }
         }
-    } else {
-        if (personInFrameTime !== null) {
-            const timeSinceLastSeen = now - lastSeenTime;
-            if (timeSinceLastSeen >= 5000) { 
-                personInFrameTime = null;
-                window.hasGreeted = false;
-                if (!isAtHome) restartIdleTimer(); 
-            }
-        }
+    } else if (personInFrameTime !== null && (now - lastSeenTime >= 5000)) {
+        personInFrameTime = null;
+        window.hasGreeted = false;
+        if (!isAtHome) restartIdleTimer(); 
     }
     requestAnimationFrame(detectPerson);
 }
@@ -154,18 +132,12 @@ function greetUser() {
     isAtHome = false; 
     const hour = new Date().getHours();
     let thTime = hour < 12 ? "สวัสดีตอนเช้าครับ" : (hour < 18 ? "สวัสดีตอนบ่ายครับ" : "สวัสดีครับ");
-    
-    const greetings = {
-        th: [
-            `${thTime} มีอะไรให้น้องนำทางช่วยไหมครับ?`, 
-            "สำนักงานขนส่งพยัคฆภูมิพิสัย ยินดีต้อนรับครับ!", 
-            "สวัสดีครับ สอบถามข้อมูลเรื่องทำใบขับขี่หรือภาษีรถกับน้องได้นะครับ",
-            "สวัสดีครับ วันนี้มาติดต่อราชการด้านไหนดีครับ?"
-        ],
-        en: ["Welcome! How can I assist you today?", "Hello! How can I help you?"]
-    };
-    
-    const list = greetings[window.currentLang] || greetings['th'];
+    const list = [
+        `${thTime} มีอะไรให้น้องนำทางช่วยไหมครับ?`, 
+        "สำนักงานขนส่งพยัคฆภูมิพิสัย ยินดีต้อนรับครับ!", 
+        "สวัสดีครับ สอบถามข้อมูลเรื่องทำใบขับขี่หรือภาษีรถกับน้องได้นะครับ",
+        "สวัสดีครับ วันนี้มาติดต่อราชการด้านไหนดีครับ?"
+    ];
     let finalGreet = list[Math.floor(Math.random() * list.length)];
     window.hasGreeted = true; 
     displayResponse(finalGreet);
@@ -173,7 +145,7 @@ function greetUser() {
 }
 
 /**
- * 4. ระบบประมวลผลคำตอบ (Tiered Search - ตัดปุ่มยืนยันออก)
+ * 4. ระบบประมวลผลคำตอบ (Smart Search AI Logic)
  */
 async function getResponse(userQuery) {
     if (!userQuery || window.isBusy || !window.localDatabase) return;
@@ -183,10 +155,39 @@ async function getResponse(userQuery) {
     resetSystemState(); 
     window.isBusy = true;
     updateLottie('thinking');
-    
+
+    const query = userQuery.toLowerCase().trim();
+
+    // --- [Conversation Flow: ดักจับคำถามกว้างเพื่อถามต่อ] ---
+    const isBroadLicense = (query === "ต่อใบขับขี่" || query === "ใบขับขี่หมดอายุ") && 
+                           (!query.includes("ชั่วคราว") && !query.includes("5 ปี") && !query.includes("2 ปี"));
+
+    if (isBroadLicense) {
+        const askMsg = "ไม่ทราบว่าใบขับขี่ของท่านเป็นแบบชั่วคราว หรือแบบ 5 ปีครับ?";
+        displayResponse(askMsg);
+        speak(askMsg);
+        
+        const container = document.getElementById('faq-container');
+        container.innerHTML = ""; 
+        const opts = [
+            { t: "แบบชั่วคราว (2 ปี)", s: "ต่อใบขับขี่ชั่วคราว" },
+            { t: "แบบ 5 ปี เป็น 5 ปี", s: "ต่อใบขับขี่ 5 ปี" }
+        ];
+        opts.forEach(opt => {
+            const btn = document.createElement('button');
+            btn.className = 'faq-btn';
+            btn.style.borderColor = "#3498db";
+            btn.innerText = opt.t;
+            btn.onclick = () => getResponse(opt.s);
+            container.appendChild(btn);
+        });
+        window.isBusy = false; 
+        return; 
+    }
+
+    // --- [Smart Search: ค้นหาด้วยวิธี Token Matching] ---
     try {
-        fetch(`${GAS_URL}?query=${encodeURIComponent(userQuery.trim())}&action=logOnly`, { mode: 'no-cors' });
-        const query = userQuery.toLowerCase().trim();
+        fetch(`${GAS_URL}?query=${encodeURIComponent(query)}&action=logOnly`, { mode: 'no-cors' });
         let bestMatch = { answer: "", score: 0 };
 
         for (const sheetName of Object.keys(window.localDatabase)) {
@@ -194,23 +195,37 @@ async function getResponse(userQuery) {
             window.localDatabase[sheetName].forEach((item) => {
                 const rawKeys = item[0] ? item[0].toString().toLowerCase().trim() : "";
                 if (!rawKeys) return;
+                
                 const keyList = rawKeys.split(/[,|]/).map(k => k.trim());
                 let ans = window.currentLang === 'th' ? (item[1] || "ไม่มีข้อมูล") : (item[2] || "No data");
                 
                 keyList.forEach(key => {
-                    let score = (query === key) ? 1.0 : (query.includes(key) && key.length > 2 ? 0.9 : calculateSimilarity(query, key));
-                    if (score > bestMatch.score) {
-                        bestMatch = { answer: ans, score: score };
+                    let score = 0;
+                    const lowerKey = key.toLowerCase();
+                    
+                    if (query === lowerKey) {
+                        score = 1.0;
+                    } else {
+                        // แยกคำเป็นชิ้นๆ (Tokenization)
+                        const keyTokens = lowerKey.split(/[\s,/-]+/).filter(t => t.length > 0);
+                        let matchCount = 0;
+                        keyTokens.forEach(kt => { if (query.includes(kt)) matchCount++; });
+                        
+                        const tokenScore = matchCount / keyTokens.length;
+                        const simScore = calculateSimilarity(query, lowerKey);
+                        score = (tokenScore * 0.8) + (simScore * 0.2); // ให้น้ำหนัก Token เป็นหลัก
                     }
+
+                    if (score > bestMatch.score) bestMatch = { answer: ans, score: score };
                 });
             });
         }
 
-        if (bestMatch.score >= 0.75) { 
+        if (bestMatch.score >= 0.65) { // ปรับ Threshold ให้ยืดหยุ่นขึ้น
             displayResponse(bestMatch.answer);
             speak(bestMatch.answer);
         } else {
-            const fallback = window.currentLang === 'th' ? "ขออภัยครับ น้องนำทางหาข้อมูลไม่พบ ลองเลือกจากหัวข้อด้านล่างนะครับ" : "I couldn't find that. Please try the topics below.";
+            const fallback = window.currentLang === 'th' ? "ขออภัยครับ น้องหาข้อมูลไม่พบ ลองเลือกจากหัวข้อด้านล่างนะครับ" : "I couldn't find that.";
             displayResponse(fallback);
             speak(fallback);
             renderFAQButtons(); 
@@ -243,12 +258,11 @@ function speak(text) {
 }
 
 const stopAllSpeech = () => {
-    window.speechSynthesis.pause(); 
     window.speechSynthesis.cancel();
     if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
     window.isBusy = false;
     updateLottie('idle');
-    console.log("🛑 Speech Stopped.");
+    console.log("🛑 Speech Terminated.");
 };
 
 window.addEventListener('pagehide', stopAllSpeech);
@@ -256,7 +270,7 @@ window.addEventListener('beforeunload', stopAllSpeech);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') stopAllSpeech(); });
 
 /**
- * 6. ระบบเริ่มต้นและช่วยเหลือ
+ * 6. ระบบเริ่มต้น
  */
 async function initDatabase() {
     try {
@@ -267,7 +281,7 @@ async function initDatabase() {
             cocoModel = await cocoSsd.load();
             renderFAQButtons();
             initCamera(); 
-            displayResponse(window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone.");
+            displayResponse("กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ");
         }
     } catch (e) { setTimeout(initDatabase, 5000); }
 }
@@ -329,3 +343,4 @@ function editDistance(s1, s2) {
 }
 
 initDatabase();
+                        
