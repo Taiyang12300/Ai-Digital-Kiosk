@@ -147,16 +147,25 @@ function greetUser() {
 /**
  * 4. ระบบประมวลผลคำตอบ (Smart Search AI Logic)
  */
+/**
+ * 4. ระบบประมวลผลคำตอบ (Smart Search AI Logic)
+ */
 async function getResponse(userQuery) {
-    if (!userQuery || window.isBusy || !window.localDatabase) return;
+    // แก้ไข: ตัด window.isBusy ออกจากเงื่อนไขตรวจสอบแรก เพื่อให้ฟังก์ชันยอมรันแม้กำลังพูดอยู่
+    if (!userQuery || !window.localDatabase) return;
 
+    // หากมีการเรียกใช้ฟังก์ชันขณะที่ระบบกำลังยุ่ง (เช่น กำลังพูด) ให้หยุดเสียงเก่าและล้างสถานะทันที
     if (window.isBusy) {
         stopAllSpeech(); 
+        window.isBusy = false; 
     }
  
     isAtHome = false; 
     updateInteractionTime(); 
+    
+    // resetSystemState จะช่วยเคลียร์สถานะเสียงและเวลาอีกครั้งเพื่อความเสถียร
     resetSystemState(); 
+    
     window.isBusy = true;
     updateLottie('thinking');
 
@@ -206,7 +215,7 @@ async function getResponse(userQuery) {
                         score = 3.0; // เพิ่มน้ำหนักให้ Exact Match มากขึ้น
                         foundExact = true;
                     } else {
-                        // --- [เพิ่ม Logic: ล็อกประเภทปีใบขับขี่] ---
+                        // --- [Logic: ล็อกประเภทปีใบขับขี่] ---
                         let yearBonus = 0;
                         const isQuery5Year = query.includes("5 ปี") || query.includes("5ปี");
                         const isQuery2Year = query.includes("2 ปี") || query.includes("2ปี") || query.includes("ชั่วคราว");
@@ -215,19 +224,17 @@ async function getResponse(userQuery) {
 
                         if (isQuery5Year && isKey5Year) yearBonus = 1.0;
                         if (isQuery2Year && isKey2Year) yearBonus = 1.0;
-                        // ถ้าคนถามถาม 5 ปี แต่ Key เป็น 2 ปี ให้ติดลบเพื่อป้องกันการสลับ
+                        
+                        // ป้องกันการตอบสลับกัน
                         if (isQuery5Year && isKey2Year) yearBonus = -1.0;
                         if (isQuery2Year && isKey5Year) yearBonus = -1.0;
 
-                        // แยกคำเพื่อหาความสำคัญ (Tokens)
                         const keyTokens = lowerKey.split(/[\s,/-]+/).filter(t => t.length > 1);
                         let matchCount = 0;
                         keyTokens.forEach(kt => { if (query.includes(kt)) matchCount++; });
                         const tokenScore = keyTokens.length > 0 ? (matchCount / keyTokens.length) : 0;
 
                         const simScore = calculateSimilarity(query, lowerKey);
-                        
-                        // รวมคะแนนใหม่ (ใช้ Year Bonus เป็นตัวตัดสินเด็ดขาด)
                         score = (tokenScore * 0.7) + (simScore * 0.3) + yearBonus;
                     }
 
@@ -240,7 +247,7 @@ async function getResponse(userQuery) {
         }
 
         // --- [3. การตอบกลับ] ---
-        if (bestMatch.score >= 0.5) { // ปรับ Threshold ลงเล็กน้อยหลังเพิ่ม Year Bonus
+        if (bestMatch.score >= 0.5) { 
             displayResponse(bestMatch.answer);
             speak(bestMatch.answer);
         } else {
@@ -312,14 +319,27 @@ async function initDatabase() {
 function renderFAQButtons() {
     const container = document.getElementById('faq-container');
     if (!container || !window.localDatabase || !window.localDatabase["FAQ"]) return;
+    
     container.innerHTML = "";
+    
+    // ดึงข้อมูล FAQ จากแถวที่ 2 เป็นต้นไป (slice(1))
     window.localDatabase["FAQ"].slice(1).forEach((row) => {
         const qText = (window.currentLang === 'th') ? row[0] : row[1];
+        
         if (qText) {
             const btn = document.createElement('button');
             btn.className = 'faq-btn';
             btn.innerText = qText;
-            btn.onclick = () => getResponse(qText);
+            
+            btn.onclick = () => {
+                // --- ส่วนที่เพิ่มเพื่อให้กดแทรกขณะน้องพูดได้ ---
+                stopAllSpeech();      // 1. หยุดเสียงที่กำลังพูดอยู่
+                window.isBusy = false; // 2. ปลดล็อกสถานะเพื่อให้ getResponse เริ่มงานใหม่ได้ทันที
+                // ---------------------------------------
+                
+                getResponse(qText);
+            };
+            
             container.appendChild(btn);
         }
     });
