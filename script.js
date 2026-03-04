@@ -14,7 +14,7 @@ const GAS_URL = "https://script.google.com/macros/s/AKfycbz1bkIsQ588u-rpjY-8nMly
 
 let idleTimer = null; 
 let speechSafetyTimeout = null; 
-const IDLE_TIME_LIMIT = 30000; 
+const IDLE_TIME_LIMIT = 20000; 
 let video = document.getElementById('video');
 let cocoModel = null; 
 let isDetecting = true; 
@@ -113,7 +113,7 @@ async function detectPerson() {
 
     const predictions = await cocoModel.detect(video);
     // 1. คัดกรองเบื้องต้น: ต้องเป็นคน และขนาดตัวใหญ่พอ (อยู่ใกล้)
-    const person = predictions.find(p => p.class === "person" && p.score > 0.75 && p.bbox[2] > 135); 
+    const person = predictions.find(p => p.class === "person" && p.score > 0.75 && p.bbox[2] > 150); 
 
     if (person) {
         if (personInFrameTime === null) {
@@ -124,7 +124,7 @@ async function detectPerson() {
         // ✅ จุดสำคัญ: จะยอมอัปเดต lastSeenTime (ต่อเวลา Session) 
         // ก็ต่อเมื่อคนคนนี้ยืนแช่อยู่หน้าจอ "เกิน 3 วินาที" แล้วเท่านั้น
         const stayDuration = now - personInFrameTime;
-        if (stayDuration >= 3000) {
+        if (stayDuration >= 5000) {
             if (lastSeenTime !== now) {
                 console.log("⏳ [AI] Active User confirmed. Session extended.");
             }
@@ -137,9 +137,9 @@ async function detectPerson() {
         }
     } else {
         // 2. ถ้าไม่เจอคน (หรือเจอแต่ตัวเล็ก/เดินผ่านไวๆ จนไม่นับเป็น Active User)
-        // ระบบจะตรวจเช็คว่าหายไปนานเกิน 4 วินาทีหรือยัง เพื่อทำการ Reset
+        // ระบบจะตรวจเช็คว่าหายไปนานเกิน 3 วินาทีหรือยัง เพื่อทำการ Reset
         const gap = now - lastSeenTime;
-        if (personInFrameTime !== null && gap >= 4000) {
+        if (personInFrameTime !== null && gap >= 3000) {
             console.log("🚫 [AI] No active user. Ready to reset Home.");
             personInFrameTime = null;
             window.hasGreeted = false;
