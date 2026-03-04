@@ -112,20 +112,20 @@ async function detectPerson() {
     lastDetectionTime = now;
 
     const predictions = await cocoModel.detect(video);
-    const person = predictions.find(p => p.class === "person" && p.score > 0.75 && p.bbox[2] > 130); 
+    const person = predictions.find(p => p.class === "person" && p.score > 0.75 && p.bbox[2] > 200); 
 
     if (person) {
         if (personInFrameTime === null) {
             console.log("👁️ [AI] Person detected.");
             personInFrameTime = now;
         }
-        if (now - personInFrameTime >= 2000) {
+        if (now - personInFrameTime >= 3000) {
             lastSeenTime = now; 
             if (isAtHome && !window.isBusy && !window.hasGreeted && (now - personInFrameTime >= 1500)) {
                 greetUser();
             }
         }
-    } else if (personInFrameTime !== null && (now - lastSeenTime >= 5000)) {
+    } else if (personInFrameTime !== null && (now - lastSeenTime >= 4000)) {
         console.log("🚫 [AI] Person left frame.");
         personInFrameTime = null;
         window.hasGreeted = false;
