@@ -14,7 +14,7 @@ const GAS_URL = "https://script.google.com/macros/s/AKfycbz1bkIsQ588u-rpjY-8nMly
 
 let idleTimer = null; 
 let speechSafetyTimeout = null; 
-const IDLE_TIME_LIMIT = 20000; 
+const IDLE_TIME_LIMIT = 15000; 
 let video = document.getElementById('video');
 let cocoModel = null; 
 let isDetecting = true; 
