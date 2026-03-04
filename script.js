@@ -165,103 +165,90 @@ function greetUser() {
  * 4. ระบบประมวลผลคำตอบ (Smart Search AI Logic)
  */
 async function getResponse(userQuery) {
-    // แก้ไข: ตัด window.isBusy ออกจากเงื่อนไขตรวจสอบแรก เพื่อให้ฟังก์ชันยอมรันแม้กำลังพูดอยู่
     if (!userQuery || !window.localDatabase) return;
 
-    // หากมีการเรียกใช้ฟังก์ชันขณะที่ระบบกำลังยุ่ง (เช่น กำลังพูด) ให้หยุดเสียงเก่าและล้างสถานะทันที
-    if (window.isBusy) {
-        stopAllSpeech(); 
-        window.isBusy = false; 
-    }
- 
+    // หยุดเสียงเก่าและอัปเดตสถานะ
+    if (window.isBusy) { stopAllSpeech(); window.isBusy = false; }
     isAtHome = false; 
     updateInteractionTime(); 
-    
-    // resetSystemState จะช่วยเคลียร์สถานะเสียงและเวลาอีกครั้งเพื่อความเสถียร
     resetSystemState(); 
-    
     window.isBusy = true;
     updateLottie('thinking');
 
-    // ล้างอักขระพิเศษและคำเชื่อมที่ไม่จำเป็น
+    // เตรียมคำค้นหา (ลบช่องว่างและอักขระพิเศษ)
     const query = userQuery.toLowerCase().trim().replace(/[?？!！]/g, "");
 
-    // --- [1. Conversation Flow: คัดกรองคำถามกว้าง] ---
-    const isBroadLicense = (query === "ต่อใบขับขี่" || query === "ใบขับขี่หมดอายุ") && 
-                           (!query.includes("ชั่วคราว") && !query.includes("5 ปี") && !query.includes("2 ปี"));
-
-    if (isBroadLicense) {
+    // --- [1. คัดกรองคำถามกว้าง - เหมือนเดิมแต่ปรับคำค้นให้ตรง] ---
+    if ((query === "ต่อใบขับขี่" || query === "ใบขับขี่หมดอายุ") && 
+        (!query.includes("ชั่วคราว") && !query.includes("5 ปี") && !query.includes("2 ปี"))) {
         const askMsg = "ไม่ทราบว่าใบขับขี่ของท่านเป็นแบบชั่วคราว หรือแบบ 5 ปีครับ?";
         displayResponse(askMsg);
         speak(askMsg);
         renderOptionButtons([
-            { t: "แบบชั่วคราว (2 ปี)", s: "ต่อใบขับขี่ 2 ปี เป็น 5 ปี" },
+            { t: "แบบชั่วคราว (2 ปี)", s: "ต่อใบขับขี่ชั่วคราว" },
             { t: "แบบ 5 ปี", s: "ต่อใบขับขี่ 5 ปี เป็น 5 ปี" },
         ]);
         window.isBusy = false; 
         return; 
     }
 
-    // --- [2. Smart Search: High Intelligence Logic] ---
     try {
-        fetch(`${GAS_URL}?query=${encodeURIComponent(query)}&action=logOnly`, { mode: 'no-cors' });
-        let bestMatch = { answer: "", score: 0 };
-        let foundExact = false;
+        let bestMatch = { answer: "", score: 0, debugKey: "" };
 
         for (const sheetName of Object.keys(window.localDatabase)) {
-            if (["Lottie_State", "Config", "FAQ"].includes(sheetName) || foundExact) continue;
+            // ข้าม Sheet ที่ไม่ใช่ข้อมูล
+            if (["Lottie_State", "Config", "FAQ"].includes(sheetName)) continue;
 
             const rows = window.localDatabase[sheetName];
             for (const item of rows) {
-                if (foundExact) break;
-
-                const rawKeys = item[0] ? item[0].toString().toLowerCase().trim() : "";
+                const rawKeys = item[0] ? item[0].toString().toLowerCase() : "";
                 if (!rawKeys) continue;
                 
-                const keyList = rawKeys.split(/[,|]/).map(k => k.trim());
-                let ans = window.currentLang === 'th' ? (item[1] || "ไม่มีข้อมูล") : (item[2] || "No data");
+                // ✅ แก้ไข: แยกคีย์เวิร์ดและลบช่องว่างส่วนเกินออก (Trim)
+                const keyList = rawKeys.split(/[,|\n]/).map(k => k.trim()).filter(k => k !== "");
+                let ans = window.currentLang === 'th' ? (item[1] || "") : (item[2] || item[1]);
                 
                 for (const key of keyList) {
                     let score = 0;
                     const lowerKey = key.toLowerCase();
                     
                     if (query === lowerKey) {
-                        score = 3.0; // เพิ่มน้ำหนักให้ Exact Match มากขึ้น
-                        foundExact = true;
+                        score = 10.0; // Exact Match ให้ความสำคัญสูงสุด
                     } else {
-                        // --- [Logic: ล็อกประเภทปีใบขับขี่] ---
-                        let yearBonus = 0;
-                        const isQuery5Year = query.includes("5 ปี") || query.includes("5ปี");
-                        const isQuery2Year = query.includes("2 ปี") || query.includes("2ปี") || query.includes("ชั่วคราว");
-                        const isKey5Year = lowerKey.includes("5 ปี") || lowerKey.includes("5ปี");
-                        const isKey2Year = lowerKey.includes("2 ปี") || lowerKey.includes("2ปี") || lowerKey.includes("ชั่วคราว");
-
-                        if (isQuery5Year && isKey5Year) yearBonus = 1.0;
-                        if (isQuery2Year && isKey2Year) yearBonus = 1.0;
-                        
-                        // ป้องกันการตอบสลับกัน
-                        if (isQuery5Year && isKey2Year) yearBonus = -1.0;
-                        if (isQuery2Year && isKey5Year) yearBonus = -1.0;
-
+                        // นับจำนวน Token ที่ตรงกัน
                         const keyTokens = lowerKey.split(/[\s,/-]+/).filter(t => t.length > 1);
                         let matchCount = 0;
                         keyTokens.forEach(kt => { if (query.includes(kt)) matchCount++; });
-                        const tokenScore = keyTokens.length > 0 ? (matchCount / keyTokens.length) : 0;
+                        
+                        let tokenScore = keyTokens.length > 0 ? (matchCount / keyTokens.length) : 0;
+                        let simScore = calculateSimilarity(query, lowerKey);
 
-                        const simScore = calculateSimilarity(query, lowerKey);
-                        score = (tokenScore * 0.7) + (simScore * 0.3) + yearBonus;
+                        // --- [Logic: ปีใบขับขี่] ---
+                        let yearBonus = 0;
+                        const isQ5 = query.includes("5 ปี") || query.includes("5ปี");
+                        const isQ2 = query.includes("2 ปี") || query.includes("2ปี") || query.includes("ชั่วคราว");
+                        const isK5 = lowerKey.includes("5 ปี") || lowerKey.includes("5ปี");
+                        const isK2 = lowerKey.includes("2 ปี") || lowerKey.includes("2ปี") || lowerKey.includes("ชั่วคราว");
+
+                        if (isQ5 && isK5) yearBonus = 2.0;
+                        if (isQ2 && isK2) yearBonus = 2.0;
+                        if ((isQ5 && isK2) || (isQ2 && isK5)) yearBonus = -5.0; // หักคะแนนหนักถ้าประเภทไม่ตรง
+
+                        // ✅ แก้ไข: เพิ่มตัวคูณคะแนนให้สูงขึ้นเพื่อให้ผ่าน Threshold ง่ายขึ้น
+                        score = (tokenScore * 5) + (simScore * 1) + yearBonus;
                     }
 
                     if (score > bestMatch.score) {
-                        bestMatch = { answer: ans, score: score };
+                        bestMatch = { answer: ans, score: score, debugKey: lowerKey };
                     }
-                    if (foundExact) break;
                 }
             }
         }
 
-        // --- [3. การตอบกลับ] ---
-        if (bestMatch.score >= 0.5) { 
+        console.log(`🎯 Best Match: "${bestMatch.debugKey}" Score: ${bestMatch.score}`);
+
+        // ✅ แก้ไข: ปรับเกณฑ์ตัดสินใจให้ยืดหยุ่นขึ้น (0.4)
+        if (bestMatch.score >= 0.4 && bestMatch.answer !== "") { 
             displayResponse(bestMatch.answer);
             speak(bestMatch.answer);
         } else {
@@ -273,7 +260,6 @@ async function getResponse(userQuery) {
     } catch (err) { 
         console.error(err);
         resetSystemState(); 
-        restartIdleTimer(); 
     }
 }
 
