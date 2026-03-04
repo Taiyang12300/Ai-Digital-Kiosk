@@ -1,6 +1,6 @@
- /**
- * สมองกลน้องนำทาง - เวอร์ชั่น AI Smart Search & Conversation Flow
- * ปรับปรุงล่าสุด: เพิ่ม Debug Logs เพื่อเช็คสถานะการ Reset Home
+/**
+ * 🚀 สมองกลน้องนำทาง - เวอร์ชั่นสมบูรณ์ (Bilingual & Debug Mode)
+ * ปรับปรุง: รองรับ 2 ภาษาในปุ่ม Option, ระบบคัดกรองใบขับขี่ 2 ภาษา และเพิ่ม Log สถานะ
  */
 
 window.localDatabase = null;
@@ -27,13 +27,13 @@ const DETECTION_INTERVAL = 500;
  * 1. ระบบจัดการสถานะและความเสถียร
  */
 function resetSystemState() {
-    console.log("🧹 Resetting System State...");
+    console.log("🧹 [System] Resetting State...");
     stopAllSpeech();
 }
 
 function updateInteractionTime() {
     lastSeenTime = Date.now();
-    console.log("🖱️ Interaction detected. Resetting lastSeenTime.");
+    console.log("🖱️ [Log] Interaction detected. Timer Reset.");
     if (!isAtHome) restartIdleTimer();
 }
 
@@ -61,22 +61,15 @@ function forceUnmute() {
  */
 function resetToHome() {
     const now = Date.now();
-    const idleTime = now - lastSeenTime;
-    
-    // Log สถานะการเช็ค Reset
-    console.log(`⏳ [Reset Check] isBusy: ${window.isBusy}, personInFrame: ${personInFrameTime !== null}, Idle: ${Math.floor(idleTime/1000)}s/${IDLE_TIME_LIMIT/1000}s`);
+    console.log(`⏳ [Debug Reset] Busy: ${window.isBusy}, PersonInFrame: ${personInFrameTime !== null}, Idle: ${Math.floor((now - lastSeenTime)/1000)}s`);
 
-    if (window.isBusy || personInFrameTime !== null || (idleTime < IDLE_TIME_LIMIT)) {
-        if (!isAtHome) {
-            console.log("🚫 [Reset Canceled] System is active or person detected.");
-            restartIdleTimer(); 
-        }
+    if (window.isBusy || personInFrameTime !== null || (now - lastSeenTime < IDLE_TIME_LIMIT)) {
+        if (!isAtHome) restartIdleTimer(); 
         return;
     }
-    
     if (isAtHome) return; 
 
-    console.log("🏠 [Reset Success] Returning to Home Screen.");
+    console.log("🏠 [Action] Returning to Home Screen.");
     resetSystemState();
     forceUnmute(); 
     window.hasGreeted = false;      
@@ -90,10 +83,7 @@ function resetToHome() {
 
 function restartIdleTimer() {
     if (idleTimer) clearTimeout(idleTimer);
-    if (!isAtHome) {
-        console.log("🔄 Idle Timer Restarted.");
-        idleTimer = setTimeout(resetToHome, IDLE_TIME_LIMIT); 
-    }
+    if (!isAtHome) idleTimer = setTimeout(resetToHome, IDLE_TIME_LIMIT); 
 }
 
 /**
@@ -126,57 +116,53 @@ async function detectPerson() {
 
     if (person) {
         if (personInFrameTime === null) {
-            console.log("👁️ [AI] Person entered frame.");
+            console.log("👁️ [AI] Person detected.");
             personInFrameTime = now;
         }
-        
         if (now - personInFrameTime >= 2000) {
-            lastSeenTime = now; // รีเซ็ตเวลา idle เพราะยังมีคนยืนอยู่
+            lastSeenTime = now; 
             if (isAtHome && !window.isBusy && !window.hasGreeted && (now - personInFrameTime >= 1500)) {
                 greetUser();
             }
         }
-    } else if (personInFrameTime !== null) {
-        // ถ้าคนหายไปเกิน 5 วินาที
-        if (now - lastSeenTime >= 5000) {
-            console.log("🚫 [AI] Person lost? Time since lost: " + Math.floor((now - lastSeenTime)/1000) + "s");
-            personInFrameTime = null;
-            window.hasGreeted = false;
-            if (!isAtHome) restartIdleTimer(); 
-        }
+    } else if (personInFrameTime !== null && (now - lastSeenTime >= 5000)) {
+        console.log("🚫 [AI] Person left frame.");
+        personInFrameTime = null;
+        window.hasGreeted = false;
+        if (!isAtHome) restartIdleTimer(); 
     }
     requestAnimationFrame(detectPerson);
 }
 
 function greetUser() {
     if (window.hasGreeted || window.isBusy) return; 
-    
     forceUnmute();
     isAtHome = false; 
     
     const hour = new Date().getHours();
     let thTime = hour < 12 ? "สวัสดีตอนเช้าครับ" : (hour < 18 ? "สวัสดีตอนบ่ายครับ" : "สวัสดีครับ");
-    
+    let enTime = hour < 12 ? "Good morning" : (hour < 18 ? "Good afternoon" : "Good day");
+
     const greetings = {
         th: [`${thTime} มีอะไรให้น้องนำทางช่วยไหมครับ?`, "สำนักงานขนส่งพยัคฆภูมิพิสัยสวัสดีครับ"],
-        en: ["Hello! How can I assist you today?"]
+        en: [`${enTime}! How can I help you?`, "Welcome! How can I assist you today?"]
     };
     
     const list = greetings[window.currentLang] || greetings['th'];
     let finalGreet = list[Math.floor(Math.random() * list.length)];
     
-    console.log("👋 [AI] Greeting triggered: " + finalGreet);
+    console.log("👋 [Greeting]: " + finalGreet);
     window.hasGreeted = true; 
     displayResponse(finalGreet);
     speak(finalGreet);
 }
 
 /**
- * 4. ระบบประมวลผลคำตอบ
+ * 4. ระบบประมวลผลคำตอบ (Smart Search AI Logic)
  */
 async function getResponse(userQuery) {
     if (!userQuery || !window.localDatabase) return;
-    console.log("📝 User Query: " + userQuery);
+    console.log("📝 [User Query]: " + userQuery);
 
     if (window.isBusy) { stopAllSpeech(); window.isBusy = false; }
     isAtHome = false; 
@@ -187,27 +173,82 @@ async function getResponse(userQuery) {
 
     const query = userQuery.toLowerCase().trim().replace(/[?？!！]/g, "");
 
-    // Logic Search... (ตัดมาเฉพาะจุดที่ต้องเช็ค Log)
+    // --- [1. คัดกรองคำถามกว้าง - รองรับ 2 ภาษา] ---
+    const isLicense = query.includes("ใบขับขี่") || query.includes("license");
+    const isRenew = query.includes("ต่อ") || query.includes("renew");
+
+    if (isLicense && isRenew && !query.includes("ชั่วคราว") && !query.includes("temporary") && !query.includes("5 ปี") && !query.includes("5ปี")) {
+        const askMsg = (window.currentLang === 'th') 
+            ? "ไม่ทราบว่าใบขับขี่ของท่านเป็นแบบชั่วคราว หรือแบบ 5 ปีครับ?" 
+            : "Is your license a Temporary (2-year) or a 5-year type?";
+        displayResponse(askMsg);
+        speak(askMsg);
+        renderOptionButtons([
+            { th: "แบบชั่วคราว (2 ปี)", en: "Temporary (2 years)", s_th: "ต่อใบขับขี่ชั่วคราว", s_en: "renew temporary license" },
+            { th: "แบบ 5 ปี", en: "5-year type", s_th: "ต่อใบขับขี่ 5 ปี เป็น 5 ปี", s_en: "renew 5 year license" },
+        ]);
+        window.isBusy = false; 
+        return; 
+    }
+
     try {
         let bestMatch = { answer: "", score: 0, debugKey: "" };
-        // ... (ส่วนการค้นหาใน Database) ...
-        
-        // จำลองผลลัพธ์เพื่อ Log
-        console.log(`🎯 Best Match: "${bestMatch.debugKey}" Score: ${bestMatch.score}`);
+
+        for (const sheetName of Object.keys(window.localDatabase)) {
+            if (["Lottie_State", "Config", "FAQ"].includes(sheetName)) continue;
+            const rows = window.localDatabase[sheetName];
+            for (const item of rows) {
+                const rawKeys = item[0] ? item[0].toString().toLowerCase() : "";
+                if (!rawKeys) continue;
+                
+                const keyList = rawKeys.split(/[,|\n]/).map(k => k.trim()).filter(k => k !== "");
+                let ans = window.currentLang === 'th' ? (item[1] || "") : (item[2] || item[1]);
+                
+                for (const key of keyList) {
+                    let score = 0;
+                    const lowerKey = key.toLowerCase();
+                    if (query === lowerKey) {
+                        score = 10.0;
+                    } else {
+                        const keyTokens = lowerKey.split(/[\s,/-]+/).filter(t => t.length > 1);
+                        let matchCount = 0;
+                        keyTokens.forEach(kt => { if (query.includes(kt)) matchCount++; });
+                        let tokenScore = keyTokens.length > 0 ? (matchCount / keyTokens.length) : 0;
+                        let simScore = calculateSimilarity(query, lowerKey);
+
+                        let yearBonus = 0;
+                        const isQ5 = query.includes("5 ปี") || query.includes("5ปี") || query.includes("5 year");
+                        const isQ2 = query.includes("2 ปี") || query.includes("2ปี") || query.includes("ชั่วคราว") || query.includes("temporary");
+                        const isK5 = lowerKey.includes("5 ปี") || lowerKey.includes("5ปี");
+                        const isK2 = lowerKey.includes("2 ปี") || lowerKey.includes("2ปี") || lowerKey.includes("ชั่วคราว");
+
+                        if (isQ5 && isK5) yearBonus = 2.0;
+                        if (isQ2 && isK2) yearBonus = 2.0;
+                        if ((isQ5 && isK2) || (isQ2 && isK5)) yearBonus = -5.0;
+
+                        score = (tokenScore * 5) + (simScore * 1) + yearBonus;
+                    }
+
+                    if (score > bestMatch.score) {
+                        bestMatch = { answer: ans, score: score, debugKey: lowerKey };
+                    }
+                }
+            }
+        }
+
+        console.log(`🎯 [Match Found]: "${bestMatch.debugKey}" Score: ${bestMatch.score}`);
 
         if (bestMatch.score >= 0.4 && bestMatch.answer !== "") { 
             displayResponse(bestMatch.answer);
             speak(bestMatch.answer);
         } else {
-            console.log("⚠️ No match found above 0.4");
-            const fallback = "ขออภัยครับ น้องหาข้อมูลไม่พบ";
+            console.warn("⚠️ [No Match] Score too low.");
+            const fallback = window.currentLang === 'th' ? "ขออภัยครับ น้องหาข้อมูลไม่พบ ลองเลือกจากหัวข้อด้านล่างนะครับ" : "I couldn't find that. Please try the topics below.";
             displayResponse(fallback);
             speak(fallback);
+            renderFAQButtons(); 
         }
-    } catch (err) { 
-        console.error("❌ Search Error:", err);
-        resetSystemState(); 
-    }
+    } catch (err) { console.error(err); resetSystemState(); }
 }
 
 /**
@@ -217,18 +258,13 @@ function speak(text) {
     if (!text) return;
     window.speechSynthesis.cancel();
     forceUnmute();
-    
     const safetyTime = (text.length * 200) + 5000;
-    console.log(`🔊 [Speech] Speaking: "${text.substring(0,20)}..." (Safety: ${safetyTime}ms)`);
-    
     if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
     
     speechSafetyTimeout = setTimeout(() => {
-        if (window.isBusy) {
-            console.warn("⚠️ [Speech] Safety Timeout reached. Forcing isBusy = false.");
-            window.isBusy = false; 
-            updateLottie('idle'); 
-            restartIdleTimer(); 
+        if (window.isBusy) { 
+            console.warn("🛡️ [Speech] Safety Timeout triggered.");
+            window.isBusy = false; updateLottie('idle'); restartIdleTimer(); 
         }
     }, safetyTime);
 
@@ -236,11 +272,8 @@ function speak(text) {
     msg.lang = (window.currentLang === 'th') ? 'th-TH' : 'en-US';
     msg.onstart = () => { window.isBusy = true; updateLottie('talking'); };
     msg.onend = () => { 
-        console.log("✅ [Speech] Finished.");
         if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
-        window.isBusy = false; 
-        updateLottie('idle'); 
-        updateInteractionTime(); 
+        window.isBusy = false; updateLottie('idle'); updateInteractionTime(); 
     };
     window.speechSynthesis.speak(msg);
 }
@@ -250,11 +283,15 @@ const stopAllSpeech = () => {
     if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
     window.isBusy = false;
     updateLottie('idle');
-    console.log("🛑 [Speech] Manually Terminated.");
+    console.log("🛑 [Action] Speech Terminated.");
 };
 
+window.addEventListener('pagehide', stopAllSpeech);
+window.addEventListener('beforeunload', stopAllSpeech);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') stopAllSpeech(); });
+
 /**
- * 6. ระบบเริ่มต้น
+ * 6. ระบบ UI และปุ่ม
  */
 async function initDatabase() {
     try {
@@ -266,6 +303,7 @@ async function initDatabase() {
             renderFAQButtons();
             initCamera(); 
             displayResponse("กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ");
+            console.log("✅ [System] Database & Camera Ready.");
         }
     } catch (e) { setTimeout(initDatabase, 5000); }
 }
@@ -273,29 +311,42 @@ async function initDatabase() {
 function renderFAQButtons() {
     const container = document.getElementById('faq-container');
     if (!container || !window.localDatabase || !window.localDatabase["FAQ"]) return;
-    
     container.innerHTML = "";
-    
-    // ดึงข้อมูล FAQ จากแถวที่ 2 เป็นต้นไป (slice(1))
     window.localDatabase["FAQ"].slice(1).forEach((row) => {
         const qText = (window.currentLang === 'th') ? row[0] : row[1];
-        
         if (qText) {
             const btn = document.createElement('button');
             btn.className = 'faq-btn';
             btn.innerText = qText;
-            
-            btn.onclick = () => {
-                // --- ส่วนที่เพิ่มเพื่อให้กดแทรกขณะน้องพูดได้ ---
-                stopAllSpeech();      // 1. หยุดเสียงที่กำลังพูดอยู่
-                window.isBusy = false; // 2. ปลดล็อกสถานะเพื่อให้ getResponse เริ่มงานใหม่ได้ทันที
-                // ---------------------------------------
-                
-                getResponse(qText);
-            };
-            
+            btn.onclick = () => { stopAllSpeech(); window.isBusy = false; getResponse(qText); };
             container.appendChild(btn);
         }
+    });
+}
+
+function renderOptionButtons(options) {
+    const container = document.getElementById('faq-container');
+    if (!container) return;
+    container.innerHTML = ""; 
+    
+    options.forEach(opt => {
+        const btn = document.createElement('button');
+        btn.className = 'faq-btn'; 
+        btn.style.border = "2px solid var(--primary, #6366f1)"; 
+        btn.style.backgroundColor = "#f0edff"; 
+        
+        // ✅ ปรับเป็น 2 ภาษา
+        btn.innerText = (window.currentLang === 'th') ? opt.th : (opt.en || opt.th); 
+        
+        btn.onclick = () => {
+            stopAllSpeech();
+            window.isBusy = false;
+            // ✅ เลือก Search Query ตามภาษา
+            const query = (window.currentLang === 'th') ? opt.s_th : (opt.s_en || opt.s_th);
+            getResponse(query); 
+            setTimeout(renderFAQButtons, 800); 
+        };
+        container.appendChild(btn);
     });
 }
 
@@ -312,10 +363,7 @@ function updateLottie(state) {
 
 function displayResponse(text) {
     const box = document.getElementById('response-text');
-    if (box) {
-        // รองรับการเว้นบรรทัดจาก Google Sheets ให้แสดงผลสวยงาม
-        box.innerHTML = text.replace(/\n/g, '<br>');
-    }
+    if (box) box.innerHTML = text.replace(/\n/g, '<br>');
 }
 
 function calculateSimilarity(s1, s2) {
@@ -343,31 +391,3 @@ function editDistance(s1, s2) {
 }
 
 initDatabase();
-                        
-function renderOptionButtons(options) {
-    const container = document.getElementById('faq-container');
-    if (!container) return;
-    container.innerHTML = ""; 
-    
-    options.forEach(opt => {
-        const btn = document.createElement('button');
-        btn.className = 'faq-btn'; 
-        btn.style.border = "2px solid var(--primary)"; 
-        btn.style.backgroundColor = "#f0edff"; 
-        btn.innerText = opt.t; 
-        
-        btn.onclick = () => {
-            // --- ส่วนที่แก้ไขเพิ่ม ---
-            stopAllSpeech();      // 1. หยุดเสียงที่กำลังพูดอยู่ทั้งหมด
-            window.isBusy = false; // 2. ปลดล็อกสถานะเพื่อให้ getResponse ทำงานได้
-            // -----------------------
-            
-            getResponse(opt.s); 
-            
-            setTimeout(() => {
-                renderFAQButtons();
-            }, 800); 
-        };
-        container.appendChild(btn);
-    });
-}
