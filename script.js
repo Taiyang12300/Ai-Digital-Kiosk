@@ -113,7 +113,7 @@ async function detectPerson() {
 
     const predictions = await cocoModel.detect(video);
     // 1. คัดกรองเบื้องต้น: ต้องเป็นคน และขนาดตัวใหญ่พอ (อยู่ใกล้)
-    const person = predictions.find(p => p.class === "person" && p.score > 0.65 && p.bbox[2] > 135); 
+    const person = predictions.find(p => p.class === "person" && p.score > 0.75 && p.bbox[2] > 135); 
 
     if (person) {
         if (personInFrameTime === null) {
