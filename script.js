@@ -112,37 +112,44 @@ async function detectPerson() {
     lastDetectionTime = now;
 
     const predictions = await cocoModel.detect(video);
-    // 1. คัดกรองเบื้องต้น: ต้องเป็นคน และขนาดตัวใหญ่พอ (อยู่ใกล้)
+    
+    // 1. คัดกรอง: เป็นคน, มั่นใจสูง, และอยู่ในระยะหน้าตู้ (150 ตามที่คุณทดสอบแล้ว)
     const person = predictions.find(p => p.class === "person" && p.score > 0.75 && p.bbox[2] > 150); 
 
     if (person) {
         if (personInFrameTime === null) {
-            console.log("👁️ [AI] Potential user detected. Waiting 3s...");
+            console.log("👁️ [AI] User detected. Waiting for interaction...");
             personInFrameTime = now;
         }
 
-        // ✅ จุดสำคัญ: จะยอมอัปเดต lastSeenTime (ต่อเวลา Session) 
-        // ก็ต่อเมื่อคนคนนี้ยืนแช่อยู่หน้าจอ "เกิน 3 วินาที" แล้วเท่านั้น
         const stayDuration = now - personInFrameTime;
+
+        // ✅ [เงื่อนไขที่ 1] ยืนครบ 3 วินาที -> ให้ทักทายทันที (ถ้าอยู่หน้า Home)
+        if (stayDuration >= 3000 && isAtHome && !window.isBusy && !window.hasGreeted) {
+            console.log("👋 [AI] 3s reached: Greeting user.");
+            greetUser(); 
+        }
+
+        // ✅ [เงื่อนไขที่ 2] ยืนครบ 5 วินาที -> ยกระดับเป็น Active User (ต่อเวลาหน้าจอ)
+        // ตราบใดที่ยังยืนอยู่ ระบบจะ reset ค่า lastSeenTime เรื่อยๆ หน้าจอจะไม่กลับ Home
         if (stayDuration >= 5000) {
-            if (lastSeenTime !== now) {
-                console.log("⏳ [AI] Active User confirmed. Session extended.");
+            if (lastSeenTime !== now && Math.floor(stayDuration/1000) % 5 === 0) {
+                console.log("⏳ [AI] 5s confirmed: Session active (Home reset locked).");
             }
             lastSeenTime = now; 
-
-            // เงื่อนไขการทักทาย (เฉพาะตอนอยู่หน้า Home)
-            if (isAtHome && !window.isBusy && !window.hasGreeted) {
-                greetUser();
-            }
         }
+
     } else {
-        // 2. ถ้าไม่เจอคน (หรือเจอแต่ตัวเล็ก/เดินผ่านไวๆ จนไม่นับเป็น Active User)
-        // ระบบจะตรวจเช็คว่าหายไปนานเกิน 3 วินาทีหรือยัง เพื่อทำการ Reset
+        // 2. กรณีคนหายไปจากระยะ 150 (เดินออกหรือเดินผ่านไกลๆ)
         const gap = now - lastSeenTime;
+
+        // ถ้าหายไปนานเกิน 3 วินาที (ป้องกันกล้องหลุดชั่วคราว) ให้เริ่มปล่อยให้ระบบนับถอยหลังกลับ Home
         if (personInFrameTime !== null && gap >= 3000) {
-            console.log("🚫 [AI] No active user. Ready to reset Home.");
-            personInFrameTime = null;
-            window.hasGreeted = false;
+            console.log("🚫 [AI] No active user in range. Ready to reset.");
+            personInFrameTime = null;   // ล้างสถานะเพื่อรับคนใหม่
+            window.hasGreeted = false;  // รีเซ็ตสถานะการทักทาย
+            
+            // ถ้าไม่ได้อยู่หน้า Home ให้เรียกตัวนับถอยหลัง (15 วินาทีตามที่คุณตั้งไว้)
             if (!isAtHome) restartIdleTimer(); 
         }
     }
