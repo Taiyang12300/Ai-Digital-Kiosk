@@ -114,7 +114,7 @@ async function detectPerson() {
     const predictions = await cocoModel.detect(video);
     
     // 1. คัดกรอง: เป็นคน, มั่นใจสูง, และอยู่ในระยะหน้าตู้ (150 ตามที่คุณทดสอบแล้ว)
-    const person = predictions.find(p => p.class === "person" && p.score > 0.75 && p.bbox[2] > 150); 
+    const person = predictions.find(p => p.class === "person" && p.score > 0.75 && p.bbox[2] > 140); 
 
     if (person) {
         if (personInFrameTime === null) {
