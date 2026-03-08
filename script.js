@@ -160,19 +160,48 @@ function greetUser() {
     isAtHome = false; 
     
     const hour = new Date().getHours();
-    let thTime = hour < 12 ? "สวัสดีตอนเช้าครับ" : (hour < 18 ? "สวัสดีตอนบ่ายครับ" : "สวัสดีครับ");
-    let enTime = hour < 12 ? "Good morning" : (hour < 18 ? "Good afternoon" : "Good day");
+    const isThai = window.currentLang === 'th';
 
+    // 1. กำหนดคำเริ่มต้นตามช่วงเวลา
+    let timeGreetTh = "";
+    let timeGreetEn = "";
+
+    if (hour < 12) {
+        timeGreetTh = "สวัสดีตอนเช้าครับ"; // ปรับตามคำแนะนำของคุณ
+        timeGreetEn = "Good morning";
+    } else if (hour < 17) {
+        timeGreetTh = "สวัสดีตอนบ่ายครับ";
+        timeGreetEn = "Good afternoon";
+    } else {
+        timeGreetTh = "สวัสดีตอนเย็นครับ";
+        timeGreetEn = "Good evening";
+    }
+
+    // 2. คลังประโยคทักทายที่ดูมีชีวิตชีวา (สุ่มเพื่อไม่ให้จำเจ)
     const greetings = {
-        th: [`${thTime} มีอะไรให้น้องนำทางช่วยไหมครับ?`, "สำนักงานขนส่งพยัคฆภูมิพิสัยสวัสดีครับ"],
-        en: [`${enTime}! How can I help you?`, "Welcome! How can I assist you today?"]
+        th: [
+            `${timeGreetTh} มีอะไรให้น้องนำทางช่วยดูแลไหมครับ?`,
+            `สำนักงานขนส่งพยัคฆภูมิพิสัยครับ มีข้อมูลส่วนไหนที่อยากสอบถามผมไหมครับ?`,
+            `${timeGreetTh} เชิญสอบถามข้อมูลการทำใบขับขี่ หรือขั้นตอนต่างๆ กับผมได้เลยครับ`,
+            `สวัสดีครับ ผมน้องนำทาง ยินดีที่ได้ให้บริการครับ วันนี้มาติดต่อเรื่องอะไรดีครับ?`,
+            `สวัสดีครับ กำลังหาข้อมูลส่วนไหนอยู่หรือเปล่าครับ ให้ผมช่วยหาได้นะครับ`
+        ],
+        en: [
+            `${timeGreetEn}! How can I assist you today?`,
+            `Welcome! I'm Nong Nam Thang. Is there anything I can help you find?`,
+            `Hello! Feel free to ask me about driver's license renewals or any other services.`,
+            `${timeGreetEn}! It's a pleasure to see you. What can I do for you today?`,
+            `Hi there! Need any help with our services? Just let me know!`
+        ]
     };
     
+    // สุ่มเลือกประโยค
     const list = greetings[window.currentLang] || greetings['th'];
     let finalGreet = list[Math.floor(Math.random() * list.length)];
     
     console.log("👋 [Greeting]: " + finalGreet);
     window.hasGreeted = true; 
+    
     displayResponse(finalGreet);
     speak(finalGreet);
 }
