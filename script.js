@@ -91,7 +91,7 @@ function restartIdleTimer() {
  */
 async function initCamera() {
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 320, height: 240 } });
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 } });
         if (video) {
             video.srcObject = stream;
             video.onloadedmetadata = () => { video.play(); requestAnimationFrame(detectPerson); };
@@ -113,8 +113,8 @@ async function detectPerson() {
 
     const predictions = await cocoModel.detect(video);
     
-    // 1. คัดกรอง: เป็นคน, มั่นใจสูง, และอยู่ในระยะหน้าตู้ (150 ตามที่คุณทดสอบแล้ว)
-    const person = predictions.find(p => p.class === "person" && p.score > 0.75 && p.bbox[2] > 160); 
+    // 1. คัดกรอง: เป็นคน, มั่นใจสูง, และอยู่ในระยะหน้าตู้ (130 ตามที่คุณทดสอบแล้ว)
+    const person = predictions.find(p => p.class === "person" && p.score > 0.65 && p.bbox[2] > 130); 
 
     if (person) {
         if (personInFrameTime === null) {
@@ -140,7 +140,7 @@ async function detectPerson() {
         }
 
     } else {
-        // 2. กรณีคนหายไปจากระยะ 150 (เดินออกหรือเดินผ่านไกลๆ)
+        // 2. กรณีคนหายไปจากระยะ 130 (เดินออกหรือเดินผ่านไกลๆ)
         const gap = now - lastSeenTime;
 
         // ถ้าหายไปนานเกิน 3 วินาที (ป้องกันกล้องหลุดชั่วคราว) ให้เริ่มปล่อยให้ระบบนับถอยหลังกลับ Home
