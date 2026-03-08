@@ -21,7 +21,7 @@ let isDetecting = true;
 let personInFrameTime = null; 
 let lastSeenTime = Date.now();
 let lastDetectionTime = 0;
-const DETECTION_INTERVAL = 500; 
+const DETECTION_INTERVAL = 200; 
 
 /**
  * 1. ระบบจัดการสถานะและความเสถียร
