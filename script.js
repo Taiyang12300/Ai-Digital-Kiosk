@@ -131,8 +131,8 @@ async function detectPerson() {
 
         const stayDuration = now - personInFrameTime;
 
-        // ✅ ยืนครบ 3 วินาที (3000ms) -> ทักทายทันที
-        if (stayDuration >= 3000 && isAtHome && !window.isBusy && !window.hasGreeted) {
+        // ✅ ยืนครบ 4 วินาที (4000ms) -> ทักทายทันที
+        if (stayDuration >= 4000 && isAtHome && !window.isBusy && !window.hasGreeted) {
             console.log("👋 [AI] Greeting triggered.");
             greetUser(); 
         }
