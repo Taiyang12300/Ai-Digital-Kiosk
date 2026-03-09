@@ -113,13 +113,13 @@ async function detectPerson() {
 
     const predictions = await cocoModel.detect(video);
     
-    // ✅ [Smart Logic] กรองคนหน้าตู้: ต้องเป็นคน, มั่นใจ > 80%, กว้าง > 150px, และอยู่กลางจอ (100-540)
+    // ✅ [Smart Logic] กรองคนหน้าตู้: ต้องเป็นคน, มั่นใจ > 80%, กว้าง > 180px, และอยู่กลางจอ (100-540)
     const person = predictions.find(p => {
         const [x, y, width, height] = p.bbox;
         const centerX = x + (width / 2);
         return p.class === "person" && 
                p.score > 0.80 && 
-               width > 150 && 
+               width > 180 && 
                (centerX > 100 && centerX < 540);
     });
 
