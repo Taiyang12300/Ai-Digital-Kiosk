@@ -7,36 +7,127 @@
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
   <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
+  
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
   
   <style>
-    :root { --primary: #6c5ce7; --bg: #f9f9fb; --accent: #ff7675; --dlt-purple: #6f42c1; }
-    body { font-family: 'Sarabun', sans-serif; background: var(--bg); margin: 0; padding: 0; display: flex; justify-content: center; min-height: 100vh; overflow-x: hidden; }
-    .main-container { width: 100%; max-width: 600px; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+    :root { --primary: #6c5ce7; --bg: #f9f9fb; --accent: #ff7675; }
     
-    /* --- Top Controls --- */
-    .top-controls { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
-    .lang-container { display: flex; gap: 10px; }
-    .btn-lang, .btn-mute { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px; border-radius: 25px; border: 2px solid #e0e0e0; background: white; color: #636e72; font-size: 15px; font-weight: 500; cursor: pointer; transition: all 0.2s; min-width: 90px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    body { 
+      font-family: 'Sarabun', sans-serif; 
+      background: var(--bg); 
+      margin: 0; 
+      padding: 0; 
+      display: flex; 
+      justify-content: center; 
+      min-height: 100vh;
+    }
+
+    /* Wrapper หลักเพื่อคุม Layout ไม่ให้พัง */
+    .main-container {
+      width: 100%;
+      max-width: 600px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    
+    /* --- ส่วนควบคุมด้านบน (ภาษา + ปิดเสียง) --- */
+    .top-controls {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 25px;
+    }
+
+    .lang-container {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn-lang, .btn-mute {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-radius: 25px;
+      border: 2px solid #e0e0e0;
+      background: white;
+      color: #636e72;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      min-width: 90px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+
     .btn-mute { min-width: 55px; font-size: 18px; }
-    .btn-lang img { width: 22px; height: auto; border-radius: 2px; }
-    .btn-lang.active { border-color: var(--primary); background: #f0edff; color: var(--primary); font-weight: bold; }
-    .btn-mute.muted { background: var(--accent); color: white; border-color: var(--accent); }
+
+    /* ตกแต่งรูปธงสำหรับตู้ Kiosk */
+    .btn-lang img {
+      width: 22px;
+      height: auto;
+      border-radius: 2px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+
+    .btn-lang.active {
+      border-color: var(--primary);
+      background: #f0edff;
+      color: var(--primary);
+      font-weight: bold;
+    }
+
+    .btn-mute.muted {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+    }
     
-    /* --- Display & Avatar --- */
-    .avatar-container { width: 180px; height: 180px; margin-bottom: 20px; border-radius: 50%; background: white; box-shadow: 0 5px 15px rgba(0,0,0,0.05); overflow: hidden; }
+    /* --- ส่วนแสดงผลกลาง --- */
+    .avatar-container { 
+      width: 180px; 
+      height: 180px; 
+      margin-bottom: 20px; 
+      border-radius: 50%; 
+      background: white; 
+      box-shadow: 0 5px 15px rgba(0,0,0,0.05); 
+      overflow: hidden; 
+    }
     #lottie-canvas { width: 100%; height: 100%; }
-    .display-box { background: white; border-radius: 20px; padding: 25px; box-shadow: 0 10px 20px rgba(0,0,0,0.05); width: 100%; box-sizing: border-box; text-align: left; min-height: 140px; font-size: 18px; margin-bottom: 20px; color: #2d3436; border-left: 6px solid var(--primary); line-height: 1.6; }
+
+    .display-box { 
+      background: white; 
+      border-radius: 20px; 
+      padding: 25px; 
+      box-shadow: 0 10px 20px rgba(0,0,0,0.05); 
+      width: 100%; 
+      box-sizing: border-box;
+      text-align: left; 
+      min-height: 140px; 
+      font-size: 18px; 
+      margin-bottom: 20px; 
+      color: #2d3436; 
+      border-left: 6px solid var(--primary); 
+      line-height: 1.6;
+    }
     
     .faq-title { width: 100%; margin: 10px 0; font-weight: 500; color: #636e72; font-size: 16px; display: flex; align-items: center; gap: 8px; }
     .faq-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; width: 100%; margin-bottom: 30px; }
     .faq-btn { padding: 12px; background: white; color: var(--primary); border: 2px solid #e0e0ff; border-radius: 15px; font-size: 15px; cursor: pointer; transition: all 0.2s; font-weight: 500; min-height: 60px; display: flex; align-items: center; justify-content: center; text-align: center; }
+    .faq-btn:active { transform: scale(0.95); background: var(--primary); color: white; }
 
-    /* --- Input & Mic --- */
+    /* --- ส่วนรับข้อมูล --- */
     .input-section { width: 100%; display: flex; gap: 10px; margin-bottom: 20px; }
-    #userInput { flex: 1; padding: 15px; border-radius: 30px; border: 2px solid #ddd; outline: none; font-size: 16px; }
+    #userInput { flex: 1; padding: 15px; border-radius: 30px; border: 2px solid #ddd; outline: none; font-family: 'Sarabun', sans-serif; font-size: 16px; }
     .btn-send { width: 50px; height: 50px; border-radius: 50%; border: none; background: var(--primary); color: white; cursor: pointer; font-size: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+
+    .mic-section { margin-bottom: 30px; text-align: center; }
     .btn-mic { width: 90px; height: 90px; border-radius: 50%; border: none; background: var(--primary); color: white; font-size: 35px; cursor: pointer; display: flex; align-items: center; justify-content: center; margin: 0 auto; box-shadow: 0 10px 20px rgba(108,92,231,0.3); }
     .btn-mic.recording { background: var(--accent); animation: pulse 1.5s infinite; }
 
@@ -47,7 +138,7 @@
 
   <div class="main-container">
     <div class="top-controls">
-      <button onclick="toggleMute()" id="muteBtn" class="btn-mute">
+      <button onclick="toggleMute()" id="muteBtn" class="btn-mute" title="ปิด/เปิดเสียง">
         <i id="muteIcon" class="fas fa-volume-up"></i>
       </button>
 
@@ -82,47 +173,19 @@
   </div>
 
   <video id="video" width="320" height="240" autoplay muted playsinline style="display:none;"></video>
+  <canvas id="motionCanvas" width="320" height="240" style="display:none;"></canvas>
 
-  <script src="script.js?v=2.0"></script>
+  <script src="script.js?v=1.9"></script>
 
   <script>
     let recognition, isListening = false;
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    
-    // ✅ ประกาศตัวแปรเก็บหน้าต่าง Popup (ใช้ window เฉยๆ ไม่มี s)
-    window.queueWindow = null;
-    
-    // --- ฟังก์ชันควบคุมคิวออนไลน์ ---
-    function openQueue() {
-    const url = "https://gecc.dlt.go.th/dltsmartqueue/main";
-    
-    // ✅ เพิ่มการกำหนด width และ height เพื่อบังคับให้เป็น Popup
-    window.queueWindow = window.open(url, "DLT_Queue", "width=1200,height=800,menubar=no,status=no");
-             
-        const msg = (window.currentLang === 'th') ? "เปิดหน้าจองคิวให้แล้วค่ะ" : "Opening the booking page.";
-        const displayBox = document.getElementById('response-text');
-        if (displayBox) displayBox.innerText = msg;
-        
-        if (typeof speak === "function") speak(msg);
-        
-        window.isBusy = true; // ล็อคน้องนำทางชั่วคราวขณะใช้งาน
-        window.isAtHome = false;
-    }
 
-    // ฟังก์ชันสำหรับปิด (script.js จะเรียกใช้เมื่อกล้องไม่เจอคน)
-    function closeQueue() {
-        if (window.queueWindow && !window.queueWindow.closed) {
-            window.queueWindow.close();
-            window.queueWindow = null;
-        }
-        location.reload(); // รีเฟรชหน้าหลักเพื่อรับแขกคนใหม่
-    }
-
-    // --- ระบบ Speech & Lang ---
     function toggleMute() {
       window.isMuted = !window.isMuted;
       const muteBtn = document.getElementById('muteBtn');
       const muteIcon = document.getElementById('muteIcon');
+      
       if (window.isMuted) {
         window.speechSynthesis.cancel();
         muteBtn.classList.add('muted');
@@ -133,25 +196,44 @@
       }
     }
 
+    // --- ส่วนที่แก้ไข: ปรับปรุงการสลับภาษาให้ตัดเสียงและล้างสถานะทันที ---
     function changeLang(lang) {
+      // 1. สั่งหยุดเสียงทันทีและปลดล็อกสถานะ Busy เพื่อป้องกันระบบค้าง
       window.speechSynthesis.cancel();
       window.isBusy = false;
       window.currentLang = lang;
       
+      // 2. บังคับเปิดเสียงเสมอเมื่อสลับภาษา (Logic เดิมของคุณ)
+      window.isMuted = false; 
+      const muteBtn = document.getElementById('muteBtn');
+      const muteIcon = document.getElementById('muteIcon');
+      if (muteBtn) muteBtn.classList.remove('muted');
+      if (muteIcon) muteIcon.className = 'fas fa-volume-up';
+      
+      // 3. อัปเดต UI ปุ่ม
       document.getElementById('btn-th').classList.toggle('active', lang === 'th');
       document.getElementById('btn-en').classList.toggle('active', lang === 'en');
       
       const isTh = (lang === 'th');
       document.getElementById('userInput').placeholder = isTh ? "พิมพ์คำถามที่นี่..." : "Type your question here...";
       document.getElementById('statusText').innerText = isTh ? "แตะไมค์เพื่อเริ่มพูด" : "Tap mic to speak";
-      document.getElementById('faq-title-text').innerHTML = isTh ? '<i class="fas fa-star"></i> คำถามที่พบบ่อย:' : '<i class="fas fa-star"></i> Frequently Asked Questions:';
+      
+      const faqTitle = document.getElementById('faq-title-text');
+      if (faqTitle) {
+          faqTitle.innerHTML = isTh ? '<i class="fas fa-star"></i> คำถามที่พบบ่อย:' : '<i class="fas fa-star"></i> Frequently Asked Questions:';
+      }
 
+      // 4. ล้างข้อความคำตอบเก่าทิ้งทันที
       const output = document.getElementById('response-text');
       output.innerText = isTh ? "เปลี่ยนเป็นภาษาไทยแล้วครับ มีอะไรให้ช่วยไหม?" : "Switched to English. How can I assist you?";
 
       if (recognition) recognition.lang = isTh ? 'th-TH' : 'en-US';
       if (typeof renderFAQButtons === "function") renderFAQButtons();
+      
+      // 5. รีเซ็ตตัวละครและทักทายใหม่
+      if (typeof updateLottie === "function") updateLottie('idle');
       window.hasGreeted = false;
+      if (typeof greetUser === "function") greetUser();
     }
 
     if (SpeechRecognition) {
@@ -160,6 +242,7 @@
       recognition.onstart = () => {
         isListening = true;
         document.getElementById('micBtn').classList.add('recording');
+        if (typeof isDetecting !== 'undefined') isDetecting = false; 
       };
       recognition.onresult = (event) => {
         const text = event.results[0][0].transcript;
@@ -168,18 +251,23 @@
       recognition.onend = () => { stopListening(); };
     }
 
-    async function processQuery(query) {
-      window.speechSynthesis.cancel();
-      window.isBusy = false;
+    function handleManualInput() {
+      const input = document.getElementById('userInput');
+      if (input.value.trim()) { processQuery(input.value.trim()); input.value = ''; }
+    }
+    
+    function handleKeyPress(e) { if (e.key === 'Enter') handleManualInput(); }
 
-      // ตรวจจับ Keyword จองคิวออนไลน์
-      if (query.includes("จองคิว") || query.includes("booking") || query.includes("register")) {
-          const msg = (window.currentLang === 'th') ? "กำลังเปิดหน้าจองคิวออนไลน์ให้ครับ" : "Opening online booking for you.";
-          document.getElementById('response-text').innerText = msg;
-          if (typeof speak === "function") speak(msg);
-          setTimeout(openQueue, 1500);
-          return;
-      }
+    // --- ส่วนที่แก้ไข: เมื่อถามคำถามใหม่ ให้ตัดเสียงภาษาเก่าทิ้งทันที ---
+    async function processQuery(query) {
+      window.speechSynthesis.cancel(); // ตัดเสียงเก่า
+      window.isBusy = false; // เคลียร์สถานะเพื่อให้ทำงานต่อได้ทันที
+      
+      window.isMuted = false;
+      const muteBtn = document.getElementById('muteBtn');
+      const muteIcon = document.getElementById('muteIcon');
+      if (muteBtn) muteBtn.classList.remove('muted');
+      if (muteIcon) muteIcon.className = 'fas fa-volume-up';
 
       const output = document.getElementById('response-text');
       output.innerText = (window.currentLang === 'th') ? "กำลังค้นหา..." : "Searching...";
@@ -190,6 +278,7 @@
       if (isListening) { recognition.stop(); } 
       else { 
         window.speechSynthesis.cancel();
+        updateLottie('thinking');
         recognition.start(); 
       }
     }
@@ -199,13 +288,6 @@
       document.getElementById('micBtn').classList.remove('recording');
       document.getElementById('statusText').innerText = (window.currentLang === 'th') ? "แตะไมค์เพื่อเริ่มพูด" : "Tap mic to speak";
     }
-
-    function handleManualInput() {
-      const input = document.getElementById('userInput');
-      if (input.value.trim()) { processQuery(input.value.trim()); input.value = ''; }
-    }
-    
-    function handleKeyPress(e) { if (e.key === 'Enter') handleManualInput(); }
   </script>
 </body>
 </html>
