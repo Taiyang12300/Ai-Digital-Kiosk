@@ -94,11 +94,11 @@
     
     // --- ฟังก์ชันควบคุมคิวออนไลน์ ---
     function openQueue() {
-        const url = "https://gecc.dlt.go.th/dltsmartqueue/main";
-        
-        // เปิดหน้าต่างใหม่เพื่อแก้ปัญหาหน้าขาว
-        window.queueWindow = window.open(url, "DLT_Queue", "fullscreen=yes,scrollbars=yes");
-        
+    const url = "https://gecc.dlt.go.th/dltsmartqueue/main";
+    
+    // ✅ เพิ่มการกำหนด width และ height เพื่อบังคับให้เป็น Popup
+    window.queueWindow = window.open(url, "DLT_Queue", "width=1200,height=800,menubar=no,status=no");
+             
         const msg = (window.currentLang === 'th') ? "เปิดหน้าจองคิวให้แล้วค่ะ" : "Opening the booking page.";
         const displayBox = document.getElementById('response-text');
         if (displayBox) displayBox.innerText = msg;
