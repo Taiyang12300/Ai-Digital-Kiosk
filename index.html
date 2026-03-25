@@ -138,15 +138,10 @@
 
     // --- ฟังก์ชันควบคุมคิวออนไลน์ (เพิ่มใหม่) ---
     function openQueue() {
-    const url = "https://gecc.dlt.go.th/dltsmartqueue/main";
-    
-    // แจ้งเตือนผู้ใช้ก่อนเปลี่ยนหน้า (เพื่อให้ AI พูดจบก่อน)
-    console.log("Redirecting to DLT Smart Queue...");
-    
-    // เปลี่ยนหน้าเว็บไปยังระบบจองคิวโดยตรง
-    // วิธีนี้จะแก้ปัญหา "ปฏิเสธการเชื่อมต่อ" ได้ 100% ครับ
-    window.location.href = url;
-    }
+    // ส่งผู้ใช้งานไปยังหน้า Bridge Page ที่เราสร้างใหม่
+    // หน้า queue.html จะเป็นคนจัดการ iframe และตัวนับเวลาเด้งกลับเอง
+    window.location.href = "queue.html";
+}
 
     function closeQueue() {
       document.getElementById('queue-overlay').style.display = 'none';
