@@ -113,6 +113,7 @@ async function detectPerson() {
 
     const predictions = await cocoModel.detect(video);
     
+    // ✅ [Smart Logic] กรองคนหน้าตู้: ต้องเป็นคน, มั่นใจ > 80%, กว้าง > 180px, และอยู่กลางจอ (100-540)
     const person = predictions.find(p => {
         const [x, y, width, height] = p.bbox;
         const centerX = x + (width / 2);
@@ -127,37 +128,24 @@ async function detectPerson() {
             console.log("👁️ [AI] Target Spotted (Center Zone)");
             personInFrameTime = now;
         }
+
         const stayDuration = now - personInFrameTime;
+
+        // ✅ ยืนครบ 3 วินาที (3000ms) -> ทักทายทันที
         if (stayDuration >= 3000 && isAtHome && !window.isBusy && !window.hasGreeted) {
             console.log("👋 [AI] Greeting triggered.");
             greetUser(); 
         }
+
+        // อัปเดตเวลาการมองเห็นล่าสุดเสมอ
         lastSeenTime = now; 
 
     } else {
         const gap = now - lastSeenTime;
 
-        // ✅ จุดที่คนเดินออกจากหน้าตู้เกิน 3 วินาที
+        // ✅ กันหลุด: ถ้าคนหายไปเกิน 3 วินาที ถึงจะล้างสถานะคน (Hysteresis)
         if (personInFrameTime !== null && gap >= 3000) {
             console.log("🚫 [AI] Target Left Zone.");
-
-            // 🚀 ปรับปรุงส่วนการปิดหน้าต่างจองคิวให้เสถียรขึ้น
-            // เราเช็คว่ามีหน้าต่างเปิดอยู่จริงไหม และยังไม่ถูกปิดไปก่อนหน้า
-            if (window.queueWindow && !window.queueWindow.closed) {
-                console.log("🧹 [System] Auto-Closing Queue Window...");
-                try {
-                    window.queueWindow.close(); // สั่งปิดแท็บจองคิว
-                } catch (e) {
-                    console.error("❌ Error closing window:", e);
-                }
-                window.queueWindow = null;
-                
-                // แนะนำให้ reload เพื่อล้างค่า RAM และสถานะทักทายให้กลับไปเริ่มต้นใหม่
-                location.reload(); 
-                return; 
-            }
-
-            // ถ้าไม่มีหน้าต่างเปิดอยู่ ก็แค่รีเซ็ตค่าสถานะปกติ
             personInFrameTime = null;   
             window.hasGreeted = false;  
             if (!isAtHome) restartIdleTimer(); 
