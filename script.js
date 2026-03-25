@@ -141,16 +141,23 @@ async function detectPerson() {
         if (personInFrameTime !== null && gap >= 3000) {
             console.log("🚫 [AI] Target Left Zone.");
 
-            // 🚀 --- ส่วนที่เพิ่มใหม่: สั่งปิดหน้าจองคิวทันที ---
+            // 🚀 ปรับปรุงส่วนการปิดหน้าต่างจองคิวให้เสถียรขึ้น
+            // เราเช็คว่ามีหน้าต่างเปิดอยู่จริงไหม และยังไม่ถูกปิดไปก่อนหน้า
             if (window.queueWindow && !window.queueWindow.closed) {
                 console.log("🧹 [System] Auto-Closing Queue Window...");
-                window.queueWindow.close(); // สั่งปิดหน้าต่าง Popup
+                try {
+                    window.queueWindow.close(); // สั่งปิดแท็บจองคิว
+                } catch (e) {
+                    console.error("❌ Error closing window:", e);
+                }
                 window.queueWindow = null;
-                location.reload(); // รีเฟรชหน้าหลักเพื่อให้ระบบสะอาด
-                return; // จบฟังก์ชันทันทีเพื่อเริ่มใหม่หลังรีโหลด
+                
+                // แนะนำให้ reload เพื่อล้างค่า RAM และสถานะทักทายให้กลับไปเริ่มต้นใหม่
+                location.reload(); 
+                return; 
             }
-            // -------------------------------------------
 
+            // ถ้าไม่มีหน้าต่างเปิดอยู่ ก็แค่รีเซ็ตค่าสถานะปกติ
             personInFrameTime = null;   
             window.hasGreeted = false;  
             if (!isAtHome) restartIdleTimer(); 
