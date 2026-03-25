@@ -83,14 +83,6 @@
 </head>
 <body>
 
-  <div id="queue-overlay">
-    <div class="queue-header">
-      <h2><i class="fas fa-calendar-check"></i> ระบบจองคิวออนไลน์ กรมการขนส่งทางบก</h2>
-      <button onclick="closeQueue()" class="btn-close-queue">กลับไปหน้าหลัก</button>
-    </div>
-    <iframe id="queue-iframe" src=""></iframe>
-  </div>
-
   <div class="main-container">
     <div class="top-controls">
       <button onclick="toggleMute()" id="muteBtn" class="btn-mute">
@@ -127,14 +119,6 @@
     </div>
   </div>
 
-  <div id="queue-status-bar" style="display:none; position:fixed; top:0; left:0; width:100%; height:50px; background:rgba(111, 66, 193, 0.9); color:white; z-index:20000; display:flex; align-items:center; justify-content:space-between; padding:0 20px; box-sizing:border-box; font-family:Sarabun;">
-    <span><i class="fas fa-clock"></i> จะกลับหน้าหลักในอีก <span id="timer-count">60</span> วินาที</span>
-    <div>
-        <button onclick="resetQueueTimer()" style="background:white; color:#6f42c1; border:none; padding:5px 15px; border-radius:15px; margin-right:10px; cursor:pointer; font-weight:bold;">ใช้งานต่อ</button>
-        <button onclick="closeQueue()" style="background:#ff7675; color:white; border:none; padding:5px 15px; border-radius:15px; cursor:pointer; font-weight:bold;">กลับหน้าหลัก</button>
-    </div>
-</div>
-
   <video id="video" width="320" height="240" autoplay muted playsinline style="display:none;"></video>
 
   <script src="script.js?v=2.0"></script>
@@ -142,52 +126,36 @@
   <script>
     let recognition, isListening = false;
     let queueTimer; // ตัวนับเวลาสำหรับปิดหน้าจองคิวอัตโนมัติ
-    let timeLeft = 60; // ตั้งไว้ 60 วินาที (1 นาที) 
-    let queueCountdown; 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
+    windows.queueWindow = null;
+    
     // --- ฟังก์ชันควบคุมคิวออนไลน์ (เพิ่มใหม่) ---
     function openQueue() {
     const url = "https://gecc.dlt.go.th/dltsmartqueue/main";
-    // เก็บหน้าต่างไว้ใน window.queueWindow เพื่อให้ script.js มองเห็น
+    
+    // เปิดหน้าต่างใหม่ (Popup) เพื่อเลี่ยงการโดนบล็อก iframe
     window.queueWindow = window.open(url, "DLT_Queue", "fullscreen=yes,scrollbars=yes");
     
-    const msg = "เปิดหน้าจองคิวให้แล้วค่ะ";
-    displayResponse(msg);
-    speak(msg);
-}
-
-function startCountdown() {
-    timeLeft = 60; // รีเซ็ตเวลาเป็น 60 ทุกครั้งที่เริ่ม
-    updateTimerDisplay();
+    // แจ้งสถานะ
+    const msg = (window.currentLang === 'th') ? "เปิดหน้าจองคิวให้แล้วค่ะ" : "Opening the booking page.";
+    const displayBox = document.getElementById('response-text');
+    if (displayBox) displayBox.innerText = msg;
     
-    clearInterval(queueCountdown);
-    queueCountdown = setInterval(() => {
-        timeLeft--;
-        updateTimerDisplay();
-        if (timeLeft <= 0) {
-            closeQueue(); // หมดเวลา ดีดกลับหน้าหลัก
-        }
-    }, 1000);
+    if (typeof speak === "function") speak(msg);
+    
+    // ล็อคสถานะน้องนำทางชั่วคราว
+    window.isBusy = true;
+    window.isAtHome = false;
 }
 
-// ฟังก์ชันรีเซ็ตเวลาเมื่อผู้ใช้กด "ใช้งานต่อ"
-function resetQueueTimer() {
-    timeLeft = 60;
-    updateTimerDisplay();
-}
-
-function updateTimerDisplay() {
-    const timerElem = document.getElementById('timer-count');
-    if(timerElem) timerElem.innerText = timeLeft;
-}
-
+// ฟังก์ชันสำหรับปิด (ที่จะโดนเรียกจาก script.js เมื่อ AI ไม่เจอคน)
 function closeQueue() {
-    clearInterval(queueCountdown);
-    document.getElementById('queue-overlay').style.display = 'none';
-    document.getElementById('queue-status-bar').style.display = 'none';
-    document.getElementById('queue-iframe').src = "";
-    window.isBusy = false;
+    if (window.queueWindow && !window.queueWindow.closed) {
+        window.queueWindow.close();
+        window.queueWindow = null;
+    }
+    // รีเฟรชหน้าหลักเพื่อล้างสถานะทั้งหมดและเริ่มรับแขกใหม่
+    location.reload();
 }
 
     // --- Logic เดิมของคุณ ---
