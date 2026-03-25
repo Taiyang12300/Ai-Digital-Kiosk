@@ -127,6 +127,14 @@
     </div>
   </div>
 
+  <div id="queue-status-bar" style="display:none; position:fixed; top:0; left:0; width:100%; height:50px; background:rgba(111, 66, 193, 0.9); color:white; z-index:20000; display:flex; align-items:center; justify-content:space-between; padding:0 20px; box-sizing:border-box; font-family:Sarabun;">
+    <span><i class="fas fa-clock"></i> จะกลับหน้าหลักในอีก <span id="timer-count">60</span> วินาที</span>
+    <div>
+        <button onclick="resetQueueTimer()" style="background:white; color:#6f42c1; border:none; padding:5px 15px; border-radius:15px; margin-right:10px; cursor:pointer; font-weight:bold;">ใช้งานต่อ</button>
+        <button onclick="closeQueue()" style="background:#ff7675; color:white; border:none; padding:5px 15px; border-radius:15px; cursor:pointer; font-weight:bold;">กลับหน้าหลัก</button>
+    </div>
+</div>
+
   <video id="video" width="320" height="240" autoplay muted playsinline style="display:none;"></video>
 
   <script src="script.js?v=2.0"></script>
@@ -134,41 +142,59 @@
   <script>
     let recognition, isListening = false;
     let queueTimer; // ตัวนับเวลาสำหรับปิดหน้าจองคิวอัตโนมัติ
-    let queueWindow = null; 
+    let timeLeft = 60; // ตั้งไว้ 60 วินาที (1 นาที) 
+    let queueCountdown; 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
     // --- ฟังก์ชันควบคุมคิวออนไลน์ (เพิ่มใหม่) ---
     function openQueue() {
     const url = "https://gecc.dlt.go.th/dltsmartqueue/main";
-    
-    // 1. เปิดหน้าจองคิวในหน้าต่างใหม่ (Popup) แบบเต็มจอ
-    // วิธีนี้จะไม่โดนบล็อกแน่นอนเพราะไม่ใช่ iframe ครับ
-    queueWindow = window.open(url, "DLT_Queue", "fullscreen=yes,scrollbars=yes");
+    const iframe = document.getElementById('queue-iframe');
+    const overlay = document.getElementById('queue-overlay');
+    const statusBar = document.getElementById('queue-status-bar');
 
-    // 2. ให้น้องนำทางพูดแจ้งผู้ใช้
-    const msg = "เปิดหน้าจองคิวออนไลน์ให้แล้วค่ะ ระบบจะกลับมาหน้าหลักอัตโนมัติหากไม่มีการใช้งาน";
-    document.getElementById('response-text').innerText = msg;
-    if (typeof speak === "function") speak(msg);
-
-    // 3. ระบบ "ดีดกลับอัตโนมัติ" (Auto-Reset)
-    // ตั้งเวลาไว้ 3 นาที (180000 ms) ถ้าครบกำหนดจะปิดหน้าต่างจองคิวทันที
-    clearTimeout(window.idleTimer);
-    window.idleTimer = setTimeout(() => {
-        if (queueWindow && !queueWindow.closed) {
-            queueWindow.close(); // สั่งปิดหน้าขนส่ง
-            window.focus(); // ดึงหน้าน้องนำทางกลับมาเด่นข้างหน้า
-            location.reload(); // รีเฟรชตัวเองเพื่อล้างค่าใหม่พร้อมรับคนต่อไป
-        }
-    }, 180000); 
+    if (iframe && overlay) {
+        iframe.src = url;
+        overlay.style.display = 'flex';
+        statusBar.style.display = 'flex'; // โชว์แถบจับเวลา
+        window.isBusy = true;
+        
+        startCountdown(); // เริ่มนับถอยหลัง
+    }
 }
 
-    function closeQueue() {
-      document.getElementById('queue-overlay').style.display = 'none';
-      document.getElementById('queue-iframe').src = "";
-      window.isBusy = false;
-      clearTimeout(queueTimer);
-      if (typeof updateLottie === "function") updateLottie('idle');
-    }
+function startCountdown() {
+    timeLeft = 60; // รีเซ็ตเวลาเป็น 60 ทุกครั้งที่เริ่ม
+    updateTimerDisplay();
+    
+    clearInterval(queueCountdown);
+    queueCountdown = setInterval(() => {
+        timeLeft--;
+        updateTimerDisplay();
+        if (timeLeft <= 0) {
+            closeQueue(); // หมดเวลา ดีดกลับหน้าหลัก
+        }
+    }, 1000);
+}
+
+// ฟังก์ชันรีเซ็ตเวลาเมื่อผู้ใช้กด "ใช้งานต่อ"
+function resetQueueTimer() {
+    timeLeft = 60;
+    updateTimerDisplay();
+}
+
+function updateTimerDisplay() {
+    const timerElem = document.getElementById('timer-count');
+    if(timerElem) timerElem.innerText = timeLeft;
+}
+
+function closeQueue() {
+    clearInterval(queueCountdown);
+    document.getElementById('queue-overlay').style.display = 'none';
+    document.getElementById('queue-status-bar').style.display = 'none';
+    document.getElementById('queue-iframe').src = "";
+    window.isBusy = false;
+}
 
     // --- Logic เดิมของคุณ ---
     function toggleMute() {
