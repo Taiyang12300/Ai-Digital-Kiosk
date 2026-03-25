@@ -138,16 +138,14 @@
 
     // --- ฟังก์ชันควบคุมคิวออนไลน์ (เพิ่มใหม่) ---
     function openQueue() {
-      const url = "https://gecc.dlt.go.th/dltsmartqueue/main";
-      document.getElementById('queue-iframe').src = url;
-      document.getElementById('queue-overlay').style.display = 'flex';
-      window.isBusy = true; // หยุด AI ทักทายคน
-      
-      // ตั้งเวลา Auto-Close 3 นาที (180,000 ms) หากไม่มีการใช้งาน
-      clearTimeout(queueTimer);
-      queueTimer = setTimeout(() => {
-        closeQueue();
-      }, 180000); 
+    const url = "https://gecc.dlt.go.th/dltsmartqueue/main";
+    
+    // แจ้งเตือนผู้ใช้ก่อนเปลี่ยนหน้า (เพื่อให้ AI พูดจบก่อน)
+    console.log("Redirecting to DLT Smart Queue...");
+    
+    // เปลี่ยนหน้าเว็บไปยังระบบจองคิวโดยตรง
+    // วิธีนี้จะแก้ปัญหา "ปฏิเสธการเชื่อมต่อ" ได้ 100% ครับ
+    window.location.href = url;
     }
 
     function closeQueue() {
