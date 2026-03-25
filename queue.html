@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>ระบบจองคิวออนไลน์ - กรมการขนส่งทางบก</title>
+    <style>
+        body { margin: 0; padding: 0; overflow: hidden; font-family: 'Sarabun', sans-serif; background: #6f42c1; }
+        .top-bar { 
+            height: 60px; background: #6f42c1; color: white; 
+            display: flex; align-items: center; justify-content: space-between; 
+            padding: 0 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            position: relative; z-index: 10;
+        }
+        .btn-back { 
+            background: white; color: #6f42c1; border: none; 
+            padding: 10px 20px; border-radius: 20px; font-weight: bold; cursor: pointer; 
+        }
+        /* ขยาย iframe ให้เต็มจอ */
+        #dlt-frame { 
+            width: 100vw; height: calc(100vh - 60px); border: none; 
+        }
+    </style>
+</head>
+<body onclick="resetTimer()"> <div class="top-bar">
+        <div><i class="fas fa-clock"></i> ระบบจะกลับหน้าหลักอัตโนมัติหากไม่มีการใช้งาน (3 นาที)</div>
+        <button class="btn-back" onclick="goHome()">กลับไปหาหน้าน้องนำทาง</button>
+    </div>
+
+    <iframe id="dlt-frame" src="https://gecc.dlt.go.th/dltsmartqueue/main"></iframe>
+
+    <script>
+        let idleTime = 0;
+        const limit = 180; // ตั้งเวลาเดินหนีไว้ 180 วินาที (3 นาที)
+
+        // ฟังก์ชันนับเวลาถอยหลัง
+        const timerIncrement = () => {
+            idleTime++;
+            if (idleTime >= limit) {
+                goHome(); // เดินหนีเกินเวลา ให้ดีดกลับ
+            }
+        };
+
+        // เริ่มนับเวลาทุกๆ 1 วินาที
+        let idleInterval = setInterval(timerIncrement, 1000);
+
+        // ฟังก์ชันรีเซ็ตเวลา (เมื่อมีการแตะหน้าจอ)
+        function resetTimer() {
+            idleTime = 0;
+        }
+
+        function goHome() {
+            window.location.href = "index.html"; // ดีดกลับหน้าหลัก
+        }
+
+        // ป้องกันการโดนบล็อก iframe (บาง Browser ต้องใช้เทคนิคนี้)
+        document.getElementById('dlt-frame').onload = function() {
+            console.log("หน้าจองคิวโหลดเสร็จแล้ว ตัวนับเวลายังทำงานอยู่เบื้องหลัง");
+        };
+    </script>
+</body>
+</html>
