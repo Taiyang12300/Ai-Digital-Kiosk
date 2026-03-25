@@ -149,18 +149,12 @@
     // --- ฟังก์ชันควบคุมคิวออนไลน์ (เพิ่มใหม่) ---
     function openQueue() {
     const url = "https://gecc.dlt.go.th/dltsmartqueue/main";
-    const iframe = document.getElementById('queue-iframe');
-    const overlay = document.getElementById('queue-overlay');
-    const statusBar = document.getElementById('queue-status-bar');
-
-    if (iframe && overlay) {
-        iframe.src = url;
-        overlay.style.display = 'flex';
-        statusBar.style.display = 'flex'; // โชว์แถบจับเวลา
-        window.isBusy = true;
-        
-        startCountdown(); // เริ่มนับถอยหลัง
-    }
+    // เก็บหน้าต่างไว้ใน window.queueWindow เพื่อให้ script.js มองเห็น
+    window.queueWindow = window.open(url, "DLT_Queue", "fullscreen=yes,scrollbars=yes");
+    
+    const msg = "เปิดหน้าจองคิวให้แล้วค่ะ";
+    displayResponse(msg);
+    speak(msg);
 }
 
 function startCountdown() {
