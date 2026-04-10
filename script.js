@@ -113,7 +113,6 @@ async function detectPerson() {
 
     const predictions = await cocoModel.detect(video);
     
-    // ✅ [Smart Logic] กรองคนหน้าตู้: ต้องเป็นคน, มั่นใจ > 80%, กว้าง > 180px, และอยู่กลางจอ (100-540)
     const person = predictions.find(p => {
         const [x, y, width, height] = p.bbox;
         const centerX = x + (width / 2);
@@ -129,23 +128,29 @@ async function detectPerson() {
             personInFrameTime = now;
         }
 
+        // ✅ อัปเดตสถานะให้หน้าจอ Debug แสดงผลว่าเจอคน (True)
+        window.PersonInFrame = true;
+
+        // ✅ stayDuration ใช้ตัดสินใจว่าจะทักทาย (Greet) หรือยัง
         const stayDuration = now - personInFrameTime;
 
-        // ✅ ยืนครบ 3 วินาที (3000ms) -> ทักทายทันที
         if (stayDuration >= 3000 && isAtHome && !window.isBusy && !window.hasGreeted) {
             console.log("👋 [AI] Greeting triggered.");
             greetUser(); 
         }
 
-        // อัปเดตเวลาการมองเห็นล่าสุดเสมอ
         lastSeenTime = now; 
 
     } else {
         const gap = now - lastSeenTime;
 
-        // ✅ กันหลุด: ถ้าคนหายไปเกิน 3 วินาที ถึงจะล้างสถานะคน (Hysteresis)
         if (personInFrameTime !== null && gap >= 3000) {
             console.log("🚫 [AI] Target Left Zone.");
+            
+            // 🚩 จุดตาย: ต้อง Reset ค่าที่โชว์ใน Log ให้เป็น false ที่นี่
+            // ถ้าไม่มีบรรทัดนี้ ค่าในหน้าจอ Debug จะค้างเป็น true ตลอดไป
+            window.PersonInFrame = false; 
+
             personInFrameTime = null;   
             window.hasGreeted = false;  
             if (!isAtHome) restartIdleTimer(); 
