@@ -214,9 +214,32 @@ function greetUser() {
 /**
  * 4. ระบบประมวลผลคำตอบ (Smart Search AI Logic)
  */
+/**
+ * ✅ ฟังก์ชันเสริม: ส่งคำถามไปบันทึกลง Google Sheets (FAQ)
+ */
+async function logQuestionToSheet(userQuery) {
+    if (!userQuery || !GAS_URL) return;
+    try {
+        // ส่ง query ไปที่ GAS โดยระบุ action=logOnly เพื่อให้ฝั่ง Apps Script ทำงานในส่วนบันทึก FAQ
+        const finalUrl = `${GAS_URL}?action=logOnly&query=${encodeURIComponent(userQuery)}`;
+        
+        // ใช้ mode: 'no-cors' เพื่อให้ส่งข้อมูลออกไปได้โดยไม่ติดปัญหาเรื่องความปลอดภัยของเบราว์เซอร์
+        await fetch(finalUrl, { mode: 'no-cors' });
+        console.log("📊 [Log] บันทึกสถิติคำถามลง Google Sheet เรียบร้อย");
+    } catch (e) {
+        console.error("❌ [Log] ไม่สามารถส่งข้อมูลไปบันทึกได้:", e);
+    }
+}
+
+/**
+ * 🚀 ฟังก์ชันประมวลผลคำตอบ (ฉบับปรับปรุง: เพิ่มระบบบันทึก Log)
+ */
 async function getResponse(userQuery) {
     if (!userQuery || !window.localDatabase) return;
     console.log("📝 [User Query]: " + userQuery);
+
+    // 🚩 บรรทัดที่เพิ่มใหม่: บันทึกคำถามลง Sheet ทุกครั้งที่มีคนถาม
+    logQuestionToSheet(userQuery);
 
     if (window.isBusy) { stopAllSpeech(); window.isBusy = false; }
     isAtHome = false; 
@@ -237,6 +260,8 @@ async function getResponse(userQuery) {
             : "Is your license a Temporary (2-year) or a 5-year type?";
         displayResponse(askMsg);
         speak(askMsg);
+        
+        // เมื่อขึ้นปุ่มตัวเลือก เราจะส่งค่าไปถามต่อ และค่าใหม่จะถูกบันทึกเมื่อกดปุ่มนั้นๆ
         renderOptionButtons([
             { th: "แบบชั่วคราว (2 ปี)", en: "Temporary (2 years)", s_th: "ต่อใบขับขี่ชั่วคราว", s_en: "renew temporary license" },
             { th: "แบบ 5 ปี", en: "5-year type", s_th: "ต่อใบขับขี่ 5 ปี เป็น 5 ปี", s_en: "renew 5 year license" },
