@@ -1,5 +1,6 @@
 /**
  * 🚀 สมองกลน้องนำทาง - เวอร์ชั่นแก้ไขระบบ Checklist และปุ่ม Print
+ * ปรับปรุง: แก้ไขปัญหาปุ่ม Print เละ และคงระบบ Checklist ตรวจสอบเอกสาร
  */
 
 window.localDatabase = null;
@@ -113,7 +114,7 @@ function startLicenseCheck(type) {
     ]);
 }
 
-// ระบบตรวจสอบการติ๊ก Checklist
+// 🟢 ฟังก์ชันตรวจสอบการติ๊ก Checklist (คงเดิมของพี่)
 function validateDocCheck() {
     const checks = document.querySelectorAll('.doc-check');
     const btn = document.getElementById('btnPrintGuide');
@@ -128,6 +129,17 @@ function validateDocCheck() {
         btn.disabled = true;
         btn.style.background = "#bdc3c7"; // สีเทาเมื่อเอกสารไม่ครบ
         btn.style.cursor = "not-allowed";
+    }
+}
+
+// 🟢 ฟังก์ชันปริ้นใบนำทาง (เรียกใช้จากตัวแปร Global เพื่อกันปุ่มเละ)
+function handlePrintClick() {
+    if (window.currentPrintJob) {
+        printLicenseNote(
+            window.currentPrintJob.type, 
+            window.currentPrintJob.note, 
+            window.currentPrintJob.docs
+        );
     }
 }
 
@@ -147,7 +159,7 @@ function showLicenseChecklist(type, expiry) {
         else if (expiry === 'over3') { note = "ต้องอบรม 5 ชม. ที่ขนส่งเท่านั้น + สอบข้อเขียน + สอบขับรถ"; }
     }
 
-    // ป้องกันปุ่มเละด้วยการเก็บข้อมูลลง Object
+    // 💡 แก้ปัญหาปุ่มเละ: เก็บข้อมูลไว้ใน window แทนการใส่ใน onclick ตรงๆ
     window.currentPrintJob = { type, note, docs: docs.join('\\n') };
 
     let resultHTML = `
@@ -170,7 +182,7 @@ function showLicenseChecklist(type, expiry) {
     resultHTML += `
             <hr>
             <button id="btnPrintGuide" disabled 
-                onclick="printLicenseNote(window.currentPrintJob.type, window.currentPrintJob.note, window.currentPrintJob.docs)" 
+                onclick="handlePrintClick()" 
                 style="width:100%; padding:15px; background:#bdc3c7; color:white; border:none; border-radius:10px; font-weight:bold; font-size:22px; cursor:not-allowed;">
                 🖨️ ปริ้นใบนำทาง
             </button>
