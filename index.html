@@ -10,20 +10,21 @@
   
   <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
 
-<script src="script.js"></script>
+  <script src="script.js"></script>
 
-<script>
-  // 3. บังคับให้เริ่มทำงาน "หลังจาก" หน้าจอและไฟล์ทุกอย่างโหลดเสร็จชัวร์ๆ
-  window.addEventListener('load', () => {
-    console.log("🚀 หน้าจอโหลดเสร็จแล้ว กำลังเช็คสมองกล...");
-    if (typeof faceapi !== 'undefined') {
-        // ถ้าไฟล์ script.js ของพี่มีฟังก์ชันชื่อ init() ให้เรียกตรงนี้ครับ
-        if (typeof init === 'function') init(); 
-    } else {
-        alert("น้องนำทางโหลดไม่สำเร็จ เพราะหาไฟล์ face-api ไม่เจอครับพี่!");
-    }
-  });
-</script>
+  <script>
+    // เริ่มทำงานหลังจากหน้าจอโหลดเสร็จ
+    window.addEventListener('load', () => {
+      console.log("🚀 หน้าจอโหลดเสร็จแล้ว กำลังเช็คสมองกล...");
+      if (typeof faceapi !== 'undefined') {
+          // เรียกใช้ฟังก์ชันเริ่มต้นจาก script.js (ถ้ามี)
+          if (typeof initDatabase === 'function') initDatabase(); 
+      } else {
+          console.error("หาไฟล์ face-api ไม่เจอ");
+      }
+    });
+  </script>
+
   <style>
     :root { --primary: #6c5ce7; --bg: #f9f9fb; --accent: #ff7675; }
     
@@ -37,7 +38,6 @@
       min-height: 100vh;
     }
 
-    /* Wrapper หลักเพื่อคุม Layout ไม่ให้พัง */
     .main-container {
       width: 100%;
       max-width: 600px;
@@ -47,7 +47,6 @@
       align-items: center;
     }
     
-    /* --- ส่วนควบคุมด้านบน (ภาษา + ปิดเสียง) --- */
     .top-controls {
       width: 100%;
       display: flex;
@@ -80,14 +79,7 @@
     }
 
     .btn-mute { min-width: 55px; font-size: 18px; }
-
-    /* ตกแต่งรูปธงสำหรับตู้ Kiosk */
-    .btn-lang img {
-      width: 22px;
-      height: auto;
-      border-radius: 2px;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-    }
+    .btn-lang img { width: 22px; height: auto; border-radius: 2px; }
 
     .btn-lang.active {
       border-color: var(--primary);
@@ -102,7 +94,6 @@
       border-color: var(--accent);
     }
     
-    /* --- ส่วนแสดงผลกลาง --- */
     .avatar-container { 
       width: 180px; 
       height: 180px; 
@@ -135,7 +126,6 @@
     .faq-btn { padding: 12px; background: white; color: var(--primary); border: 2px solid #e0e0ff; border-radius: 15px; font-size: 15px; cursor: pointer; transition: all 0.2s; font-weight: 500; min-height: 60px; display: flex; align-items: center; justify-content: center; text-align: center; }
     .faq-btn:active { transform: scale(0.95); background: var(--primary); color: white; }
 
-    /* --- ส่วนรับข้อมูล --- */
     .input-section { width: 100%; display: flex; gap: 10px; margin-bottom: 20px; }
     #userInput { flex: 1; padding: 15px; border-radius: 30px; border: 2px solid #ddd; outline: none; font-family: 'Sarabun', sans-serif; font-size: 16px; }
     .btn-send { width: 50px; height: 50px; border-radius: 50%; border: none; background: var(--primary); color: white; cursor: pointer; font-size: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
@@ -185,10 +175,7 @@
     </div>
   </div>
 
-  <video id="video" width="320" height="240" autoplay muted playsinline style="display:none;"></video>
-  <canvas id="motionCanvas" width="320" height="240" style="display:none;"></canvas>
-
-  <script src="script.js?v=1.9"></script>
+  <video id="video" width="320" height="240" autoplay muted playsinline style="position: absolute; opacity: 0; pointer-events: none;"></video>
 
   <script>
     let recognition, isListening = false;
@@ -209,21 +196,21 @@
       }
     }
 
-    // --- ส่วนที่แก้ไข: ปรับปรุงการสลับภาษาให้ตัดเสียงและล้างสถานะทันที ---
     function changeLang(lang) {
-      // 1. สั่งหยุดเสียงทันทีและปลดล็อกสถานะ Busy เพื่อป้องกันระบบค้าง
       window.speechSynthesis.cancel();
       window.isBusy = false;
-      window.currentLang = lang;
-      window.isAtHome = true;
-      // 2. บังคับเปิดเสียงเสมอเมื่อสลับภาษา (Logic เดิมของคุณ)
+      
+      // เรียกใช้ฟังก์ชัน switchLanguage ใน script.js เพื่ออัปเดตระบบภายใน
+      if (typeof window.switchLanguage === "function") {
+          window.switchLanguage(lang);
+      } else {
+          window.currentLang = lang;
+      }
+
       window.isMuted = false; 
       const muteBtn = document.getElementById('muteBtn');
-      const muteIcon = document.getElementById('muteIcon');
       if (muteBtn) muteBtn.classList.remove('muted');
-      if (muteIcon) muteIcon.className = 'fas fa-volume-up';
       
-      // 3. อัปเดต UI ปุ่ม
       document.getElementById('btn-th').classList.toggle('active', lang === 'th');
       document.getElementById('btn-en').classList.toggle('active', lang === 'en');
       
@@ -236,17 +223,13 @@
           faqTitle.innerHTML = isTh ? '<i class="fas fa-star"></i> คำถามที่พบบ่อย:' : '<i class="fas fa-star"></i> Frequently Asked Questions:';
       }
 
-      // 4. ล้างข้อความคำตอบเก่าทิ้งทันที
       const output = document.getElementById('response-text');
       output.innerText = isTh ? "เปลี่ยนเป็นภาษาไทยแล้วครับ มีอะไรให้ช่วยไหม?" : "Switched to English. How can I assist you?";
 
       if (recognition) recognition.lang = isTh ? 'th-TH' : 'en-US';
       if (typeof renderFAQButtons === "function") renderFAQButtons();
       
-      // 5. รีเซ็ตตัวละครและทักทายใหม่
-      if (typeof updateLottie === "function") updateLottie('idle');
       window.hasGreeted = false;
-      if (typeof greetUser === "function") greetUser();
     }
 
     if (SpeechRecognition) {
@@ -255,7 +238,7 @@
       recognition.onstart = () => {
         isListening = true;
         document.getElementById('micBtn').classList.add('recording');
-        if (typeof isDetecting !== 'undefined') isDetecting = false; 
+        if (typeof window.isDetecting !== 'undefined') window.isDetecting = false; 
       };
       recognition.onresult = (event) => {
         const text = event.results[0][0].transcript;
@@ -271,19 +254,17 @@
     
     function handleKeyPress(e) { if (e.key === 'Enter') handleManualInput(); }
 
-    // --- ส่วนที่แก้ไข: เมื่อถามคำถามใหม่ ให้ตัดเสียงภาษาเก่าทิ้งทันที ---
     async function processQuery(query) {
-      window.speechSynthesis.cancel(); // ตัดเสียงเก่า
-      window.isBusy = false; // เคลียร์สถานะเพื่อให้ทำงานต่อได้ทันที
+      window.speechSynthesis.cancel();
+      window.isBusy = false;
       
       window.isMuted = false;
       const muteBtn = document.getElementById('muteBtn');
-      const muteIcon = document.getElementById('muteIcon');
       if (muteBtn) muteBtn.classList.remove('muted');
-      if (muteIcon) muteIcon.className = 'fas fa-volume-up';
 
       const output = document.getElementById('response-text');
       output.innerText = (window.currentLang === 'th') ? "กำลังค้นหา..." : "Searching...";
+      
       if (typeof getResponse === "function") await getResponse(query);
     }
 
@@ -291,7 +272,7 @@
       if (isListening) { recognition.stop(); } 
       else { 
         window.speechSynthesis.cancel();
-        updateLottie('thinking');
+        if (typeof updateLottie === "function") updateLottie('thinking');
         recognition.start(); 
       }
     }
@@ -300,6 +281,8 @@
       isListening = false;
       document.getElementById('micBtn').classList.remove('recording');
       document.getElementById('statusText').innerText = (window.currentLang === 'th') ? "แตะไมค์เพื่อเริ่มพูด" : "Tap mic to speak";
+      // กลับมาให้ AI ตรวจจับใบหน้าต่อหลังจากพูดจบ
+      if (typeof window.isDetecting !== 'undefined') window.isDetecting = true;
     }
   </script>
 </body>
