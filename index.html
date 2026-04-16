@@ -203,7 +203,7 @@
       window.speechSynthesis.cancel();
       window.isBusy = false;
       window.currentLang = lang;
-      
+      window.isAtHome = true;
       // 2. บังคับเปิดเสียงเสมอเมื่อสลับภาษา (Logic เดิมของคุณ)
       window.isMuted = false; 
       const muteBtn = document.getElementById('muteBtn');
