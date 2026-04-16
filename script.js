@@ -1,6 +1,6 @@
 /**
  * 🚀 สมองกลน้องนำทาง - เวอร์ชั่นคัดกรองใบขับขี่ + ระบบปริ้นใบนำทาง
- * ปรับปรุง: เพิ่ม Logic คัดกรองวันหมดอายุ และเชื่อมต่อระบบ Print 58mm
+ * ปรับปรุง: เพิ่มระบบ Checkbox ตรวจสอบเอกสารก่อนปริ้น
  */
 
 window.localDatabase = null;
@@ -122,7 +122,7 @@ function greetUser() {
     speak(text);
 }
 
-// --- 4. 🚩 ระบบคัดกรองใบขับขี่ (Logic ใหม่ของพี่) ---
+// --- 4. 🚩 ระบบคัดกรองใบขับขี่ ---
 
 function startLicenseCheck(type) {
     isAtHome = false;
@@ -140,6 +140,23 @@ function startLicenseCheck(type) {
     ]);
 }
 
+// ฟังก์ชันตรวจสอบเอกสารแบบติ๊กช่อง (ปรับปรุงใหม่)
+function validateDocCheck() {
+    const checks = document.querySelectorAll('.doc-check');
+    const btn = document.getElementById('btnPrintGuide');
+    const allChecked = Array.from(checks).every(c => c.checked);
+
+    if (allChecked) {
+        btn.disabled = false;
+        btn.style.background = "#28a745"; // สีเขียว
+        btn.style.cursor = "pointer";
+    } else {
+        btn.disabled = true;
+        btn.style.background = "#bdc3c7"; // สีเทา
+        btn.style.cursor = "not-allowed";
+    }
+}
+
 function showLicenseChecklist(type, expiry) {
     const isThai = window.currentLang === 'th';
     const isTemp = type.includes("ชั่วคราว") || type.includes("2 ปี");
@@ -147,17 +164,11 @@ function showLicenseChecklist(type, expiry) {
     let docs = ["บัตรประชาชน (ตัวจริง)", "ใบขับขี่เดิม", "ใบรับรองแพทย์ (ไม่เกิน 1 เดือน)"];
     let note = "";
 
-    // กฎเหล็กของพี่: ชั่วคราวไม่ต้องอบรม
     if (isTemp) {
-        if (expiry === 'normal') {
-            note = "ไม่ต้องอบรม ต่อได้ทันที";
-        } else if (expiry === 'over1') {
-            note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนใหม่";
-        } else if (expiry === 'over3') {
-            note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนและสอบขับรถใหม่";
-        }
+        if (expiry === 'normal') note = "ไม่ต้องอบรม ต่อได้ทันที";
+        else if (expiry === 'over1') note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนใหม่";
+        else if (expiry === 'over3') note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนและสอบขับรถใหม่";
     } else {
-        // กรณี 5 ปี เป็น 5 ปี
         if (expiry === 'normal') {
             docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)");
             note = "อบรมออนไลน์ 1 ชม. และต่อได้ทันที";
@@ -169,12 +180,36 @@ function showLicenseChecklist(type, expiry) {
         }
     }
 
-    let resultHTML = `<strong>${type}</strong><br><span style="color:blue;">${note}</span><hr>`;
-    docs.forEach(d => { resultHTML += `<div>[ ] ${d}</div>`; });
-    resultHTML += `<br><button onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}')" style="width:100%; padding:15px; background:#28a745; color:white; border:none; border-radius:10px; font-weight:bold; font-size:18px;">🖨️ ปริ้นใบนำทาง</button>`;
+    // สร้าง HTML พร้อม Checkbox
+    let resultHTML = `
+        <div style="text-align:left; padding:10px;">
+            <strong style="font-size:20px; color:#6c5ce7;">${type}</strong><br>
+            <span style="color:blue; font-weight:bold;">${note}</span>
+            <hr>
+            <p style="margin-bottom:10px; font-weight:bold;">กรุณาตรวจสอบเอกสารที่มีให้ครบ:</p>
+    `;
+
+    docs.forEach((d, index) => {
+        resultHTML += `
+            <div style="margin-bottom:12px; display:flex; align-items:center; gap:12px;">
+                <input type="checkbox" id="doc-${index}" class="doc-check" style="width:25px; height:25px;" onchange="validateDocCheck()">
+                <label for="doc-${index}" style="font-size:18px;">${d}</label>
+            </div>
+        `;
+    });
+
+    resultHTML += `
+            <hr>
+            <button id="btnPrintGuide" disabled 
+                onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}')" 
+                style="width:100%; padding:15px; background:#bdc3c7; color:white; border:none; border-radius:10px; font-weight:bold; font-size:18px; cursor:not-allowed;">
+                🖨️ ปริ้นใบนำทาง
+            </button>
+        </div>
+    `;
 
     displayResponse(resultHTML);
-    speak(isThai ? `เตรียมเอกสารตามรายการนี้ และสามารถปริ้นใบนำทางได้เลยครับ` : `Please prepare these documents and print your guide.`);
+    speak(isThai ? `กรุณาติ๊กรายการเอกสารให้ครบเพื่อปริ้นใบนำทางครับ` : `Please check all documents to print the guide.`);
 }
 
 // --- 5. ระบบค้นหาและจัดการคำถาม ---
