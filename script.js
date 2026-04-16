@@ -1,5 +1,5 @@
 /**
- * 🚀 สมองกลน้องนำทาง - เวอร์ชั่นแก้ไขการแสดงผลปุ่ม Print
+ * 🚀 สมองกลน้องนำทาง - เวอร์ชั่นแก้ไขระบบ Checklist และปุ่ม Print
  */
 
 window.localDatabase = null;
@@ -12,7 +12,6 @@ let isAtHome = true;
 const GAS_URL = "https://script.google.com/macros/s/AKfycbz1bkIsQ588u-rpjY-8nMlya5_c0DsIabRvyPyCC_sPs5vyeJ_1wcOBaqKfg7cvlM3XJw/exec"; 
 
 let idleTimer = null; 
-let speechSafetyTimeout = null; 
 const IDLE_TIME_LIMIT = 15000; 
 let video = document.getElementById('video');
 let isDetecting = true; 
@@ -21,16 +20,9 @@ let lastSeenTime = Date.now();
 let lastDetectionTime = 0;
 const DETECTION_INTERVAL = 200; 
 
-// --- 1. ระบบจัดการสถานะ ---
-function resetSystemState() {
-    stopAllSpeech();
-}
-
-function updateInteractionTime() {
-    lastSeenTime = Date.now();
-    if (!isAtHome) restartIdleTimer();
-}
-
+// --- 1. ระบบจัดการสถานะ & กล้อง ---
+function resetSystemState() { stopAllSpeech(); }
+function updateInteractionTime() { lastSeenTime = Date.now(); if (!isAtHome) restartIdleTimer(); }
 document.addEventListener('mousedown', updateInteractionTime);
 document.addEventListener('touchstart', updateInteractionTime);
 
@@ -40,21 +32,15 @@ function forceUnmute() {
     if (muteBtn) muteBtn.classList.remove('muted');
 }
 
-// --- 2. ระบบ Reset หน้าจอ ---
 function resetToHome() {
     const now = Date.now();
-    if (window.isBusy || personInFrameTime !== null || (now - lastSeenTime < IDLE_TIME_LIMIT)) {
-        if (!isAtHome) restartIdleTimer(); 
-        return;
-    }
+    if (window.isBusy || personInFrameTime !== null || (now - lastSeenTime < IDLE_TIME_LIMIT)) return;
     if (isAtHome) return; 
-
     resetSystemState();
     forceUnmute(); 
     window.hasGreeted = false;      
     personInFrameTime = null;       
     isAtHome = true; 
-
     displayResponse(window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone.");
     renderFAQButtons(); 
 }
@@ -64,14 +50,10 @@ function restartIdleTimer() {
     if (!isAtHome) idleTimer = setTimeout(resetToHome, IDLE_TIME_LIMIT); 
 }
 
-// --- 3. ระบบดวงตา AI (Face-API) ---
 async function initCamera() {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 } });
-        if (video) {
-            video.srcObject = stream;
-            video.onloadedmetadata = () => { video.play(); loadFaceModels(); };
-        }
+        if (video) { video.srcObject = stream; video.onloadedmetadata = () => { video.play(); loadFaceModels(); }; }
     } catch (err) { console.error("❌ Camera Error:", err); }
 }
 
@@ -87,24 +69,20 @@ async function detectPerson() {
     const now = Date.now();
     if (now - lastDetectionTime < DETECTION_INTERVAL) { requestAnimationFrame(detectPerson); return; }
     lastDetectionTime = now;
-
     const predictions = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withAgeAndGender();
     const face = predictions.find(f => {
         const box = f.detection.box;
         const centerX = box.x + (box.width / 2);
         return f.detection.score > 0.60 && box.width > 160 && (centerX > 100 && centerX < 540);
     });
-
     if (face) {
         if (personInFrameTime === null) personInFrameTime = now;
-        window.detectedGender = face.gender; 
         if ((now - personInFrameTime) >= 3000 && isAtHome && !window.isBusy && !window.hasGreeted) greetUser(); 
         lastSeenTime = now; 
     } else {
         if (personInFrameTime !== null && (now - lastSeenTime > 3000)) {
             personInFrameTime = null;   
             window.hasGreeted = false;  
-            if (!isAtHome) restartIdleTimer();
         }
     }
     requestAnimationFrame(detectPerson);
@@ -114,23 +92,20 @@ function greetUser() {
     if (window.hasGreeted || window.isBusy) return;
     forceUnmute();
     isAtHome = false; 
-    const isThai = window.currentLang === 'th';
-    const text = isThai ? "สวัสดีครับ มีอะไรให้น้องนำทางช่วยดูแลไหมครับ?" : "Hello! How can I help you today?";
+    const text = (window.currentLang === 'th') ? "สวัสดีครับ มีอะไรให้น้องนำทางช่วยดูแลไหมครับ?" : "Hello! How can I help you today?";
     window.hasGreeted = true; 
     displayResponse(text);
     speak(text);
 }
 
-// --- 4. 🚩 ระบบคัดกรองใบขับขี่ ---
+// --- 2. 🚩 ระบบคัดกรองใบขับขี่และ Checklist ---
 
 function startLicenseCheck(type) {
     isAtHome = false;
     const isThai = window.currentLang === 'th';
     const msg = isThai ? `ใบขับขี่ ${type} ของท่าน หมดอายุหรือยังครับ?` : `Is your ${type} license expired?`;
-    
     displayResponse(msg);
     speak(msg);
-
     renderOptionButtons([
         { th: "✅ ยังไม่หมดอายุ / ไม่เกิน 1 ปี", en: "Not expired / Under 1 year", action: () => showLicenseChecklist(type, 'normal') },
         { th: "⚠️ หมดอายุเกิน 1 ปี (แต่ไม่เกิน 3 ปี)", en: "Expired 1-3 years", action: () => showLicenseChecklist(type, 'over1') },
@@ -138,6 +113,7 @@ function startLicenseCheck(type) {
     ]);
 }
 
+// ระบบตรวจสอบการติ๊ก Checklist
 function validateDocCheck() {
     const checks = document.querySelectorAll('.doc-check');
     const btn = document.getElementById('btnPrintGuide');
@@ -146,11 +122,11 @@ function validateDocCheck() {
 
     if (allChecked) {
         btn.disabled = false;
-        btn.style.background = "#28a745";
+        btn.style.background = "#28a745"; // สีเขียวเมื่อพร้อมปริ้น
         btn.style.cursor = "pointer";
     } else {
         btn.disabled = true;
-        btn.style.background = "#bdc3c7";
+        btn.style.background = "#bdc3c7"; // สีเทาเมื่อเอกสารไม่ครบ
         btn.style.cursor = "not-allowed";
     }
 }
@@ -158,7 +134,6 @@ function validateDocCheck() {
 function showLicenseChecklist(type, expiry) {
     const isThai = window.currentLang === 'th';
     const isTemp = type.includes("ชั่วคราว") || type.includes("2 ปี");
-    
     let docs = ["บัตรประชาชน (ตัวจริง)", "ใบขับขี่เดิม", "ใบรับรองแพทย์ (ไม่เกิน 1 เดือน)"];
     let note = "";
 
@@ -167,46 +142,35 @@ function showLicenseChecklist(type, expiry) {
         else if (expiry === 'over1') note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนใหม่";
         else if (expiry === 'over3') note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนและสอบขับรถใหม่";
     } else {
-        if (expiry === 'normal') {
-            docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)");
-            note = "อบรมออนไลน์ 1 ชม. และต่อได้ทันที";
-        } else if (expiry === 'over1') {
-            docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)");
-            note = "อบรมออนไลน์ และต้องสอบข้อเขียนใหม่";
-        } else if (expiry === 'over3') {
-            note = "ต้องอบรม 5 ชม. ที่ขนส่งเท่านั้น + สอบข้อเขียน + สอบขับรถ";
-        }
+        if (expiry === 'normal') { docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)"); note = "อบรมออนไลน์ 1 ชม. และต่อได้ทันที"; }
+        else if (expiry === 'over1') { docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)"); note = "อบรมออนไลน์ และต้องสอบข้อเขียนใหม่"; }
+        else if (expiry === 'over3') { note = "ต้องอบรม 5 ชม. ที่ขนส่งเท่านั้น + สอบข้อเขียน + สอบขับรถ"; }
     }
 
-    // จัดเตรียมข้อมูลสำหรับเรียกใช้ใน onclick เพื่อเลี่ยงปัญหาตัวอักษรพิเศษ
-    window.currentPrintData = {
-        type: type,
-        note: note,
-        docs: docs.join('\\n')
-    };
+    // ป้องกันปุ่มเละด้วยการเก็บข้อมูลลง Object
+    window.currentPrintJob = { type, note, docs: docs.join('\\n') };
 
     let resultHTML = `
         <div style="text-align:left; padding:10px;">
             <strong style="font-size:20px; color:#6c5ce7;">${type}</strong><br>
             <span style="color:blue; font-weight:bold;">${note}</span>
             <hr>
-            <p style="margin-bottom:10px; font-weight:bold;">กรุณาตรวจสอบเอกสารที่มีให้ครบ:</p>
+            <p style="margin-bottom:10px; font-weight:bold;">กรุณาติ๊กตรวจสอบเอกสารให้ครบ:</p>
     `;
 
     docs.forEach((d, index) => {
         resultHTML += `
             <div style="margin-bottom:12px; display:flex; align-items:center; gap:12px;">
-                <input type="checkbox" id="doc-${index}" class="doc-check" style="width:25px; height:25px;" onchange="validateDocCheck()">
-                <label for="doc-${index}" style="font-size:18px;">${d}</label>
+                <input type="checkbox" id="doc-${index}" class="doc-check" style="width:28px; height:28px;" onchange="validateDocCheck()">
+                <label for="doc-${index}" style="font-size:18px; cursor:pointer;">${d}</label>
             </div>
         `;
     });
 
-    // แก้ไขปุ่ม Print โดยดึงข้อมูลจากตัวแปร window แทนการยัดโค้ดลงใน HTML โดยตรง
     resultHTML += `
             <hr>
             <button id="btnPrintGuide" disabled 
-                onclick="printLicenseNote(window.currentPrintData.type, window.currentPrintData.note, window.currentPrintData.docs)" 
+                onclick="printLicenseNote(window.currentPrintJob.type, window.currentPrintJob.note, window.currentPrintJob.docs)" 
                 style="width:100%; padding:15px; background:#bdc3c7; color:white; border:none; border-radius:10px; font-weight:bold; font-size:22px; cursor:not-allowed;">
                 🖨️ ปริ้นใบนำทาง
             </button>
@@ -214,34 +178,30 @@ function showLicenseChecklist(type, expiry) {
     `;
 
     displayResponse(resultHTML);
-    speak(isThai ? `กรุณาติ๊กรายการเอกสารให้ครบเพื่อปริ้นใบนำทางครับ` : `Please check all documents to print the guide.`);
+    speak(isThai ? `กรุณาตรวจสอบเอกสารและติ๊กให้ครบเพื่อปริ้นใบนำทางครับ` : `Please check all documents to print the guide.`);
 }
 
-// --- 5. ระบบค้นหาและจัดการคำถาม ---
+// --- 3. ระบบค้นหา & เสียง ---
 
 async function getResponse(userQuery) {
     if (!userQuery || !window.localDatabase) return;
     if (window.isBusy) stopAllSpeech();
-    
     isAtHome = false; 
     updateInteractionTime(); 
     window.isBusy = true;
     updateLottie('thinking');
-
     const query = userQuery.toLowerCase().trim();
 
     if ((query.includes("ใบขับขี่") || query.includes("license")) && (query.includes("ต่อ") || query.includes("renew"))) {
-        if (!query.includes("ชั่วคราว") && !query.includes("5 ปี") && !query.includes("5ปี")) {
-            const askMsg = (window.currentLang === 'th') ? "ไม่ทราบว่าใบขับขี่ของท่านเป็นแบบชั่วคราว หรือแบบ 5 ปีครับ?" : "Is your license Temporary or 5-year?";
-            displayResponse(askMsg);
-            speak(askMsg);
-            renderOptionButtons([
-                { th: "แบบชั่วคราว (2 ปี)", en: "Temporary (2 years)", action: () => startLicenseCheck("แบบชั่วคราว (2 ปี)") },
-                { th: "แบบ 5 ปี", en: "5-year type", action: () => startLicenseCheck("แบบ 5 ปี") }
-            ]);
-            window.isBusy = false; 
-            return;
-        }
+        const askMsg = (window.currentLang === 'th') ? "ไม่ทราบว่าใบขับขี่ของท่านเป็นแบบชั่วคราว หรือแบบ 5 ปีครับ?" : "Is your license Temporary or 5-year?";
+        displayResponse(askMsg);
+        speak(askMsg);
+        renderOptionButtons([
+            { th: "แบบชั่วคราว (2 ปี)", en: "Temporary (2 years)", action: () => startLicenseCheck("แบบชั่วคราว (2 ปี)") },
+            { th: "แบบ 5 ปี", en: "5-year type", action: () => startLicenseCheck("แบบ 5 ปี") }
+        ]);
+        window.isBusy = false; 
+        return;
     }
 
     try {
@@ -250,25 +210,13 @@ async function getResponse(userQuery) {
             if (["Lottie_State", "Config", "FAQ"].includes(sheetName)) continue;
             window.localDatabase[sheetName].forEach(item => {
                 const keys = item[0] ? item[0].toString().toLowerCase() : "";
-                if (keys.includes(query)) {
-                    bestMatch = { answer: (window.currentLang === 'th' ? item[1] : item[2] || item[1]), score: 10 };
-                }
+                if (keys.includes(query)) bestMatch = { answer: (window.currentLang === 'th' ? item[1] : item[2] || item[1]), score: 10 };
             });
         }
-
-        if (bestMatch.score > 0) {
-            displayResponse(bestMatch.answer);
-            speak(bestMatch.answer);
-        } else {
-            const fb = window.currentLang === 'th' ? "ขออภัยครับ น้องหาข้อมูลไม่พบ" : "No info found.";
-            displayResponse(fb);
-            speak(fb);
-            setTimeout(renderFAQButtons, 3000);
-        }
+        if (bestMatch.score > 0) { displayResponse(bestMatch.answer); speak(bestMatch.answer); }
+        else { speak(window.currentLang === 'th' ? "ขออภัยครับ น้องหาข้อมูลไม่พบ" : "No info found."); setTimeout(renderFAQButtons, 3000); }
     } catch (err) { window.isBusy = false; }
 }
-
-// --- 6. ระบบเสียงและ UI ---
 
 function speak(text) {
     if (!text || window.isMuted) return;
@@ -281,11 +229,7 @@ function speak(text) {
     window.speechSynthesis.speak(msg);
 }
 
-const stopAllSpeech = () => {
-    window.speechSynthesis.cancel();
-    window.isBusy = false;
-    updateLottie('idle');
-};
+const stopAllSpeech = () => { window.speechSynthesis.cancel(); window.isBusy = false; updateLottie('idle'); };
 
 function renderFAQButtons() {
     const container = document.getElementById('faq-container');
@@ -312,10 +256,7 @@ function renderOptionButtons(options) {
         btn.className = 'faq-btn';
         btn.style.border = "2px solid #6c5ce7";
         btn.innerText = (window.currentLang === 'th') ? opt.th : opt.en;
-        btn.onclick = () => { 
-            stopAllSpeech(); 
-            if (opt.action) opt.action();
-        };
+        btn.onclick = () => { stopAllSpeech(); if (opt.action) opt.action(); };
         container.appendChild(btn);
     });
 }
@@ -331,20 +272,13 @@ function updateLottie(state) {
     player.load(assets[state]);
 }
 
-function displayResponse(text) {
-    document.getElementById('response-text').innerHTML = text.replace(/\n/g, '<br>');
-}
+function displayResponse(text) { document.getElementById('response-text').innerHTML = text.replace(/\n/g, '<br>'); }
 
 async function initDatabase() {
     try {
         const res = await fetch(GAS_URL);
         const json = await res.json();
-        if (json.database) {
-            window.localDatabase = json.database;
-            renderFAQButtons();
-            initCamera();
-            displayResponse("ระบบพร้อมให้บริการแล้วครับ");
-        }
+        if (json.database) { window.localDatabase = json.database; renderFAQButtons(); initCamera(); displayResponse("ระบบพร้อมให้บริการแล้วครับ"); }
     } catch (e) { setTimeout(initDatabase, 5000); }
 }
 
