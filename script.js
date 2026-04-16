@@ -16,7 +16,7 @@ let idleTimer = null;
 let speechSafetyTimeout = null; 
 const IDLE_TIME_LIMIT = 15000; 
 let video = document.getElementById('video');
-let cocoModel = null; 
+let faceModel = null; 
 let isDetecting = true; 
 let personInFrameTime = null; 
 let lastSeenTime = Date.now();
@@ -91,19 +91,34 @@ function restartIdleTimer() {
  */
 async function initCamera() {
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 } });
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: "user", width: 640, height: 480 } 
+        });
         if (video) {
             video.srcObject = stream;
-            video.onloadedmetadata = () => { video.play(); requestAnimationFrame(detectPerson); };
+            video.onloadedmetadata = () => { 
+                video.play(); 
+                // เริ่มโหลด Model และเริ่ม Detect
+                loadAndStartDetection();
+            };
         }
     } catch (err) { console.error("❌ Camera Error:", err); }
 }
 
+async function loadAndStartDetection() {
+    // โหลด BlazeFace Model
+    faceModel = await blazeface.load();
+    console.log("✅ [AI] Face Detection Model Ready");
+    requestAnimationFrame(detectPerson);
+}
+
 async function detectPerson() {
-    if (!isDetecting || !cocoModel) { 
+    // ตรวจสอบว่าโมเดลพร้อมใช้งานหรือไม่
+    if (!isDetecting || !faceModel) { 
         setTimeout(() => requestAnimationFrame(detectPerson), 1000); 
         return; 
     }
+
     const now = Date.now();
     if (now - lastDetectionTime < DETECTION_INTERVAL) {
         requestAnimationFrame(detectPerson);
@@ -111,31 +126,35 @@ async function detectPerson() {
     }
     lastDetectionTime = now;
 
-    const predictions = await cocoModel.detect(video);
+    // เปลี่ยนมาใช้ estimateFaces (ส่งค่า false เพื่อไม่ให้ใช้ tensors จะได้ไม่กินสเปกเครื่อง)
+    const predictions = await faceModel.estimateFaces(video, false);
     
-    const person = predictions.find(p => {
-        const [x, y, width, height] = p.bbox;
-        const centerX = x + (width / 2);
-        return p.class === "person" && 
-               p.score > 0.80 && 
-               width > 180 && 
-               (centerX > 100 && centerX < 540);
+    // คัดกรองเฉพาะ "ใบหน้า" ที่อยู่ตรงกลางจอและมีขนาดใหญ่พอ (ยืนใกล้ตู้)
+    const face = predictions.find(f => {
+        // BlazeFace จะให้จุด topLeft และ bottomRight มาคำนวณขนาด
+        const width = f.bottomRight[0] - f.topLeft[0];
+        const centerX = f.topLeft[0] + (width / 2);
+        
+        // เงื่อนไข: ความเชื่อมั่น > 90%, ขนาดใบหน้า > 80px, และอยู่กลางจอ (150-490)
+        return f.probability[0] > 0.90 && 
+               width > 80 && 
+               (centerX > 150 && centerX < 490);
     });
 
-    if (person) {
+    if (face) {
         if (personInFrameTime === null) {
-            console.log("👁️ [AI] Target Spotted (Center Zone)");
+            console.log("👤 [AI] Face Detected in Center Zone");
             personInFrameTime = now;
         }
 
-        // ✅ อัปเดตสถานะให้หน้าจอ Debug แสดงผลว่าเจอคน (True)
+        // ✅ อัปเดตสถานะให้หน้าจอ Debug (เหมือนเดิม)
         window.PersonInFrame = true;
 
-        // ✅ stayDuration ใช้ตัดสินใจว่าจะทักทาย (Greet) หรือยัง
         const stayDuration = now - personInFrameTime;
 
-        if (stayDuration >= 3000 && isAtHome && !window.isBusy && !window.hasGreeted) {
-            console.log("👋 [AI] Greeting triggered.");
+        // ถ้าจ้องหน้าน้องเกิน 2 วินาที (ลดจาก 3 วินาทีเพื่อให้ไวขึ้น) ให้ทักทาย
+        if (stayDuration >= 2000 && isAtHome && !window.isBusy && !window.hasGreeted) {
+            console.log("👋 [AI] Face-to-Face Greeting triggered.");
             greetUser(); 
         }
 
@@ -144,13 +163,10 @@ async function detectPerson() {
     } else {
         const gap = now - lastSeenTime;
 
-        if (personInFrameTime !== null && gap >= 3000) {
-            console.log("🚫 [AI] Target Left Zone.");
-            
-            // 🚩 จุดตาย: ต้อง Reset ค่าที่โชว์ใน Log ให้เป็น false ที่นี่
-            // ถ้าไม่มีบรรทัดนี้ ค่าในหน้าจอ Debug จะค้างเป็น true ตลอดไป
+        // ถ้าไม่เห็นใบหน้าติดต่อกัน 2.5 วินาที ให้ถือว่าคนเดินออกไปแล้ว
+        if (personInFrameTime !== null && gap >= 2500) {
+            console.log("🚫 [AI] User Left.");
             window.PersonInFrame = false; 
-
             personInFrameTime = null;   
             window.hasGreeted = false;  
             if (!isAtHome) restartIdleTimer(); 
@@ -378,13 +394,19 @@ async function initDatabase() {
         const json = await res.json();
         if (json.database) {
             window.localDatabase = json.database;
-            cocoModel = await cocoSsd.load();
+            
+            // 🚩 แก้ไขจุดนี้: เปลี่ยนจาก cocoSsd.load() เป็น blazeface.load()
+            faceModel = await blazeface.load(); 
+            
             renderFAQButtons();
             initCamera(); 
             displayResponse("กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ");
-            console.log("✅ [System] Database & Camera Ready.");
+            console.log("✅ [System] Database & Face Model Ready.");
         }
-    } catch (e) { setTimeout(initDatabase, 5000); }
+    } catch (e) { 
+        console.error("❌ Init Error:", e);
+        setTimeout(initDatabase, 5000); 
+    }
 }
 
 function renderFAQButtons() {
