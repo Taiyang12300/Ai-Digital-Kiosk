@@ -113,8 +113,7 @@ async function loadAndStartDetection() {
 }
 
 async function detectPerson() {
-    // ตรวจสอบว่าโมเดลพร้อมใช้งานหรือไม่
-    if (!isDetecting || !faceModel) { 
+    if (!window.isDetecting || !faceModel) { 
         setTimeout(() => requestAnimationFrame(detectPerson), 1000); 
         return; 
     }
@@ -126,16 +125,24 @@ async function detectPerson() {
     }
     lastDetectionTime = now;
 
-    // เปลี่ยนมาใช้ estimateFaces (ส่งค่า false เพื่อไม่ให้ใช้ tensors จะได้ไม่กินสเปกเครื่อง)
     const predictions = await faceModel.estimateFaces(video, false);
     
-    // คัดกรองเฉพาะ "ใบหน้า" ที่อยู่ตรงกลางจอและมีขนาดใหญ่พอ (ยืนใกล้ตู้)
+    // --- [Log เพื่อดูว่า AI เห็นกี่ใบหน้าในเฟรม] ---
+    if (predictions.length > 0) {
+        // console.log(`🔍 [AI Scan] Found ${predictions.length} face(s)`); 
+    }
+
     const face = predictions.find(f => {
-        // BlazeFace จะให้จุด topLeft และ bottomRight มาคำนวณขนาด
         const width = f.bottomRight[0] - f.topLeft[0];
         const centerX = f.topLeft[0] + (width / 2);
+        const prob = (f.probability[0] * 100).toFixed(1);
+
+        // --- [Log ตัวเลขจริงเพื่อให้คุณปรับจูนได้ง่ายขึ้น] ---
+        // บรรทัดนี้จะทำงานเมื่อ AI มั่นใจเกิน 50% เพื่อให้คุณเห็นค่า Width และ CenterX
+        if (f.probability[0] > 0.50) {
+            console.log(`📏 Face Info -> Prob: ${prob}%, Width: ${width.toFixed(1)}, CenterX: ${centerX.toFixed(1)}`);
+        }
         
-        // เงื่อนไข: ความเชื่อมั่น > 80%, ขนาดใบหน้า > 45px, และอยู่กลางจอ (50-270)
         return f.probability[0] > 0.80 && 
                width > 45 && 
                (centerX > 50 && centerX < 270);
@@ -143,18 +150,20 @@ async function detectPerson() {
 
     if (face) {
         if (personInFrameTime === null) {
-            console.log("👤 [AI] Face Detected in Center Zone");
+            console.log("🎯 [AI Status] Face LOCKED in center zone!");
             personInFrameTime = now;
         }
 
-        // ✅ อัปเดตสถานะให้หน้าจอ Debug (เหมือนเดิม)
         window.PersonInFrame = true;
-
         const stayDuration = now - personInFrameTime;
 
-        // ถ้าจ้องหน้าน้องเกิน 2 วินาที (ลดจาก 3 วินาทีเพื่อให้ไวขึ้น) ให้ทักทาย
-        if (stayDuration >= 2000 && isAtHome && !window.isBusy && !window.hasGreeted) {
-            console.log("👋 [AI] Face-to-Face Greeting triggered.");
+        // --- [Log นับถอยหลังการทักทาย] ---
+        if (stayDuration < 2000 && isAtHome && !window.hasGreeted) {
+             console.log(`⏱️ Greeting in: ${((2000 - stayDuration)/1000).toFixed(1)}s`);
+        }
+
+        if (stayDuration >= 2000 && window.isAtHome && !window.isBusy && !window.hasGreeted) {
+            console.log("👋 [AI Action] Triggering GreetUser now!");
             greetUser(); 
         }
 
@@ -162,14 +171,12 @@ async function detectPerson() {
 
     } else {
         const gap = now - lastSeenTime;
-
-        // ถ้าไม่เห็นใบหน้าติดต่อกัน 2.5 วินาที ให้ถือว่าคนเดินออกไปแล้ว
         if (personInFrameTime !== null && gap >= 2500) {
-            console.log("🚫 [AI] User Left.");
+            console.log("🚫 [AI Status] Target lost for 2.5s -> Resetting Greeting state.");
             window.PersonInFrame = false; 
             personInFrameTime = null;   
             window.hasGreeted = false;  
-            if (!isAtHome) restartIdleTimer(); 
+            if (!window.isAtHome) restartIdleTimer(); 
         }
     }
     requestAnimationFrame(detectPerson);
