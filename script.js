@@ -388,4 +388,10 @@ function editDistance(s1, s2) {
     return costs[s2.length];
 }
 
+window.addEventListener('pagehide', stopAllSpeech);
+window.addEventListener('beforeunload', stopAllSpeech);
+document.addEventListener('visibilitychange', () => { 
+    if (document.visibilityState === 'hidden') stopAllSpeech(); 
+});
+
 initDatabase();
