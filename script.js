@@ -99,7 +99,7 @@ async function detectPerson() {
     if (face) {
         if (personInFrameTime === null) personInFrameTime = now;
         window.detectedGender = face.gender; 
-        if ((now - personInFrameTime) >= 3000 && isAtHome && !window.isBusy && !window.hasGreeted) greetUser(); 
+        if ((now - personInFrameTime) >= 2000 && isAtHome && !window.isBusy && !window.hasGreeted) greetUser(); 
         lastSeenTime = now; 
     } else {
         if (personInFrameTime !== null && (now - lastSeenTime > 3000)) {
