@@ -128,9 +128,16 @@ function checkChecklist() {
     const checks = document.querySelectorAll('.doc-check');
     const printBtn = document.getElementById('btnPrintGuide');
     if (!printBtn) return;
-    // ปลดล็อคปุ่มปริ้นเมื่อติ๊กครบทุกช่อง
+    
+    // ตรวจสอบว่าติ๊กครบทุกช่องหรือไม่
     const allChecked = checks.length > 0 && Array.from(checks).every(c => c.checked);
-    printBtn.style.display = allChecked ? "block" : "none";
+    
+    // แสดงปุ่มปริ้นเมื่อติ๊กครบเท่านั้น
+    if (allChecked) {
+        printBtn.style.display = "block";
+    } else {
+        printBtn.style.display = "none";
+    }
 }
 
 function startLicenseCheck(type) {
@@ -155,6 +162,7 @@ function showLicenseChecklist(type, expiry) {
     let docs = ["บัตรประชาชน (ตัวจริง)", "ใบขับขี่เดิม", "ใบรับรองแพทย์ (ไม่เกิน 1 เดือน)"];
     let note = "";
 
+    // กฎการอบรมตามประเภทใบขับขี่
     if (isTemp) {
         if (expiry === 'normal') note = "ไม่ต้องอบรม ต่อได้ทันที";
         else if (expiry === 'over1') note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนใหม่";
@@ -171,27 +179,31 @@ function showLicenseChecklist(type, expiry) {
         }
     }
 
-    // ปรับปรุง HTML ให้ติ๊กได้จริงและสวยงาม
-    let resultHTML = `<div style="text-align:left; background:white; padding:15px; border-radius:12px; border:1px solid #ddd;">`;
-    resultHTML += `<strong style="font-size:20px;">${type}</strong><br><span style="color:#6c5ce7; font-weight:bold;">💡 ${note}</span><hr style="margin:10px 0;">`;
-    resultHTML += `<p style="font-size:14px; color:gray; margin-bottom:10px;">กรุณาติ๊กตรวจสอบเอกสาร:</p>`;
-
-    docs.forEach((d, idx) => { 
-        resultHTML += `
-            <div style="display:flex; align-items:center; margin-bottom:12px; background:#f8f9fd; padding:8px; border-radius:8px;">
-                <input type="checkbox" class="doc-check" id="chk-${idx}" onchange="checkChecklist()" style="width:22px; height:22px; cursor:pointer; accent-color:#6c5ce7;">
-                <label for="chk-${idx}" style="margin-left:12px; font-size:18px; cursor:pointer; color:#2d3436;">${d}</label>
-            </div>`; 
+    // สร้าง HTML ใหม่แบบสะอาด ป้องกันโค้ดหลุด (Fix จากรูป 59348.jpg)
+    let checklistItems = "";
+    docs.forEach((d, idx) => {
+        checklistItems += `
+            <div style="display:flex; align-items:center; margin-bottom:12px; background:#f0f2f5; padding:10px; border-radius:8px; cursor:pointer;" onclick="document.getElementById('chk-${idx}').click()">
+                <input type="checkbox" class="doc-check" id="chk-${idx}" onchange="checkChecklist()" onclick="event.stopPropagation()" style="width:25px; height:25px; cursor:pointer; accent-color:#6c5ce7;">
+                <label style="margin-left:12px; font-size:18px; cursor:pointer; color:#2d3436; flex:1;">${d}</label>
+            </div>`;
     });
 
-    resultHTML += `
-        <button id="btnPrintGuide" onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}')" 
-            style="display:none; width:100%; padding:15px; background:linear-gradient(135deg, #28a745, #218838); color:white; border:none; border-radius:10px; font-weight:bold; font-size:18px; cursor:pointer; margin-top:10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-            🖨️ ปริ้นใบนำทาง
-        </button></div>`;
+    const resultHTML = `
+        <div style="text-align:left; background:white; padding:15px; border-radius:12px;">
+            <strong style="font-size:22px; color:#2d3436;">${type}</strong><br>
+            <div style="background:#e8f0fe; color:#1a73e8; padding:8px; border-radius:5px; margin-top:5px; font-weight:bold;">💡 ${note}</div>
+            <hr style="margin:15px 0; border:0; border-top:1px solid #eee;">
+            <p style="font-size:15px; color:#636e72; margin-bottom:10px;">กรุณาตรวจสอบเอกสาร (ติ๊กให้ครบเพื่อปริ้น):</p>
+            ${checklistItems}
+            <button id="btnPrintGuide" onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}')" 
+                style="display:none; width:100%; padding:15px; background:#28a745; color:white; border:none; border-radius:10px; font-weight:bold; font-size:20px; cursor:pointer; margin-top:15px; box-shadow: 0 4px 6px rgba(40,167,69,0.2);">
+                🖨️ ปริ้นใบนำทาง
+            </button>
+        </div>`;
 
     displayResponse(resultHTML);
-    speak(isThai ? `เตรียมเอกสารตามรายการนี้ให้ครบ แล้วกดปริ้นใบนำทางครับ` : `Please check documents and print your guide.`);
+    speak(isThai ? "กรุณาติ๊กตรวจสอบเอกสารให้ครบ แล้วกดปุ่มปริ้นใบนำทางครับ" : "Please check all documents to print your guide.");
 }
 
 // --- 5. ระบบค้นหาและจัดการคำถาม ---
