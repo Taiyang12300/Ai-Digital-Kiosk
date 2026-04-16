@@ -145,7 +145,7 @@ async function detectPerson() {
         
         return f.probability[0] > 0.80 && 
                width > 45 && 
-               (centerX > 50 && centerX < 270);
+               (centerX > 100 && centerX < 550);
     });
 
     if (face) {
