@@ -8,9 +8,9 @@ window.currentLang = 'th';
 window.isMuted = false; 
 window.isBusy = false; 
 window.hasGreeted = false;
-window.window.window.isAtHome = true; 
+window.isAtHome = true; 
 
-const GAS_URL = "https://script.google.com/macros/s/AKfycbz1bkIsQ588u-rpjY-8nMlya5_c0DsIabRvyPyCC_sPs5vyeJ_1wcOBaqKfg7cvlM3XJw/exec"; 
+window.GAS_URL = "https://script.google.com/macros/s/AKfycbz1bkIsQ588u-rpjY-8nMlya5_c0DsIabRvyPyCC_sPs5vyeJ_1wcOBaqKfg7cvlM3XJw/exec"; 
 
 let idleTimer = null; 
 let speechSafetyTimeout = null; 
@@ -127,42 +127,43 @@ async function detectPerson() {
 
     const predictions = await faceModel.estimateFaces(video, false);
     
-    // --- [Log เพื่อดูว่า AI เห็นกี่ใบหน้าในเฟรม] ---
-    if (predictions.length > 0) {
-        // console.log(`🔍 [AI Scan] Found ${predictions.length} face(s)`); 
-    }
-
     const face = predictions.find(f => {
         const width = f.bottomRight[0] - f.topLeft[0];
         const centerX = f.topLeft[0] + (width / 2);
         const prob = (f.probability[0] * 100).toFixed(1);
+        const landmarks = f.landmarks; // ดึงข้อมูล ตา จมูก ปาก
 
-        // --- [Log ตัวเลขจริงเพื่อให้คุณปรับจูนได้ง่ายขึ้น] ---
-        // บรรทัดนี้จะทำงานเมื่อ AI มั่นใจเกิน 50% เพื่อให้คุณเห็นค่า Width และ CenterX
+        // --- 1. ตรวจสอบรายละเอียดใบหน้า (Landmarks) ---
+        // จุดที่ 0 = ตาขวา, จุดที่ 2 = จมูก (กล้องอยู่ขวาจะเห็น 2 จุดนี้ชัดสุด)
+        const hasKeyFeatures = landmarks && landmarks[0] && landmarks[2];
+
+        // --- 2. Log ข้อมูลเพื่อการปรับจูนหน้าตู้จริง ---
         if (f.probability[0] > 0.50) {
-            console.log(`📏 Face Info -> Prob: ${prob}%, Width: ${width.toFixed(1)}, CenterX: ${centerX.toFixed(1)}`);
+            console.log(`📏 Face Info -> Prob: ${prob}%, W: ${width.toFixed(1)}, CX: ${centerX.toFixed(1)}, KeyPoints: ${hasKeyFeatures ? 'OK' : 'MISSING'}`);
         }
         
-        return f.probability[0] > 0.80 && 
+        // --- 3. เงื่อนไขการตัดสินใจ (ปรับให้เข้ากับตู้จริง) ---
+        return f.probability[0] > 0.75 && // ลดลงนิดหน่อยจาก 0.80 เพราะแสงย้อน
                width > 45 && 
-               (centerX > 100 && centerX < 550);
+               (centerX > 80 && centerX < 560) && // ขยายให้ครอบคลุมค่า 349 และมุมกล้องที่เยื้องขวา
+               hasKeyFeatures; // ต้องเห็นตา/จมูก ถึงจะนับว่าเป็นคน
     });
 
     if (face) {
         if (personInFrameTime === null) {
-            console.log("🎯 [AI Status] Face LOCKED in center zone!");
+            console.log("🎯 [AI Status] Face LOCKED with Landmarks!");
             personInFrameTime = now;
         }
 
         window.PersonInFrame = true;
         const stayDuration = now - personInFrameTime;
 
-        // --- [Log นับถอยหลังการทักทาย] ---
         if (stayDuration < 2000 && window.isAtHome && !window.hasGreeted) {
              console.log(`⏱️ Greeting in: ${((2000 - stayDuration)/1000).toFixed(1)}s`);
         }
 
-        if (stayDuration >= 2000 && window.window.isAtHome && !window.isBusy && !window.hasGreeted) {
+        // เช็ค window.isAtHome (ลบ window. ที่ซ้อนกันออก)
+        if (stayDuration >= 2000 && window.isAtHome && !window.isBusy && !window.hasGreeted) {
             console.log("👋 [AI Action] Triggering GreetUser now!");
             greetUser(); 
         }
@@ -172,11 +173,11 @@ async function detectPerson() {
     } else {
         const gap = now - lastSeenTime;
         if (personInFrameTime !== null && gap >= 2500) {
-            console.log("🚫 [AI Status] Target lost for 2.5s -> Resetting Greeting state.");
+            console.log("🚫 [AI Status] Target lost -> Resetting state.");
             window.PersonInFrame = false; 
             personInFrameTime = null;   
             window.hasGreeted = false;  
-            if (!window.window.isAtHome) restartIdleTimer(); 
+            if (!window.isAtHome) restartIdleTimer(); 
         }
     }
     requestAnimationFrame(detectPerson);
