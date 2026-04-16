@@ -65,7 +65,7 @@ function restartIdleTimer() {
     if (!isAtHome) idleTimer = setTimeout(resetToHome, IDLE_TIME_LIMIT); 
 }
 
-// --- 3. ระบบดวงตา AI (Face-API) ---
+// --- 3. ระบบดวงตา AI (เปลี่ยนเป็น Face-API แต่ใช้ Logic เดิมควบคุม) ---
 async function initCamera() {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 } });
@@ -80,13 +80,20 @@ async function loadFaceModels() {
     const MODEL_URL = 'https://taiyang12300.github.io/model/';
     await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
     await faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL);
+    console.log("✅ [AI] Face-API Ready");
     requestAnimationFrame(detectPerson);
 }
 
 async function detectPerson() {
-    if (!isDetecting || typeof faceapi === 'undefined') { requestAnimationFrame(detectPerson); return; }
+    if (!isDetecting || typeof faceapi === 'undefined') { 
+        requestAnimationFrame(detectPerson); 
+        return; 
+    }
     const now = Date.now();
-    if (now - lastDetectionTime < DETECTION_INTERVAL) { requestAnimationFrame(detectPerson); return; }
+    if (now - lastDetectionTime < DETECTION_INTERVAL) {
+        requestAnimationFrame(detectPerson);
+        return;
+    }
     lastDetectionTime = now;
 
     const predictions = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withAgeAndGender();
@@ -97,12 +104,20 @@ async function detectPerson() {
     });
 
     if (face) {
-        if (personInFrameTime === null) personInFrameTime = now;
+        if (personInFrameTime === null) {
+            console.log(`👁️ [AI] Spotted: ${face.gender}`);
+            personInFrameTime = now;
+        }
+        window.PersonInFrame = true;
         window.detectedGender = face.gender; 
-        if ((now - personInFrameTime) >= 2000 && isAtHome && !window.isBusy && !window.hasGreeted) greetUser(); 
+        const stayDuration = now - personInFrameTime;
+        if (stayDuration >= 3000 && isAtHome && !window.isBusy && !window.hasGreeted) {
+            greetUser(); 
+        }
         lastSeenTime = now; 
     } else {
         if (personInFrameTime !== null && (now - lastSeenTime > 3000)) {
+            window.PersonInFrame = false; 
             personInFrameTime = null;   
             window.hasGreeted = false;  
             if (!isAtHome) restartIdleTimer();
@@ -115,11 +130,26 @@ function greetUser() {
     if (window.hasGreeted || window.isBusy) return;
     forceUnmute();
     isAtHome = false; 
+    const hour = new Date().getHours();
     const isThai = window.currentLang === 'th';
-    const text = isThai ? "สวัสดีครับ มีอะไรให้น้องนำทางช่วยดูแลไหมครับ?" : "Hello! How can I help you today?";
+    const gender = window.detectedGender || 'male';
+
+    let timeGreet = (hour < 12) ? (isThai ? "สวัสดีตอนเช้าครับ" : "Good morning") :
+                    (hour < 17) ? (isThai ? "สวัสดีตอนบ่ายครับ" : "Good afternoon") : 
+                                 (isThai ? "สวัสดีตอนเย็นครับ" : "Good evening");
+
+    let personType = isThai ? (gender === 'male' ? "คุณผู้ชาย" : "คุณผู้หญิง") : (gender === 'male' ? "Sir" : "Madam");
+
+    const greetings = {
+        th: [`${timeGreet}${personType} มีอะไรให้น้องนำทางช่วยดูแลไหมครับ?`, `สำนักงานขนส่งพยัคฆภูมิพิสัย ยินดีให้บริการครับ มีอะไรให้ช่วยไหมครับ?`],
+        en: [`${timeGreet}, ${personType}! How can I assist you?`]
+    };
+    
+    const list = greetings[window.currentLang] || greetings['th'];
+    let finalGreet = list[Math.floor(Math.random() * list.length)];
     window.hasGreeted = true; 
-    displayResponse(text);
-    speak(text);
+    displayResponse(finalGreet);
+    speak(finalGreet);
 }
 
 // --- 4. 🚩 ระบบคัดกรองใบขับขี่ (Logic ใหม่ของพี่) ---
@@ -134,7 +164,7 @@ function startLicenseCheck(type) {
 
     // แสดงปุ่มเลือกสถานะวันหมดอายุ
     renderOptionButtons([
-        { th: "✅ ยังไม่หมดอายุ / ไม่เกิน 1 ปี", en: "Not expired / Under 1 year", action: () => showLicenseChecklist(type, 'normal') },
+        { th: "✅ ยังไม่หมดอายุ / หมดอายุไม่เกิน 1 ปี", en: "Not expired / Under 1 year", action: () => showLicenseChecklist(type, 'normal') },
         { th: "⚠️ หมดอายุเกิน 1 ปี (แต่ไม่เกิน 3 ปี)", en: "Expired 1-3 years", action: () => showLicenseChecklist(type, 'over1') },
         { th: "❌ หมดอายุเกิน 3 ปี", en: "Expired over 3 years", action: () => showLicenseChecklist(type, 'over3') }
     ]);
@@ -231,23 +261,41 @@ async function getResponse(userQuery) {
 }
 
 // --- 6. ระบบเสียงและ UI ---
-
 function speak(text) {
     if (!text || window.isMuted) return;
     window.speechSynthesis.cancel();
     forceUnmute();
+
+    // Safety Timeout จากโค้ดเดิม
+    const safetyTime = (text.length * 200) + 5000;
+    if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
+    speechSafetyTimeout = setTimeout(() => {
+        if (window.isBusy) { window.isBusy = false; updateLottie('idle'); restartIdleTimer(); }
+    }, safetyTime);
+
     const msg = new SpeechSynthesisUtterance(text.replace(/[*#-]/g, ""));
     msg.lang = (window.currentLang === 'th') ? 'th-TH' : 'en-US';
     msg.onstart = () => { window.isBusy = true; updateLottie('talking'); };
-    msg.onend = () => { window.isBusy = false; updateLottie('idle'); };
+    msg.onend = () => { 
+        if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
+        window.isBusy = false; updateLottie('idle'); updateInteractionTime(); 
+    };
     window.speechSynthesis.speak(msg);
 }
 
+// 🚩 จุดสำคัญ: ใช้รูปแบบ const ตามโค้ดเดิมเป๊ะ
 const stopAllSpeech = () => {
     window.speechSynthesis.cancel();
+    if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
     window.isBusy = false;
     updateLottie('idle');
+    console.log("🛑 [Action] Speech Terminated.");
 };
+
+// ดักฟังการปิดหน้าจอ
+window.addEventListener('pagehide', stopAllSpeech);
+window.addEventListener('beforeunload', stopAllSpeech);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') stopAllSpeech(); });
 
 function renderFAQButtons() {
     const container = document.getElementById('faq-container');
@@ -310,4 +358,27 @@ async function initDatabase() {
     } catch (e) { setTimeout(initDatabase, 5000); }
 }
 
+function calculateSimilarity(s1, s2) {
+    let longer = s1.length < s2.length ? s2 : s1;
+    let shorter = s1.length < s2.length ? s1 : s2;
+    if (longer.length === 0) return 1.0;
+    return (longer.length - editDistance(longer, shorter)) / longer.length;
+}
+
+function editDistance(s1, s2) {
+    let costs = [];
+    for (let i = 0; i <= s1.length; i++) {
+        let lastValue = i;
+        for (let j = 0; j <= s2.length; j++) {
+            if (i === 0) costs[j] = j;
+            else if (j > 0) {
+                let newVal = costs[j - 1];
+                if (s1.charAt(i - 1) !== s2.charAt(j - 1)) newVal = Math.min(Math.min(newVal, lastValue), costs[j]) + 1;
+                costs[j - 1] = lastValue; lastValue = newVal;
+            }
+        }
+        if (i > 0) costs[s2.length] = lastValue;
+    }
+    return costs[s2.length];
+}
 initDatabase();
