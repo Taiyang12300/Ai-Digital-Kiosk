@@ -9,9 +9,21 @@
   <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
   
   <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
-  <script src="script.js"></script>
 
-  
+<script src="script.js"></script>
+
+<script>
+  // 3. บังคับให้เริ่มทำงาน "หลังจาก" หน้าจอและไฟล์ทุกอย่างโหลดเสร็จชัวร์ๆ
+  window.addEventListener('load', () => {
+    console.log("🚀 หน้าจอโหลดเสร็จแล้ว กำลังเช็คสมองกล...");
+    if (typeof faceapi !== 'undefined') {
+        // ถ้าไฟล์ script.js ของพี่มีฟังก์ชันชื่อ init() ให้เรียกตรงนี้ครับ
+        if (typeof init === 'function') init(); 
+    } else {
+        alert("น้องนำทางโหลดไม่สำเร็จ เพราะหาไฟล์ face-api ไม่เจอครับพี่!");
+    }
+  });
+</script>
   <style>
     :root { --primary: #6c5ce7; --bg: #f9f9fb; --accent: #ff7675; }
     
