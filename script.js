@@ -1,6 +1,6 @@
 /**
  * 🚀 สมองกลน้องนำทาง - เวอร์ชั่นคัดกรองใบขับขี่ + ระบบปริ้นใบนำทาง
- * ปรับปรุง: เพิ่ม Logic คัดกรองวันหมดอายุ และเชื่อมต่อระบบ Print 58mm
+ * ปรับปรุง: แก้ไขให้ Checklist ติ๊กได้จริง และปุ่ม Print จะแสดงเมื่อติ๊กครบ
  */
 
 window.localDatabase = null;
@@ -122,7 +122,16 @@ function greetUser() {
     speak(text);
 }
 
-// --- 4. 🚩 ระบบคัดกรองใบขับขี่ (Logic ใหม่ของพี่) ---
+// --- 4. 🚩 ระบบคัดกรองใบขับขี่ (Logic ติ๊กได้จริง) ---
+
+function checkChecklist() {
+    const checks = document.querySelectorAll('.doc-check');
+    const printBtn = document.getElementById('btnPrintGuide');
+    if (!printBtn) return;
+    // ปลดล็อคปุ่มปริ้นเมื่อติ๊กครบทุกช่อง
+    const allChecked = checks.length > 0 && Array.from(checks).every(c => c.checked);
+    printBtn.style.display = allChecked ? "block" : "none";
+}
 
 function startLicenseCheck(type) {
     isAtHome = false;
@@ -132,7 +141,6 @@ function startLicenseCheck(type) {
     displayResponse(msg);
     speak(msg);
 
-    // แสดงปุ่มเลือกสถานะวันหมดอายุ
     renderOptionButtons([
         { th: "✅ ยังไม่หมดอายุ / ไม่เกิน 1 ปี", en: "Not expired / Under 1 year", action: () => showLicenseChecklist(type, 'normal') },
         { th: "⚠️ หมดอายุเกิน 1 ปี (แต่ไม่เกิน 3 ปี)", en: "Expired 1-3 years", action: () => showLicenseChecklist(type, 'over1') },
@@ -147,17 +155,11 @@ function showLicenseChecklist(type, expiry) {
     let docs = ["บัตรประชาชน (ตัวจริง)", "ใบขับขี่เดิม", "ใบรับรองแพทย์ (ไม่เกิน 1 เดือน)"];
     let note = "";
 
-    // กฎเหล็กของพี่: ชั่วคราวไม่ต้องอบรม
     if (isTemp) {
-        if (expiry === 'normal') {
-            note = "ไม่ต้องอบรม ต่อได้ทันที";
-        } else if (expiry === 'over1') {
-            note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนใหม่";
-        } else if (expiry === 'over3') {
-            note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนและสอบขับรถใหม่";
-        }
+        if (expiry === 'normal') note = "ไม่ต้องอบรม ต่อได้ทันที";
+        else if (expiry === 'over1') note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนใหม่";
+        else if (expiry === 'over3') note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนและสอบขับรถใหม่";
     } else {
-        // กรณี 5 ปี เป็น 5 ปี
         if (expiry === 'normal') {
             docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)");
             note = "อบรมออนไลน์ 1 ชม. และต่อได้ทันที";
@@ -169,12 +171,27 @@ function showLicenseChecklist(type, expiry) {
         }
     }
 
-    let resultHTML = `<strong>${type}</strong><br><span style="color:blue;">${note}</span><hr>`;
-    docs.forEach(d => { resultHTML += `<div>[ ] ${d}</div>`; });
-    resultHTML += `<br><button onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}')" style="width:100%; padding:15px; background:#28a745; color:white; border:none; border-radius:10px; font-weight:bold; font-size:18px;">🖨️ ปริ้นใบนำทาง</button>`;
+    // ปรับปรุง HTML ให้ติ๊กได้จริงและสวยงาม
+    let resultHTML = `<div style="text-align:left; background:white; padding:15px; border-radius:12px; border:1px solid #ddd;">`;
+    resultHTML += `<strong style="font-size:20px;">${type}</strong><br><span style="color:#6c5ce7; font-weight:bold;">💡 ${note}</span><hr style="margin:10px 0;">`;
+    resultHTML += `<p style="font-size:14px; color:gray; margin-bottom:10px;">กรุณาติ๊กตรวจสอบเอกสาร:</p>`;
+
+    docs.forEach((d, idx) => { 
+        resultHTML += `
+            <div style="display:flex; align-items:center; margin-bottom:12px; background:#f8f9fd; padding:8px; border-radius:8px;">
+                <input type="checkbox" class="doc-check" id="chk-${idx}" onchange="checkChecklist()" style="width:22px; height:22px; cursor:pointer; accent-color:#6c5ce7;">
+                <label for="chk-${idx}" style="margin-left:12px; font-size:18px; cursor:pointer; color:#2d3436;">${d}</label>
+            </div>`; 
+    });
+
+    resultHTML += `
+        <button id="btnPrintGuide" onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}')" 
+            style="display:none; width:100%; padding:15px; background:linear-gradient(135deg, #28a745, #218838); color:white; border:none; border-radius:10px; font-weight:bold; font-size:18px; cursor:pointer; margin-top:10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            🖨️ ปริ้นใบนำทาง
+        </button></div>`;
 
     displayResponse(resultHTML);
-    speak(isThai ? `เตรียมเอกสารตามรายการนี้ และสามารถปริ้นใบนำทางได้เลยครับ` : `Please prepare these documents and print your guide.`);
+    speak(isThai ? `เตรียมเอกสารตามรายการนี้ให้ครบ แล้วกดปริ้นใบนำทางครับ` : `Please check documents and print your guide.`);
 }
 
 // --- 5. ระบบค้นหาและจัดการคำถาม ---
@@ -190,7 +207,6 @@ async function getResponse(userQuery) {
 
     const query = userQuery.toLowerCase().trim();
 
-    // เช็ค Keyword ใบขับขี่
     if ((query.includes("ใบขับขี่") || query.includes("license")) && (query.includes("ต่อ") || query.includes("renew"))) {
         if (!query.includes("ชั่วคราว") && !query.includes("5 ปี") && !query.includes("5ปี")) {
             const askMsg = (window.currentLang === 'th') ? "ไม่ทราบว่าใบขับขี่ของท่านเป็นแบบชั่วคราว หรือแบบ 5 ปีครับ?" : "Is your license Temporary or 5-year?";
@@ -205,7 +221,6 @@ async function getResponse(userQuery) {
         }
     }
 
-    // ระบบค้นหาจาก Database ปกติ
     try {
         let bestMatch = { answer: "", score: 0 };
         for (const sheetName of Object.keys(window.localDatabase)) {
@@ -294,7 +309,7 @@ function updateLottie(state) {
 }
 
 function displayResponse(text) {
-    document.getElementById('response-text').innerHTML = text.replace(/\n/g, '<br>');
+    document.getElementById('response-text').innerHTML = text.replace(/\\n/g, '<br>').replace(/\n/g, '<br>');
 }
 
 async function initDatabase() {
