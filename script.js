@@ -8,7 +8,7 @@ window.currentLang = 'th';
 window.isMuted = false; 
 window.isBusy = false; 
 window.hasGreeted = false;
-let isAtHome = true; 
+window.isAtHome = true; 
 
 const GAS_URL = "https://script.google.com/macros/s/AKfycbz1bkIsQ588u-rpjY-8nMlya5_c0DsIabRvyPyCC_sPs5vyeJ_1wcOBaqKfg7cvlM3XJw/exec"; 
 
@@ -17,7 +17,7 @@ let speechSafetyTimeout = null;
 const IDLE_TIME_LIMIT = 15000; 
 let video = document.getElementById('video');
 let faceModel = null; 
-let isDetecting = true; 
+window.isDetecting = true; 
 let personInFrameTime = null; 
 let lastSeenTime = Date.now();
 let lastDetectionTime = 0;
