@@ -1,6 +1,7 @@
 /**
- * 🚀 สมองกลน้องนำทาง - เวอร์ชั่นคัดกรองใบขับขี่ + ระบบปริ้นใบนำทาง
- * ปรับปรุง: เพิ่มระบบ Similarity Search (หาคำเหมือน) + แก้ไข Checklist
+ * 🚀 สมองกลน้องนำทาง - เวอร์ชั่นสมบูรณ์ (UI Fix + Fuzzy Search)
+ * ปรับปรุงล่าสุด: 16 เมษายน 2026 
+ * รายการแก้ไข: ช่องติ๊กตรงกันเป๊ะ, ปุ่ม Print สวยงาม, ระบบหาคำเหมือน (Levenshtein), คัดกรองปุ่มว่าง
  */
 
 window.localDatabase = null;
@@ -14,7 +15,7 @@ const GAS_URL = "https://script.google.com/macros/s/AKfycbz1bkIsQ588u-rpjY-8nMly
 
 let idleTimer = null; 
 let speechSafetyTimeout = null; 
-const IDLE_TIME_LIMIT = 15000; 
+const IDLE_TIME_LIMIT = 20000; 
 let video = document.getElementById('video');
 let isDetecting = true; 
 let personInFrameTime = null; 
@@ -118,29 +119,14 @@ function greetUser() {
     if (window.hasGreeted || window.isBusy) return;
     forceUnmute();
     isAtHome = false; 
-    const hour = new Date().getHours();
     const isThai = window.currentLang === 'th';
-    const gender = window.detectedGender || 'male';
-
-    let timeGreet = (hour < 12) ? (isThai ? "สวัสดีตอนเช้าครับ" : "Good morning") :
-                    (hour < 17) ? (isThai ? "สวัสดีตอนบ่ายครับ" : "Good afternoon") : 
-                                 (isThai ? "สวัสดีตอนเย็นครับ" : "Good evening");
-
-    let personType = isThai ? (gender === 'male' ? "คุณผู้ชาย" : "คุณผู้หญิง") : (gender === 'male' ? "Sir" : "Madam");
-
-    const greetings = {
-        th: [`${timeGreet}${personType} มีอะไรให้น้องนำทางช่วยดูแลไหมครับ?`, `สำนักงานขนส่งพยัคฆภูมิพิสัย ยินดีให้บริการครับ มีอะไรให้ช่วยไหมครับ?`],
-        en: [`${timeGreet}, ${personType}! How can I assist you?`]
-    };
-    
-    const list = greetings[window.currentLang] || greetings['th'];
-    let finalGreet = list[Math.floor(Math.random() * list.length)];
+    const text = isThai ? "สวัสดีตอนเช้าครับ มีอะไรให้น้องนำทางช่วยดูแลไหมครับ?" : "Good morning! How can I help you?";
     window.hasGreeted = true; 
-    displayResponse(finalGreet);
-    speak(finalGreet);
+    displayResponse(text);
+    speak(text);
 }
 
-// --- 4. 🚩 ระบบคัดกรองใบขับขี่ & Checklist ---
+// --- 4. 🚩 ระบบคัดกรองใบขับขี่ & Checklist (UI ปรับปรุงใหม่) ---
 
 function checkChecklist() {
     const checks = document.querySelectorAll('.doc-check');
@@ -167,21 +153,14 @@ function startLicenseCheck(type) {
 function showLicenseChecklist(type, expiry) {
     const isThai = window.currentLang === 'th';
     const isTemp = type.includes("ชั่วคราว") || type.includes("2 ปี");
-    
     let docs = ["บัตรประชาชน (ตัวจริง)", "ใบขับขี่เดิม", "ใบรับรองแพทย์ (ไม่เกิน 1 เดือน)"];
     let note = "";
 
-    // กฎเหล็กของพี่: ชั่วคราวไม่ต้องอบรม
     if (isTemp) {
-        if (expiry === 'normal') {
-            note = "ไม่ต้องอบรม ต่อได้ทันที";
-        } else if (expiry === 'over1') {
-            note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนใหม่";
-        } else if (expiry === 'over3') {
-            note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนและสอบขับรถใหม่";
-        }
+        if (expiry === 'normal') note = "ไม่ต้องอบรม ต่อได้ทันที";
+        else if (expiry === 'over1') note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนใหม่";
+        else if (expiry === 'over3') note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนและสอบขับรถใหม่";
     } else {
-        // กรณี 5 ปี เป็น 5 ปี
         if (expiry === 'normal') {
             docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)");
             note = "อบรมออนไลน์ 1 ชม. และต่อได้ทันที";
@@ -193,15 +172,41 @@ function showLicenseChecklist(type, expiry) {
         }
     }
 
-    let resultHTML = `<strong>${type}</strong><br><span style="color:blue;">${note}</span><hr>`;
-    docs.forEach(d => { resultHTML += `<div>[ ] ${d}</div>`; });
-    resultHTML += `<br><button onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}')" style="width:100%; padding:15px; background:#28a745; color:white; border:none; border-radius:10px; font-weight:bold; font-size:18px;">🖨️ ปริ้นใบนำทาง</button>`;
+    let resultHTML = `
+        <div style="text-align:left; background:#fff; border-radius:15px; padding:15px; box-shadow:0 5px 15px rgba(0,0,0,0.05); border:1px solid #eee;">
+            <div style="display:flex; align-items:center; margin-bottom:10px;">
+                <div style="background:#6c5ce7; width:6px; height:20px; border-radius:10px; margin-right:10px;"></div>
+                <strong style="font-size:20px; color:#2d3436;">${type}</strong>
+            </div>
+            <div style="background:#fff9f0; border-left:4px solid #fab1a0; padding:10px; border-radius:8px; margin-bottom:15px;">
+                <span style="color:#e17055; font-weight:bold;">💡 ${note}</span>
+            </div>
+            <p style="margin-bottom:10px; font-weight:600; color:#636e72;">กรุณาติ๊กตรวจสอบเอกสาร:</p>
+    `;
+
+    docs.forEach((d, idx) => {
+        resultHTML += `
+            <div style="margin-bottom:10px; display:flex; align-items:flex-start; background:#f9f9fc; padding:10px; border-radius:10px;">
+                <input type="checkbox" class="doc-check" id="chk-${idx}" onchange="checkChecklist()" 
+                    style="width:24px; height:24px; cursor:pointer; flex-shrink:0; accent-color:#6c5ce7;">
+                <label for="chk-${idx}" style="font-size:18px; margin-left:12px; color:#2d3436; cursor:pointer; line-height:1.4;">${d}</label>
+            </div>
+        `;
+    });
+
+    resultHTML += `
+            <button id="btnPrintGuide" onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}')" 
+                style="display:none; width:100%; padding:18px; background:linear-gradient(135deg, #2ecc71, #27ae60); color:white; border:none; border-radius:15px; font-weight:bold; font-size:20px; margin-top:15px; cursor:pointer; box-shadow:0 5px 15px rgba(46, 204, 113, 0.3);">
+                🖨️ ปริ้นใบนำทาง
+            </button>
+        </div>
+    `;
 
     displayResponse(resultHTML);
-    speak(isThai ? `เตรียมเอกสารตามรายการนี้ และสามารถปริ้นใบนำทางได้เลยครับ` : `Please prepare these documents and print your guide.`);
+    speak(isThai ? `เตรียมเอกสารตามรายการนี้ให้ครบ แล้วกดปริ้นใบนำทางครับ` : `Please check documents and print your guide.`);
 }
 
-// --- 5. ระบบค้นหาและจัดการคำถาม (Fuzzy Search) ---
+// --- 5. ระบบค้นหาและจัดการคำถาม (Similarity Search) ---
 
 async function getResponse(userQuery) {
     if (!userQuery || !window.localDatabase) return;
@@ -213,9 +218,8 @@ async function getResponse(userQuery) {
 
     const query = userQuery.toLowerCase().trim();
 
-    // เช็ค Keyword ใบขับขี่
     if ((query.includes("ใบขับขี่") || query.includes("license")) && (query.includes("ต่อ") || query.includes("renew"))) {
-        if (!query.includes("ชั่วคราว") && !query.includes("5 ปี") && !query.includes("5ปี")) {
+        if (!query.includes("ชั่วคราว") && !query.includes("5 ปี") && !query.includes("5ปี") && !query.includes("2 ปี") && !query.includes("2ปี")) {
             const askMsg = (window.currentLang === 'th') ? "ใบขับขี่ของท่านเป็นแบบชั่วคราว หรือแบบ 5 ปีครับ?" : "Temporary or 5-year?";
             displayResponse(askMsg); speak(askMsg);
             renderOptionButtons([
@@ -234,14 +238,12 @@ async function getResponse(userQuery) {
                 const keys = item[0] ? item[0].toString().toLowerCase() : "";
                 if (keys === "") return;
 
-                // 1. Partial Match
                 if (keys.includes(query) || query.includes(keys)) {
                     bestMatch = { answer: (window.currentLang === 'th' ? item[1] : item[2] || item[1]), score: 10 };
                 } 
-                // 2. Similarity Match (Fuzzy) - ถ้ายังไม่มีคะแนนที่ดีกว่า
                 else if (bestMatch.score < 8) {
                     let sim = calculateSimilarity(query, keys);
-                    if (sim > 0.75) { // ความเหมือนเกิน 75%
+                    if (sim > 0.75) {
                         bestMatch = { answer: (window.currentLang === 'th' ? item[1] : item[2] || item[1]), score: sim * 10 };
                     }
                 }
@@ -252,7 +254,6 @@ async function getResponse(userQuery) {
     } catch (err) { window.isBusy = false; }
 }
 
-// ฟังก์ชันคำนวณความเหมือน
 function calculateSimilarity(s1, s2) {
     let longer = s1.length < s2.length ? s2 : s1;
     let shorter = s1.length < s2.length ? s1 : s2;
@@ -341,7 +342,7 @@ function updateLottie(state) {
 }
 
 function displayResponse(text) {
-    document.getElementById('response-text').innerHTML = text.replace(/\n/g, '<br>');
+    document.getElementById('response-text').innerHTML = text.replace(/\\n/g, '<br>').replace(/\n/g, '<br>');
 }
 
 async function initDatabase() {
