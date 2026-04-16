@@ -138,8 +138,8 @@ async function detectPerson() {
     const face = predictions.find(f => {
         const box = f.detection.box;
         const centerX = box.x + (box.width / 2);
-        // เงื่อนไข: มั่นใจเกิน 75%, ขนาดใบหน้ากว้างพอ, และอยู่บริเวณกลางตู้ (CX: 349)
-        return f.detection.score > 0.60 && box.width > 150 && (centerX > 100 && centerX < 540);
+        // เงื่อนไข: มั่นใจเกิน 55%, ขนาดใบหน้ากว้างพอ, และอยู่บริเวณกลางตู้ (CX: 349)
+        return f.detection.score > 0.55 && box.width > 120 && (centerX > 100 && centerX < 540);
     });
 
     if (face) {
@@ -152,8 +152,8 @@ async function detectPerson() {
         window.PersonInFrame = true;
         const stayDuration = now - personInFrameTime;
 
-        // ยืนรอหน้าตู้เกิน 2 วินาที และยังไม่ได้ทักทาย ให้ทักทายทันที
-        if (stayDuration >= 2000 && window.isAtHome && !window.isBusy && !window.hasGreeted) {
+        // ยืนรอหน้าตู้เกิน 1 วินาที และยังไม่ได้ทักทาย ให้ทักทายทันที
+        if (stayDuration >= 1000 && window.isAtHome && !window.isBusy && !window.hasGreeted) {
             greetUser(); 
         }
         lastSeenTime = now; 
