@@ -1,6 +1,5 @@
 /**
- * 🚀 สมองกลน้องนำทาง - เวอร์ชั่นคัดกรองใบขับขี่ + ระบบปริ้นใบนำทาง
- * ปรับปรุง: เพิ่มระบบ Checkbox ตรวจสอบเอกสารก่อนปริ้น
+ * 🚀 สมองกลน้องนำทาง - เวอร์ชั่นแก้ไขการแสดงผลปุ่ม Print
  */
 
 window.localDatabase = null;
@@ -132,7 +131,6 @@ function startLicenseCheck(type) {
     displayResponse(msg);
     speak(msg);
 
-    // แสดงปุ่มเลือกสถานะวันหมดอายุ
     renderOptionButtons([
         { th: "✅ ยังไม่หมดอายุ / ไม่เกิน 1 ปี", en: "Not expired / Under 1 year", action: () => showLicenseChecklist(type, 'normal') },
         { th: "⚠️ หมดอายุเกิน 1 ปี (แต่ไม่เกิน 3 ปี)", en: "Expired 1-3 years", action: () => showLicenseChecklist(type, 'over1') },
@@ -140,19 +138,19 @@ function startLicenseCheck(type) {
     ]);
 }
 
-// ฟังก์ชันตรวจสอบเอกสารแบบติ๊กช่อง (ปรับปรุงใหม่)
 function validateDocCheck() {
     const checks = document.querySelectorAll('.doc-check');
     const btn = document.getElementById('btnPrintGuide');
+    if (!btn) return;
     const allChecked = Array.from(checks).every(c => c.checked);
 
     if (allChecked) {
         btn.disabled = false;
-        btn.style.background = "#28a745"; // สีเขียว
+        btn.style.background = "#28a745";
         btn.style.cursor = "pointer";
     } else {
         btn.disabled = true;
-        btn.style.background = "#bdc3c7"; // สีเทา
+        btn.style.background = "#bdc3c7";
         btn.style.cursor = "not-allowed";
     }
 }
@@ -180,7 +178,13 @@ function showLicenseChecklist(type, expiry) {
         }
     }
 
-    // สร้าง HTML พร้อม Checkbox
+    // จัดเตรียมข้อมูลสำหรับเรียกใช้ใน onclick เพื่อเลี่ยงปัญหาตัวอักษรพิเศษ
+    window.currentPrintData = {
+        type: type,
+        note: note,
+        docs: docs.join('\\n')
+    };
+
     let resultHTML = `
         <div style="text-align:left; padding:10px;">
             <strong style="font-size:20px; color:#6c5ce7;">${type}</strong><br>
@@ -198,11 +202,12 @@ function showLicenseChecklist(type, expiry) {
         `;
     });
 
+    // แก้ไขปุ่ม Print โดยดึงข้อมูลจากตัวแปร window แทนการยัดโค้ดลงใน HTML โดยตรง
     resultHTML += `
             <hr>
             <button id="btnPrintGuide" disabled 
-                onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}')" 
-                style="width:100%; padding:15px; background:#bdc3c7; color:white; border:none; border-radius:10px; font-weight:bold; font-size:18px; cursor:not-allowed;">
+                onclick="printLicenseNote(window.currentPrintData.type, window.currentPrintData.note, window.currentPrintData.docs)" 
+                style="width:100%; padding:15px; background:#bdc3c7; color:white; border:none; border-radius:10px; font-weight:bold; font-size:22px; cursor:not-allowed;">
                 🖨️ ปริ้นใบนำทาง
             </button>
         </div>
@@ -225,7 +230,6 @@ async function getResponse(userQuery) {
 
     const query = userQuery.toLowerCase().trim();
 
-    // เช็ค Keyword ใบขับขี่
     if ((query.includes("ใบขับขี่") || query.includes("license")) && (query.includes("ต่อ") || query.includes("renew"))) {
         if (!query.includes("ชั่วคราว") && !query.includes("5 ปี") && !query.includes("5ปี")) {
             const askMsg = (window.currentLang === 'th') ? "ไม่ทราบว่าใบขับขี่ของท่านเป็นแบบชั่วคราว หรือแบบ 5 ปีครับ?" : "Is your license Temporary or 5-year?";
@@ -240,7 +244,6 @@ async function getResponse(userQuery) {
         }
     }
 
-    // ระบบค้นหาจาก Database ปกติ
     try {
         let bestMatch = { answer: "", score: 0 };
         for (const sheetName of Object.keys(window.localDatabase)) {
