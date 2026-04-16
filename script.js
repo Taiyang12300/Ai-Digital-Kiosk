@@ -167,61 +167,38 @@ function startLicenseCheck(type) {
 function showLicenseChecklist(type, expiry) {
     const isThai = window.currentLang === 'th';
     const isTemp = type.includes("ชั่วคราว") || type.includes("2 ปี");
+    
     let docs = ["บัตรประชาชน (ตัวจริง)", "ใบขับขี่เดิม", "ใบรับรองแพทย์ (ไม่เกิน 1 เดือน)"];
     let note = "";
 
+    // กฎเหล็กของพี่: ชั่วคราวไม่ต้องอบรม
     if (isTemp) {
-        if (expiry === 'normal') note = "ไม่ต้องอบรม ต่อได้ทันที";
-        else if (expiry === 'over1') note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนใหม่";
-        else if (expiry === 'over3') note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนและสอบขับรถใหม่";
+        if (expiry === 'normal') {
+            note = "ไม่ต้องอบรม ต่อได้ทันที";
+        } else if (expiry === 'over1') {
+            note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนใหม่";
+        } else if (expiry === 'over3') {
+            note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนและสอบขับรถใหม่";
+        }
     } else {
-        if (expiry === 'normal') { 
-            docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)"); 
-            note = "อบรมออนไลน์ 1 ชม. และต่อได้ทันที"; 
+        // กรณี 5 ปี เป็น 5 ปี
+        if (expiry === 'normal') {
+            docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)");
+            note = "อบรมออนไลน์ 1 ชม. และต่อได้ทันที";
+        } else if (expiry === 'over1') {
+            docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)");
+            note = "อบรมออนไลน์ และต้องสอบข้อเขียนใหม่";
+        } else if (expiry === 'over3') {
+            note = "ต้องอบรม 5 ชม. ที่ขนส่งเท่านั้น + สอบข้อเขียน + สอบขับรถ";
         }
-        else if (expiry === 'over1') { 
-            docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)"); 
-            note = "อบรมออนไลน์ และต้องสอบข้อเขียนใหม่"; 
-        }
-        else if (expiry === 'over3') note = "ต้องอบรม 5 ชม. ที่ขนส่งเท่านั้น + สอบข้อเขียน + สอบขับรถ";
     }
 
-    // สร้าง HTML ใหม่ให้สวยงาม
-    let resultHTML = `
-        <div style="text-align:left; background:#ffffff; border-radius:20px; padding:20px; box-shadow:0 10px 25px rgba(0,0,0,0.05); border:1px solid #f0f0f0;">
-            <div style="display:flex; align-items:center; margin-bottom:15px;">
-                <div style="background:#6c5ce7; width:5px; height:25px; border-radius:10px; margin-right:10px;"></div>
-                <strong style="font-size:22px; color:#2d3436;">${type}</strong>
-            </div>
-            
-            <div style="background:#fff9f0; border-left:4px solid #fab1a0; padding:12px; border-radius:8px; margin-bottom:20px;">
-                <span style="color:#e17055; font-weight:bold; font-size:16px;">💡 ${note}</span>
-            </div>
-
-            <p style="margin-bottom:15px; font-weight:600; color:#636e72;">รายการที่ต้องเตรียม:</p>
-    `;
-    
-    docs.forEach((d, idx) => {
-        resultHTML += `
-            <div style="margin-bottom:15px; display:flex; align-items:center; background:#f8f9fa; padding:12px; border-radius:12px; transition: 0.3s;">
-                <input type="checkbox" class="doc-check" id="chk-${idx}" onchange="checkChecklist()" 
-                    style="width:24px; height:24px; cursor:pointer; accent-color:#6c5ce7;">
-                <label for="chk-${idx}" style="font-size:18px; margin-left:12px; color:#2d3436; cursor:pointer; flex:1;">${d}</label>
-            </div>
-        `;
-    });
-
-    // ปุ่มปริ้นที่แก้ Syntax แล้ว
-    resultHTML += `
-            <button id="btnPrintGuide" onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}')" 
-                style="display:none; width:100%; padding:18px; background:linear-gradient(135deg, #2ecc71, #27ae60); color:white; border:none; border-radius:15px; font-weight:bold; font-size:20px; margin-top:15px; box-shadow:0 5px 15px rgba(46, 204, 113, 0.3); cursor:pointer;">
-                🖨️ ปริ้นใบนำทาง
-            </button>
-        </div>
-    `;
+    let resultHTML = `<strong>${type}</strong><br><span style="color:blue;">${note}</span><hr>`;
+    docs.forEach(d => { resultHTML += `<div>[ ] ${d}</div>`; });
+    resultHTML += `<br><button onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}')" style="width:100%; padding:15px; background:#28a745; color:white; border:none; border-radius:10px; font-weight:bold; font-size:18px;">🖨️ ปริ้นใบนำทาง</button>`;
 
     displayResponse(resultHTML);
-    speak(isThai ? `ตรวจสอบรายการเอกสาร และกดปริ้นใบนำทางได้เลยครับ` : `Please check your documents and print.`);
+    speak(isThai ? `เตรียมเอกสารตามรายการนี้ และสามารถปริ้นใบนำทางได้เลยครับ` : `Please prepare these documents and print your guide.`);
 }
 
 // --- 5. ระบบค้นหาและจัดการคำถาม (Fuzzy Search) ---
