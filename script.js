@@ -106,14 +106,25 @@ async function initCamera() {
 }
 
 async function loadAndStartDetection() {
-    // โหลด BlazeFace Model
-    faceModel = await blazeface.load();
-    console.log("✅ [AI] Face Detection Model Ready");
-    requestAnimationFrame(detectPerson);
+    // 🔗 ชี้ไปที่ Repository ของพี่โดยตรง
+    const MODEL_URL = 'https://taiyang12300.github.io/model/'; 
+    
+    try {
+        console.log("🧠 [AI] กำลังอัปเกรดดวงตาจาก GitHub...");
+        // โหลดโมเดล 3 ตัวที่พี่มีใน GitHub เพื่อแยกเพศและอายุ
+        await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+        await faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL);
+        await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+        
+        console.log("✅ [AI] ระบบวิเคราะห์บุคคล (ชาย/หญิง/อายุ) พร้อมทำงาน!");
+        requestAnimationFrame(detectPerson);
+    } catch (e) {
+        console.error("❌ Model Load Error:", e);
+    }
 }
 
 async function detectPerson() {
-    if (!window.isDetecting || !faceModel) { 
+    if (!window.isDetecting || typeof faceapi === 'undefined') { 
         setTimeout(() => requestAnimationFrame(detectPerson), 1000); 
         return; 
     }
@@ -125,56 +136,44 @@ async function detectPerson() {
     }
     lastDetectionTime = now;
 
-    const predictions = await faceModel.estimateFaces(video, false);
+    // 🎯 ใช้ faceapi ตรวจจับพร้อมวิเคราะห์อายุ/เพศ
+    const predictions = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+        .withFaceLandmarks()
+        .withAgeAndGender();
     
     const face = predictions.find(f => {
-        const width = f.bottomRight[0] - f.topLeft[0];
-        const centerX = f.topLeft[0] + (width / 2);
-        const prob = (f.probability[0] * 100).toFixed(1);
-        const landmarks = f.landmarks; // ดึงข้อมูล ตา จมูก ปาก
+        const box = f.detection.box;
+        const centerX = box.x + (box.width / 2);
+        const prob = (f.detection.score * 100).toFixed(1);
 
-        // --- 1. ตรวจสอบรายละเอียดใบหน้า (Landmarks) ---
-        // จุดที่ 0 = ตาขวา, จุดที่ 2 = จมูก (กล้องอยู่ขวาจะเห็น 2 จุดนี้ชัดสุด)
-        const hasKeyFeatures = landmarks && landmarks[0] && landmarks[2];
-
-        // --- 2. Log ข้อมูลเพื่อการปรับจูนหน้าตู้จริง ---
-        if (f.probability[0] > 0.50) {
-            console.log(`📏 Face Info -> Prob: ${prob}%, W: ${width.toFixed(1)}, CX: ${centerX.toFixed(1)}, KeyPoints: ${hasKeyFeatures ? 'OK' : 'MISSING'}`);
+        // แสดง Log รายละเอียดเหมือนหน้าจอ Debug ที่พี่เคยทำ
+        if (f.detection.score > 0.5) {
+            console.log(`👤 [Detected] ${f.gender} (${Math.round(f.age)} ปี) | Prob: ${prob}% | CX: ${centerX.toFixed(1)}`);
         }
-        
-        // --- 3. เงื่อนไขการตัดสินใจ (ปรับให้เข้ากับตู้จริง) ---
-        return f.probability[0] > 0.75 && // ลดลงนิดหน่อยจาก 0.80 เพราะแสงย้อน
-               width > 45 && 
-               (centerX > 80 && centerX < 560) && // ขยายให้ครอบคลุมค่า 349 และมุมกล้องที่เยื้องขวา
-               hasKeyFeatures; // ต้องเห็นตา/จมูก ถึงจะนับว่าเป็นคน
+
+        // เงื่อนไข: มั่นใจเกิน 75%, ยืนใกล้พอ (width > 80), และอยู่กลางจอ (CX: 349 โดยประมาณ)
+        return f.detection.score > 0.75 && box.width > 80 && (centerX > 100 && centerX < 540);
     });
 
     if (face) {
         if (personInFrameTime === null) {
-            console.log("🎯 [AI Status] Face LOCKED with Landmarks!");
+            console.log(`🎯 [Target Locked] พบ${face.gender === 'male' ? 'ผู้ชาย' : 'ผู้หญิง'} อายุประมาณ ${Math.round(face.age)} ปี`);
             personInFrameTime = now;
+            
+            // 💡 ทิปส์: พี่สามารถเอาค่า face.age ไปแยกทักทาย "เด็ก" หรือ "ผู้ใหญ่" ได้ที่นี่ครับ
+            window.detectedAge = face.age; 
+            window.detectedGender = face.gender;
         }
-
         window.PersonInFrame = true;
         const stayDuration = now - personInFrameTime;
 
-        if (stayDuration < 2000 && window.isAtHome && !window.hasGreeted) {
-             console.log(`⏱️ Greeting in: ${((2000 - stayDuration)/1000).toFixed(1)}s`);
-        }
-
-        // เช็ค window.isAtHome (ลบ window. ที่ซ้อนกันออก)
         if (stayDuration >= 2000 && window.isAtHome && !window.isBusy && !window.hasGreeted) {
-            console.log("👋 [AI Action] Triggering GreetUser now!");
             greetUser(); 
         }
-
         lastSeenTime = now; 
-
     } else {
         const gap = now - lastSeenTime;
         if (personInFrameTime !== null && gap >= 2500) {
-            console.log("🚫 [AI Status] Target lost -> Resetting state.");
-            window.PersonInFrame = false; 
             personInFrameTime = null;   
             window.hasGreeted = false;  
             if (!window.isAtHome) restartIdleTimer(); 
