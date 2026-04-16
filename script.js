@@ -189,45 +189,43 @@ function greetUser() {
     
     const hour = new Date().getHours();
     const isThai = window.currentLang === 'th';
+    const gender = window.detectedGender; // 'male' หรือ 'female'
 
-    // 1. กำหนดคำเริ่มต้นตามช่วงเวลา
-    let timeGreetTh = "";
-    let timeGreetEn = "";
-
-    if (hour < 12) {
-        timeGreetTh = "สวัสดีตอนเช้าครับ"; // ปรับตามคำแนะนำของคุณ
-        timeGreetEn = "Good morning";
-    } else if (hour < 17) {
-        timeGreetTh = "สวัสดีตอนบ่ายครับ";
-        timeGreetEn = "Good afternoon";
+    // 1. ทักทายตามช่วงเวลา
+    let timeGreet = "";
+    if (isThai) {
+        timeGreet = (hour < 12) ? "สวัสดีตอนเช้าครับ" : (hour < 17 ? "สวัสดีตอนบ่ายครับ" : "สวัสดีตอนเย็นครับ");
     } else {
-        timeGreetTh = "สวัสดีตอนเย็นครับ";
-        timeGreetEn = "Good evening";
+        timeGreet = (hour < 12) ? "Good morning" : (hour < 17 ? "Good afternoon" : "Good evening");
     }
 
-    // 2. คลังประโยคทักทายที่ดูมีชีวิตชีวา (สุ่มเพื่อไม่ให้จำเจ)
+    // 2. แยกสรรพนามแค่ ชาย/หญิง (ตัดเรื่องอายุออกตามที่พี่ต้องการ)
+    let personType = "";
+    if (isThai) {
+        personType = (gender === 'male') ? "คุณผู้ชาย" : "คุณผู้หญิง";
+    } else {
+        personType = (gender === 'male') ? "Sir" : "Madam";
+    }
+
+    // 3. คลังประโยคทักทาย (สุ่มเหมือนเดิมแต่เน้นสรรพนามเพศ)
     const greetings = {
         th: [
-            `${timeGreetTh} มีอะไรให้น้องนำทางช่วยดูแลไหมครับ?`,
-            `สำนักงานขนส่งพยัคฆภูมิพิสัยครับ มีข้อมูลส่วนไหนที่อยากสอบถามผมไหมครับ?`,
-            `${timeGreetTh} เชิญสอบถามข้อมูลการทำใบขับขี่ หรือขั้นตอนต่างๆ กับผมได้เลยครับ`,
-            `สวัสดีครับ ผมน้องนำทาง ยินดีที่ได้ให้บริการครับ วันนี้มาติดต่อเรื่องอะไรดีครับ?`,
-            `สวัสดีครับ กำลังหาข้อมูลส่วนไหนอยู่หรือเปล่าครับ ให้ผมช่วยหาได้นะครับ`
+            `${timeGreet}${personType} มีอะไรให้น้องนำทางช่วยดูแลไหมครับ?`,
+            `สวัสดีครับ${personType} ยินดีต้อนรับสู่สำนักงานขนส่งพยัคฆภูมิพิสัยครับ`,
+            `${timeGreet}ครับ เชิญ${personType}สอบถามข้อมูลการทำใบขับขี่กับผมได้เลยครับ`,
+            `สวัสดีครับ ผมน้องนำทาง ยินดีที่ได้ให้บริการ${personType}ครับ วันนี้มาติดต่อเรื่องอะไรดีครับ?`
         ],
         en: [
-            `${timeGreetEn}! How can I assist you today?`,
-            `Welcome! I'm Nong Nam Thang. Is there anything I can help you find?`,
-            `Hello! Feel free to ask me about driver's license renewals or any other services.`,
-            `${timeGreetEn}! It's a pleasure to see you. What can I do for you today?`,
-            `Hi there! Need any help with our services? Just let me know!`
+            `${timeGreet}, ${personType}! How can I assist you today?`,
+            `Welcome! How can I help you, ${personType}?`,
+            `Hello! I'm Nong Nam Thang. Need any help with our services, ${personType}?`
         ]
     };
     
-    // สุ่มเลือกประโยค
     const list = greetings[window.currentLang] || greetings['th'];
     let finalGreet = list[Math.floor(Math.random() * list.length)];
     
-    console.log("👋 [Greeting]: " + finalGreet);
+    console.log("👋 [AI Action]: " + finalGreet);
     window.hasGreeted = true; 
     
     displayResponse(finalGreet);
