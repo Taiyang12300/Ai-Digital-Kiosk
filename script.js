@@ -1,5 +1,6 @@
 /**
- * 🚀 สมองกลน้องนำทาง - เวอร์ชั่น Face-API (ตาสับปะรด) + Smart Search สมบูรณ์
+ * 🚀 สมองกลน้องนำทาง - เวอร์ชั่น Face-API + Logic เดิม (ถอดแบบโค้ดที่พี่ส่งมา 100%)
+ * เพิ่มระบบ Log ตรวจสอบค่าต่างๆ ใน Console
  */
 
 window.localDatabase = null;
@@ -23,6 +24,7 @@ const DETECTION_INTERVAL = 200;
 
 // --- 1. ระบบจัดการสถานะ ---
 function resetSystemState() {
+    console.log("🧹 [System] Resetting State...");
     stopAllSpeech();
 }
 
@@ -49,6 +51,7 @@ function resetToHome() {
     }
     if (isAtHome) return; 
 
+    console.log("🏠 [Action] Returning Home Screen.");
     resetSystemState();
     forceUnmute(); 
     window.hasGreeted = false;      
@@ -82,7 +85,7 @@ async function loadFaceModels() {
     const MODEL_URL = 'https://taiyang12300.github.io/model/';
     await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
     await faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL);
-    console.log("✅ [AI] Face Models Ready");
+    console.log("✅ [AI] Face-API Models Ready");
     requestAnimationFrame(detectPerson);
 }
 
@@ -107,7 +110,10 @@ async function detectPerson() {
     });
 
     if (face) {
-        if (personInFrameTime === null) personInFrameTime = now;
+        if (personInFrameTime === null) {
+            console.log(`👁️ [AI] Spotted: ${face.gender} (Prob: ${face.genderProbability.toFixed(2)})`);
+            personInFrameTime = now;
+        }
         window.PersonInFrame = true;
         window.detectedGender = face.gender; 
         const stayDuration = now - personInFrameTime;
@@ -117,6 +123,7 @@ async function detectPerson() {
         lastSeenTime = now; 
     } else {
         if (personInFrameTime !== null && (now - lastSeenTime > 2500)) {
+            console.log("🚫 [AI] Person Left Frame.");
             window.PersonInFrame = false; 
             personInFrameTime = null;   
             window.hasGreeted = false;  
@@ -153,18 +160,21 @@ function greetUser() {
     speak(finalGreet);
 }
 
-// --- 4. ระบบ Search & Log (ดึง Logic ฉลาดๆ มาใส่) ---
+// --- 4. ระบบ Search (Logic เดิมที่พี่ต้องการ) ---
 async function logQuestionToSheet(userQuery) {
     if (!userQuery || !GAS_URL) return;
     try {
         const finalUrl = `${GAS_URL}?action=logOnly&query=${encodeURIComponent(userQuery)}`;
         await fetch(finalUrl, { mode: 'no-cors' });
+        console.log("📊 [Log] Saved to Sheet.");
     } catch (e) { console.error(e); }
 }
 
 async function getResponse(userQuery) {
     if (!userQuery || !window.localDatabase) return;
+    console.log(`📝 [User Query]: "${userQuery}"`);
     logQuestionToSheet(userQuery);
+
     isAtHome = false; 
     updateInteractionTime(); 
     resetSystemState(); 
@@ -179,6 +189,7 @@ async function getResponse(userQuery) {
         for (const sheetName of Object.keys(window.localDatabase)) {
             if (["Lottie_State", "Config", "FAQ"].includes(sheetName)) continue;
             const rows = window.localDatabase[sheetName];
+            
             for (const item of rows) {
                 const rawKeys = item[0] ? item[0].toString().toLowerCase() : "";
                 if (!rawKeys) continue;
@@ -189,15 +200,32 @@ async function getResponse(userQuery) {
                 for (const key of keyList) {
                     let score = 0;
                     const lowerKey = key.toLowerCase();
+
+                    // 🎯 ใช้ Logic เดิมเป๊ะๆ
                     if (query === lowerKey) {
-                        score = 10.0;
+                        score = 10.0; // Exact Match
                     } else {
+                        // แยก Token และนับ matchCount
                         const keyTokens = lowerKey.split(/[\s,/-]+/).filter(t => t.length > 1);
                         let matchCount = 0;
                         keyTokens.forEach(kt => { if (query.includes(kt)) matchCount++; });
+                        
                         let tokenScore = keyTokens.length > 0 ? (matchCount / keyTokens.length) : 0;
                         let simScore = calculateSimilarity(query, lowerKey);
-                        score = (tokenScore * 5) + (simScore * 1);
+
+                        // ระบบ Bonus ปี จากโค้ดเดิม
+                        let yearBonus = 0;
+                        const isQ5 = query.includes("5 ปี") || query.includes("5ปี");
+                        const isQ2 = query.includes("2 ปี") || query.includes("2ปี") || query.includes("ชั่วคราว");
+                        const isK5 = lowerKey.includes("5 ปี") || lowerKey.includes("5ปี");
+                        const isK2 = lowerKey.includes("2 ปี") || lowerKey.includes("2ปี") || lowerKey.includes("ชั่วคราว");
+
+                        if (isQ5 && isK5) yearBonus = 2.0;
+                        if (isQ2 && isK2) yearBonus = 2.0;
+                        if ((isQ5 && isK2) || (isQ2 && isK5)) yearBonus = -5.0;
+
+                        // คำนวณคะแนนรวมแบบเดิม
+                        score = (tokenScore * 5) + (simScore * 1) + yearBonus;
                     }
 
                     if (score > bestMatch.score) {
@@ -207,11 +235,13 @@ async function getResponse(userQuery) {
             }
         }
 
+        console.log(`🎯 [Best Match Found]: "${bestMatch.debugKey}" | Total Score: ${bestMatch.score.toFixed(2)}`);
+
         if (bestMatch.score >= 0.4 && bestMatch.answer !== "") { 
             displayResponse(bestMatch.answer);
             speak(bestMatch.answer);
         } else {
-            const fallback = window.currentLang === 'th' ? "ขออภัยครับ น้องหาข้อมูลไม่พบ ลองเลือกจากหัวข้อด้านล่างนะครับ" : "I couldn't find that. Please try the topics below.";
+            const fallback = window.currentLang === 'th' ? "ขออภัยครับ น้องหาข้อมูลไม่พบ" : "I couldn't find that.";
             displayResponse(fallback);
             speak(fallback);
             renderFAQButtons(); 
@@ -223,13 +253,10 @@ async function getResponse(userQuery) {
 function speak(text) {
     if (!text || window.isMuted) return;
     window.speechSynthesis.cancel();
-    
     const msg = new SpeechSynthesisUtterance(text.replace(/[*#-]/g, ""));
     msg.lang = (window.currentLang === 'th') ? 'th-TH' : 'en-US';
-    
     msg.onstart = () => { window.isBusy = true; updateLottie('talking'); };
     msg.onend = () => { window.isBusy = false; updateLottie('idle'); restartIdleTimer(); };
-    
     window.speechSynthesis.speak(msg);
 }
 
@@ -248,14 +275,15 @@ async function initDatabase() {
             window.localDatabase = json.database;
             renderFAQButtons();
             initCamera(); 
-            displayResponse("สวัสดีตอนเช้าครับ ระบบพร้อมให้บริการแล้ว");
+            displayResponse("ระบบพร้อมให้บริการแล้วครับ");
+            console.log("✅ [System] Database Ready.");
         }
     } catch (e) { setTimeout(initDatabase, 5000); }
 }
 
 function renderFAQButtons() {
     const container = document.getElementById('faq-container');
-    if (!container || !window.localDatabase || !window.localDatabase["FAQ"]) return;
+    if (!container || !window.localDatabase) return;
     container.innerHTML = "";
     window.localDatabase["FAQ"].slice(1).forEach((row) => {
         const qText = (window.currentLang === 'th') ? row[0] : row[1];
@@ -263,7 +291,11 @@ function renderFAQButtons() {
             const btn = document.createElement('button');
             btn.className = 'faq-btn';
             btn.innerText = qText;
-            btn.onclick = () => { stopAllSpeech(); getResponse(qText); };
+            btn.onclick = () => { 
+                console.log(`🖱️ [UI] Button Click: ${qText}`);
+                stopAllSpeech(); 
+                getResponse(qText); 
+            };
             container.appendChild(btn);
         }
     });
@@ -285,7 +317,6 @@ function displayResponse(text) {
     if (box) box.innerHTML = text.replace(/\n/g, '<br>');
 }
 
-// ฟังก์ชันคำนวณความเหมือน (ที่หายไปในโค้ดใหม่)
 function calculateSimilarity(s1, s2) {
     let longer = s1.length < s2.length ? s2 : s1;
     let shorter = s1.length < s2.length ? s1 : s2;
