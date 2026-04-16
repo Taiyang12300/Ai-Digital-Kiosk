@@ -1,6 +1,6 @@
 /**
- * 🚀 สมองกลน้องนำทาง - เวอร์ชั่น Face-API + Logic เดิม (ถอดแบบโค้ดที่พี่ส่งมา 100%)
- * เพิ่มระบบ Log ตรวจสอบค่าต่างๆ ใน Console
+ * 🚀 สมองกลน้องนำทาง - เวอร์ชั่น Face-API + Full Original Logic
+ * รวมฟีเจอร์: คัดกรองใบขับขี่ 2 ปี/5 ปี, สุ่มคำทักทาย, และระบบปุ่ม Option
  */
 
 window.localDatabase = null;
@@ -111,19 +111,19 @@ async function detectPerson() {
 
     if (face) {
         if (personInFrameTime === null) {
-            console.log(`👁️ [AI] Spotted: ${face.gender} (Prob: ${face.genderProbability.toFixed(2)})`);
+            console.log(`👁️ [AI] Spotted: ${face.gender}`);
             personInFrameTime = now;
         }
         window.PersonInFrame = true;
         window.detectedGender = face.gender; 
         const stayDuration = now - personInFrameTime;
-        if (stayDuration >= 2000 && isAtHome && !window.isBusy && !window.hasGreeted) {
+        if (stayDuration >= 3000 && isAtHome && !window.isBusy && !window.hasGreeted) {
             greetUser(); 
         }
         lastSeenTime = now; 
     } else {
-        if (personInFrameTime !== null && (now - lastSeenTime > 2500)) {
-            console.log("🚫 [AI] Person Left Frame.");
+        if (personInFrameTime !== null && (now - lastSeenTime > 3000)) {
+            console.log("🚫 [AI] Target Left.");
             window.PersonInFrame = false; 
             personInFrameTime = null;   
             window.hasGreeted = false;  
@@ -133,23 +133,34 @@ async function detectPerson() {
 }
 
 function greetUser() {
+    if (window.hasGreeted || window.isBusy) return;
     forceUnmute();
     isAtHome = false; 
     const hour = new Date().getHours();
     const isThai = window.currentLang === 'th';
     const gender = window.detectedGender || 'male';
 
-    let timeGreet = isThai 
-        ? (hour < 12 ? "สวัสดีตอนเช้าครับ" : (hour < 17 ? "สวัสดีตอนบ่ายครับ" : "สวัสดีตอนเย็นครับ"))
-        : (hour < 12 ? "Good morning" : (hour < 17 ? "Good afternoon" : "Good evening"));
+    let timeGreet = "";
+    if (hour < 12) timeGreet = isThai ? "สวัสดีตอนเช้าครับ" : "Good morning";
+    else if (hour < 17) timeGreet = isThai ? "สวัสดีตอนบ่ายครับ" : "Good afternoon";
+    else timeGreet = isThai ? "สวัสดีตอนเย็นครับ" : "Good evening";
 
     let personType = isThai 
         ? (gender === 'male' ? "คุณผู้ชาย" : "คุณผู้หญิง")
         : (gender === 'male' ? "Sir" : "Madam");
 
     const greetings = {
-        th: [`${timeGreet}${personType} มีอะไรให้น้องนำทางช่วยดูแลไหมครับ?`, `ยินดีให้บริการครับ${personType} สอบถามข้อมูลได้เลยครับ`],
-        en: [`${timeGreet}, ${personType}! How can I assist you?`, `Welcome! How can I help you today?`]
+        th: [
+            `${timeGreet}${personType} มีอะไรให้น้องนำทางช่วยดูแลไหมครับ?`,
+            `สำนักงานขนส่งพยัคฆภูมิพิสัยครับ มีข้อมูลส่วนไหนที่อยากสอบถามผมไหมครับ?`,
+            `${timeGreet} เชิญสอบถามข้อมูลการทำใบขับขี่ หรือขั้นตอนต่างๆ กับผมได้เลยครับ`,
+            `สวัสดีครับ ผมน้องนำทาง ยินดีให้บริการครับ วันนี้มาติดต่อเรื่องอะไรดีครับ?`
+        ],
+        en: [
+            `${timeGreet}, ${personType}! How can I assist you today?`,
+            `Welcome! I'm Nong Nam Thang. Is there anything I can help you find?`,
+            `Hello! Feel free to ask me about our services.`
+        ]
     };
     
     const list = greetings[window.currentLang] || greetings['th'];
@@ -160,7 +171,7 @@ function greetUser() {
     speak(finalGreet);
 }
 
-// --- 4. ระบบ Search (Logic เดิมที่พี่ต้องการ) ---
+// --- 4. ระบบ Search (Logic เดิมทั้งหมด) ---
 async function logQuestionToSheet(userQuery) {
     if (!userQuery || !GAS_URL) return;
     try {
@@ -172,9 +183,10 @@ async function logQuestionToSheet(userQuery) {
 
 async function getResponse(userQuery) {
     if (!userQuery || !window.localDatabase) return;
-    console.log(`📝 [User Query]: "${userQuery}"`);
+    console.log(`📝 [Query]: ${userQuery}`);
     logQuestionToSheet(userQuery);
 
+    if (window.isBusy) { stopAllSpeech(); window.isBusy = false; }
     isAtHome = false; 
     updateInteractionTime(); 
     resetSystemState(); 
@@ -182,6 +194,25 @@ async function getResponse(userQuery) {
     updateLottie('thinking');
 
     const query = userQuery.toLowerCase().trim().replace(/[?？!！]/g, "");
+
+    // 🚩 Logic คัดกรองใบขับขี่ (จากโค้ดเดิม)
+    const isLicense = query.includes("ใบขับขี่") || query.includes("license");
+    const isRenew = query.includes("ต่อ") || query.includes("renew");
+
+    if (isLicense && isRenew && !query.includes("ชั่วคราว") && !query.includes("temporary") && !query.includes("5 ปี") && !query.includes("5ปี")) {
+        const askMsg = (window.currentLang === 'th') 
+            ? "ไม่ทราบว่าใบขับขี่ของท่านเป็นแบบชั่วคราว หรือแบบ 5 ปีครับ?" 
+            : "Is your license a Temporary (2-year) or a 5-year type?";
+        displayResponse(askMsg);
+        speak(askMsg);
+        
+        renderOptionButtons([
+            { th: "แบบชั่วคราว (2 ปี)", en: "Temporary (2 years)", s_th: "ต่อใบขับขี่ชั่วคราว", s_en: "renew temporary license" },
+            { th: "แบบ 5 ปี", en: "5-year type", s_th: "ต่อใบขับขี่ 5 ปี เป็น 5 ปี", s_en: "renew 5 year license" },
+        ]);
+        window.isBusy = false; 
+        return; 
+    }
 
     try {
         let bestMatch = { answer: "", score: 0, debugKey: "" };
@@ -201,11 +232,9 @@ async function getResponse(userQuery) {
                     let score = 0;
                     const lowerKey = key.toLowerCase();
 
-                    // 🎯 ใช้ Logic เดิมเป๊ะๆ
                     if (query === lowerKey) {
-                        score = 10.0; // Exact Match
+                        score = 10.0;
                     } else {
-                        // แยก Token และนับ matchCount
                         const keyTokens = lowerKey.split(/[\s,/-]+/).filter(t => t.length > 1);
                         let matchCount = 0;
                         keyTokens.forEach(kt => { if (query.includes(kt)) matchCount++; });
@@ -213,7 +242,6 @@ async function getResponse(userQuery) {
                         let tokenScore = keyTokens.length > 0 ? (matchCount / keyTokens.length) : 0;
                         let simScore = calculateSimilarity(query, lowerKey);
 
-                        // ระบบ Bonus ปี จากโค้ดเดิม
                         let yearBonus = 0;
                         const isQ5 = query.includes("5 ปี") || query.includes("5ปี");
                         const isQ2 = query.includes("2 ปี") || query.includes("2ปี") || query.includes("ชั่วคราว");
@@ -224,7 +252,6 @@ async function getResponse(userQuery) {
                         if (isQ2 && isK2) yearBonus = 2.0;
                         if ((isQ5 && isK2) || (isQ2 && isK5)) yearBonus = -5.0;
 
-                        // คำนวณคะแนนรวมแบบเดิม
                         score = (tokenScore * 5) + (simScore * 1) + yearBonus;
                     }
 
@@ -235,13 +262,13 @@ async function getResponse(userQuery) {
             }
         }
 
-        console.log(`🎯 [Best Match Found]: "${bestMatch.debugKey}" | Total Score: ${bestMatch.score.toFixed(2)}`);
+        console.log(`🎯 [Match Found]: "${bestMatch.debugKey}" Score: ${bestMatch.score}`);
 
         if (bestMatch.score >= 0.4 && bestMatch.answer !== "") { 
             displayResponse(bestMatch.answer);
             speak(bestMatch.answer);
         } else {
-            const fallback = window.currentLang === 'th' ? "ขออภัยครับ น้องหาข้อมูลไม่พบ" : "I couldn't find that.";
+            const fallback = window.currentLang === 'th' ? "ขออภัยครับ น้องหาข้อมูลไม่พบ ลองเลือกจากหัวข้อด้านล่างนะครับ" : "I couldn't find that.";
             displayResponse(fallback);
             speak(fallback);
             renderFAQButtons(); 
@@ -253,10 +280,13 @@ async function getResponse(userQuery) {
 function speak(text) {
     if (!text || window.isMuted) return;
     window.speechSynthesis.cancel();
+    forceUnmute();
     const msg = new SpeechSynthesisUtterance(text.replace(/[*#-]/g, ""));
     msg.lang = (window.currentLang === 'th') ? 'th-TH' : 'en-US';
+    
     msg.onstart = () => { window.isBusy = true; updateLottie('talking'); };
     msg.onend = () => { window.isBusy = false; updateLottie('idle'); restartIdleTimer(); };
+    
     window.speechSynthesis.speak(msg);
 }
 
@@ -266,7 +296,7 @@ function stopAllSpeech() {
     updateLottie('idle');
 }
 
-// --- 6. เริ่มต้นระบบ ---
+// --- 6. เริ่มต้นระบบ & UI ---
 async function initDatabase() {
     try {
         const res = await fetch(GAS_URL, { redirect: 'follow' });
@@ -291,13 +321,30 @@ function renderFAQButtons() {
             const btn = document.createElement('button');
             btn.className = 'faq-btn';
             btn.innerText = qText;
-            btn.onclick = () => { 
-                console.log(`🖱️ [UI] Button Click: ${qText}`);
-                stopAllSpeech(); 
-                getResponse(qText); 
-            };
+            btn.onclick = () => { stopAllSpeech(); window.isBusy = false; getResponse(qText); };
             container.appendChild(btn);
         }
+    });
+}
+
+function renderOptionButtons(options) {
+    const container = document.getElementById('faq-container');
+    if (!container) return;
+    container.innerHTML = ""; 
+    options.forEach(opt => {
+        const btn = document.createElement('button');
+        btn.className = 'faq-btn'; 
+        btn.style.border = "2px solid #6366f1"; 
+        btn.style.backgroundColor = "#f0edff"; 
+        btn.innerText = (window.currentLang === 'th') ? opt.th : (opt.en || opt.th); 
+        btn.onclick = () => {
+            stopAllSpeech();
+            window.isBusy = false;
+            const query = (window.currentLang === 'th') ? opt.s_th : (opt.s_en || opt.s_th);
+            getResponse(query); 
+            setTimeout(renderFAQButtons, 800); 
+        };
+        container.appendChild(btn);
     });
 }
 
