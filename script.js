@@ -1,7 +1,7 @@
 /**
- * 🚀 สมองกลน้องนำทาง - เวอร์ชั่นสมบูรณ์ (UI Fix + Fuzzy Search)
+ * 🚀 สมองกลน้องนำทาง - เวอร์ชั่นสมบูรณ์แบบ (UI Final Fix)
  * ปรับปรุงล่าสุด: 16 เมษายน 2026 
- * รายการแก้ไข: ช่องติ๊กตรงกันเป๊ะ, ปุ่ม Print สวยงาม, ระบบหาคำเหมือน (Levenshtein), คัดกรองปุ่มว่าง
+ * แก้ไข: ช่องติ๊กตรงกันเป๊ะ 100%, ปุ่ม Print สวยงามมีมิติ, ระบบ Fuzzy Search
  */
 
 window.localDatabase = null;
@@ -24,9 +24,7 @@ let lastDetectionTime = 0;
 const DETECTION_INTERVAL = 200; 
 
 // --- 1. ระบบจัดการสถานะ ---
-function resetSystemState() {
-    stopAllSpeech();
-}
+function resetSystemState() { stopAllSpeech(); }
 
 function updateInteractionTime() {
     lastSeenTime = Date.now();
@@ -45,10 +43,7 @@ function forceUnmute() {
 // --- 2. ระบบ Reset หน้าจอ ---
 function resetToHome() {
     const now = Date.now();
-    if (window.isBusy || personInFrameTime !== null || (now - lastSeenTime < IDLE_TIME_LIMIT)) {
-        if (!isAtHome) restartIdleTimer(); 
-        return;
-    }
+    if (window.isBusy || personInFrameTime !== null || (now - lastSeenTime < IDLE_TIME_LIMIT)) return;
     if (isAtHome) return; 
 
     resetSystemState();
@@ -81,7 +76,6 @@ async function loadFaceModels() {
     const MODEL_URL = 'https://taiyang12300.github.io/model/';
     await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
     await faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL);
-    console.log("✅ [AI] Face-API Ready");
     requestAnimationFrame(detectPerson);
 }
 
@@ -101,7 +95,6 @@ async function detectPerson() {
     if (face) {
         if (personInFrameTime === null) personInFrameTime = now;
         window.PersonInFrame = true;
-        window.detectedGender = face.gender; 
         if ((now - personInFrameTime) >= 3000 && isAtHome && !window.isBusy && !window.hasGreeted) greetUser(); 
         lastSeenTime = now; 
     } else {
@@ -119,14 +112,13 @@ function greetUser() {
     if (window.hasGreeted || window.isBusy) return;
     forceUnmute();
     isAtHome = false; 
-    const isThai = window.currentLang === 'th';
-    const text = isThai ? "สวัสดีตอนเช้าครับ มีอะไรให้น้องนำทางช่วยดูแลไหมครับ?" : "Good morning! How can I help you?";
+    const text = window.currentLang === 'th' ? "สวัสดีตอนเช้าครับ มีอะไรให้น้องนำทางช่วยดูแลไหมครับ?" : "Good morning! How can I help you?";
     window.hasGreeted = true; 
     displayResponse(text);
     speak(text);
 }
 
-// --- 4. 🚩 ระบบคัดกรองใบขับขี่ & Checklist (UI ปรับปรุงใหม่) ---
+// --- 4. 🚩 ระบบคัดกรองใบขับขี่ & Checklist (UI FIX) ---
 
 function checkChecklist() {
     const checks = document.querySelectorAll('.doc-check');
@@ -138,8 +130,7 @@ function checkChecklist() {
 
 function startLicenseCheck(type) {
     isAtHome = false;
-    const isThai = window.currentLang === 'th';
-    const msg = isThai ? `ใบขับขี่ ${type} ของท่าน หมดอายุหรือยังครับ?` : `Is your ${type} license expired?`;
+    const msg = window.currentLang === 'th' ? `ใบขับขี่ ${type} ของท่าน หมดอายุหรือยังครับ?` : `Is your ${type} license expired?`;
     displayResponse(msg);
     speak(msg);
 
@@ -161,42 +152,38 @@ function showLicenseChecklist(type, expiry) {
         else if (expiry === 'over1') note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนใหม่";
         else if (expiry === 'over3') note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนและสอบขับรถใหม่";
     } else {
-        if (expiry === 'normal') {
-            docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)");
-            note = "อบรมออนไลน์ 1 ชม. และต่อได้ทันที";
-        } else if (expiry === 'over1') {
-            docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)");
-            note = "อบรมออนไลน์ และต้องสอบข้อเขียนใหม่";
-        } else if (expiry === 'over3') {
-            note = "ต้องอบรม 5 ชม. ที่ขนส่งเท่านั้น + สอบข้อเขียน + สอบขับรถ";
-        }
+        if (expiry === 'normal') { docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)"); note = "อบรมออนไลน์ 1 ชม. และต่อได้ทันที"; }
+        else if (expiry === 'over1') { docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)"); note = "อบรมออนไลน์ และต้องสอบข้อเขียนใหม่"; }
+        else if (expiry === 'over3') note = "ต้องอบรม 5 ชม. ที่ขนส่งเท่านั้น + สอบข้อเขียน + สอบขับรถ";
     }
 
     let resultHTML = `
-        <div style="text-align:left; background:#fff; border-radius:15px; padding:15px; box-shadow:0 5px 15px rgba(0,0,0,0.05); border:1px solid #eee;">
-            <div style="display:flex; align-items:center; margin-bottom:10px;">
-                <div style="background:#6c5ce7; width:6px; height:20px; border-radius:10px; margin-right:10px;"></div>
-                <strong style="font-size:20px; color:#2d3436;">${type}</strong>
+        <div style="text-align:left; background:#fff; border-radius:15px; padding:20px; box-shadow:0 8px 20px rgba(0,0,0,0.1); border:1px solid #eee;">
+            <div style="display:flex; align-items:center; margin-bottom:12px;">
+                <div style="background:#6c5ce7; width:6px; height:22px; border-radius:10px; margin-right:12px;"></div>
+                <strong style="font-size:22px; color:#2d3436;">${type}</strong>
             </div>
-            <div style="background:#fff9f0; border-left:4px solid #fab1a0; padding:10px; border-radius:8px; margin-bottom:15px;">
-                <span style="color:#e17055; font-weight:bold;">💡 ${note}</span>
+            <div style="background:#fff9f0; border-left:5px solid #fab1a0; padding:12px; border-radius:8px; margin-bottom:20px;">
+                <span style="color:#e17055; font-weight:bold; font-size:16px;">💡 ${note}</span>
             </div>
-            <p style="margin-bottom:10px; font-weight:600; color:#636e72;">กรุณาติ๊กตรวจสอบเอกสาร:</p>
+            <p style="margin-bottom:15px; font-weight:600; color:#636e72;">กรุณาติ๊กตรวจสอบเอกสาร:</p>
+            <div id="checklist-items">
     `;
 
     docs.forEach((d, idx) => {
         resultHTML += `
-            <div style="margin-bottom:10px; display:flex; align-items:flex-start; background:#f9f9fc; padding:10px; border-radius:10px;">
+            <div style="margin-bottom:12px; display:flex; align-items:flex-start; background:#f8f9fd; padding:12px; border-radius:12px; border:1px solid #f0f0f5;">
                 <input type="checkbox" class="doc-check" id="chk-${idx}" onchange="checkChecklist()" 
-                    style="width:24px; height:24px; cursor:pointer; flex-shrink:0; accent-color:#6c5ce7;">
-                <label for="chk-${idx}" style="font-size:18px; margin-left:12px; color:#2d3436; cursor:pointer; line-height:1.4;">${d}</label>
+                    style="width:26px; height:26px; cursor:pointer; flex-shrink:0; accent-color:#6c5ce7; margin:0;">
+                <label for="chk-${idx}" style="font-size:18px; margin-left:15px; color:#2d3436; cursor:pointer; line-height:1.5; flex:1;">${d}</label>
             </div>
         `;
     });
 
     resultHTML += `
+            </div>
             <button id="btnPrintGuide" onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}')" 
-                style="display:none; width:100%; padding:18px; background:linear-gradient(135deg, #2ecc71, #27ae60); color:white; border:none; border-radius:15px; font-weight:bold; font-size:20px; margin-top:15px; cursor:pointer; box-shadow:0 5px 15px rgba(46, 204, 113, 0.3);">
+                style="display:none; width:100%; padding:20px; background:linear-gradient(135deg, #2ecc71, #27ae60); color:white; border:none; border-radius:18px; font-weight:bold; font-size:22px; margin-top:20px; cursor:pointer; box-shadow:0 10px 20px rgba(46, 204, 113, 0.3); transition: transform 0.2s;">
                 🖨️ ปริ้นใบนำทาง
             </button>
         </div>
@@ -220,7 +207,7 @@ async function getResponse(userQuery) {
 
     if ((query.includes("ใบขับขี่") || query.includes("license")) && (query.includes("ต่อ") || query.includes("renew"))) {
         if (!query.includes("ชั่วคราว") && !query.includes("5 ปี") && !query.includes("5ปี") && !query.includes("2 ปี") && !query.includes("2ปี")) {
-            const askMsg = (window.currentLang === 'th') ? "ใบขับขี่ของท่านเป็นแบบชั่วคราว หรือแบบ 5 ปีครับ?" : "Temporary or 5-year?";
+            const askMsg = window.currentLang === 'th' ? "ใบขับขี่ของท่านเป็นแบบชั่วคราว หรือแบบ 5 ปีครับ?" : "Temporary or 5-year?";
             displayResponse(askMsg); speak(askMsg);
             renderOptionButtons([
                 { th: "แบบชั่วคราว (2 ปี)", en: "Temporary", action: () => startLicenseCheck("แบบชั่วคราว (2 ปี)") },
@@ -237,15 +224,12 @@ async function getResponse(userQuery) {
             window.localDatabase[sheetName].forEach(item => {
                 const keys = item[0] ? item[0].toString().toLowerCase() : "";
                 if (keys === "") return;
-
                 if (keys.includes(query) || query.includes(keys)) {
                     bestMatch = { answer: (window.currentLang === 'th' ? item[1] : item[2] || item[1]), score: 10 };
                 } 
                 else if (bestMatch.score < 8) {
                     let sim = calculateSimilarity(query, keys);
-                    if (sim > 0.75) {
-                        bestMatch = { answer: (window.currentLang === 'th' ? item[1] : item[2] || item[1]), score: sim * 10 };
-                    }
+                    if (sim > 0.75) bestMatch = { answer: (window.currentLang === 'th' ? item[1] : item[2] || item[1]), score: sim * 10 };
                 }
             });
         }
@@ -288,7 +272,7 @@ function speak(text) {
     speechSafetyTimeout = setTimeout(() => { if (window.isBusy) { window.isBusy = false; updateLottie('idle'); } }, safetyTime);
 
     const msg = new SpeechSynthesisUtterance(text.replace(/[*#-]/g, ""));
-    msg.lang = (window.currentLang === 'th') ? 'th-TH' : 'en-US';
+    msg.lang = window.currentLang === 'th' ? 'th-TH' : 'en-US';
     msg.onstart = () => { window.isBusy = true; updateLottie('talking'); };
     msg.onend = () => { if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout); window.isBusy = false; updateLottie('idle'); };
     window.speechSynthesis.speak(msg);
@@ -305,7 +289,7 @@ function renderFAQButtons() {
     if (!container || !window.localDatabase) return;
     container.innerHTML = "";
     window.localDatabase["FAQ"].slice(1).forEach((row) => {
-        const qText = (window.currentLang === 'th') ? row[0] : row[1];
+        const qText = window.currentLang === 'th' ? row[0] : row[1];
         if (qText && qText.toString().trim() !== "") {
             const btn = document.createElement('button');
             btn.className = 'faq-btn';
@@ -324,7 +308,7 @@ function renderOptionButtons(options) {
         const btn = document.createElement('button');
         btn.className = 'faq-btn';
         btn.style.border = "2px solid #6c5ce7";
-        btn.innerText = (window.currentLang === 'th') ? opt.th : opt.en;
+        btn.innerText = window.currentLang === 'th' ? opt.th : opt.en;
         btn.onclick = () => { stopAllSpeech(); if (opt.action) opt.action(); };
         container.appendChild(btn);
     });
