@@ -4,10 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AI Digital Kiosk - DLT (Local Brain)</title>
-  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;500&family=Kanit:wght@300;500;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
   <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
-  
   <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
 
@@ -24,131 +23,56 @@
       min-height: 100vh;
     }
 
-    /* Wrapper หลักเพื่อคุม Layout ไม่ให้พัง */
-    .main-container {
-      width: 100%;
-      max-width: 600px;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
+    .main-container { width: 100%; max-width: 600px; padding: 20px; display: flex; flex-direction: column; align-items: center; }
     
-    /* --- ส่วนควบคุมด้านบน (ภาษา + ปิดเสียง) --- */
-    .top-controls {
-      width: 100%;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 25px;
-    }
+    /* --- UI Components --- */
+    .top-controls { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+    .lang-container { display: flex; gap: 10px; }
+    .btn-lang, .btn-mute { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px; border-radius: 25px; border: 2px solid #e0e0e0; background: white; color: #636e72; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    .btn-lang img { width: 22px; height: auto; border-radius: 2px; }
+    .btn-lang.active { border-color: var(--primary); background: #f0edff; color: var(--primary); font-weight: bold; }
+    .btn-mute.muted { background: var(--accent); color: white; border-color: var(--accent); }
 
-    .lang-container {
-      display: flex;
-      gap: 10px;
-    }
-
-    .btn-lang, .btn-mute {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      padding: 10px 16px;
-      border-radius: 25px;
-      border: 2px solid #e0e0e0;
-      background: white;
-      color: #636e72;
-      font-size: 15px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.2s;
-      min-width: 90px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-    }
-
-    .btn-mute { min-width: 55px; font-size: 18px; }
-
-    /* ตกแต่งรูปธงสำหรับตู้ Kiosk */
-    .btn-lang img {
-      width: 22px;
-      height: auto;
-      border-radius: 2px;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-    }
-
-    .btn-lang.active {
-      border-color: var(--primary);
-      background: #f0edff;
-      color: var(--primary);
-      font-weight: bold;
-    }
-
-    .btn-mute.muted {
-      background: var(--accent);
-      color: white;
-      border-color: var(--accent);
-    }
-    
-    /* --- ส่วนแสดงผลกลาง --- */
-    .avatar-container { 
-      width: 180px; 
-      height: 180px; 
-      margin-bottom: 20px; 
-      border-radius: 50%; 
-      background: white; 
-      box-shadow: 0 5px 15px rgba(0,0,0,0.05); 
-      overflow: hidden; 
-    }
+    .avatar-container { width: 180px; height: 180px; margin-bottom: 20px; border-radius: 50%; background: white; box-shadow: 0 5px 15px rgba(0,0,0,0.05); overflow: hidden; }
     #lottie-canvas { width: 100%; height: 100%; }
 
-    .display-box { 
-      background: white; 
-      border-radius: 20px; 
-      padding: 25px; 
-      box-shadow: 0 10px 20px rgba(0,0,0,0.05); 
-      width: 100%; 
-      box-sizing: border-box;
-      text-align: left; 
-      min-height: 140px; 
-      font-size: 18px; 
-      margin-bottom: 20px; 
-      color: #2d3436; 
-      border-left: 6px solid var(--primary); 
-      line-height: 1.6;
-    }
+    .display-box { background: white; border-radius: 20px; padding: 25px; box-shadow: 0 10px 20px rgba(0,0,0,0.05); width: 100%; box-sizing: border-box; text-align: left; min-height: 140px; font-size: 18px; margin-bottom: 20px; color: #2d3436; border-left: 6px solid var(--primary); line-height: 1.6; }
     
     .faq-title { width: 100%; margin: 10px 0; font-weight: 500; color: #636e72; font-size: 16px; display: flex; align-items: center; gap: 8px; }
     .faq-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; width: 100%; margin-bottom: 30px; }
     .faq-btn { padding: 12px; background: white; color: var(--primary); border: 2px solid #e0e0ff; border-radius: 15px; font-size: 15px; cursor: pointer; transition: all 0.2s; font-weight: 500; min-height: 60px; display: flex; align-items: center; justify-content: center; text-align: center; }
     .faq-btn:active { transform: scale(0.95); background: var(--primary); color: white; }
 
-    /* --- ส่วนรับข้อมูล --- */
     .input-section { width: 100%; display: flex; gap: 10px; margin-bottom: 20px; }
-    #userInput { flex: 1; padding: 15px; border-radius: 30px; border: 2px solid #ddd; outline: none; font-family: 'Sarabun', sans-serif; font-size: 16px; }
+    #userInput { flex: 1; padding: 15px; border-radius: 30px; border: 2px solid #ddd; outline: none; font-size: 16px; font-family: 'Sarabun'; }
     .btn-send { width: 50px; height: 50px; border-radius: 50%; border: none; background: var(--primary); color: white; cursor: pointer; font-size: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 
     .mic-section { margin-bottom: 30px; text-align: center; }
     .btn-mic { width: 90px; height: 90px; border-radius: 50%; border: none; background: var(--primary); color: white; font-size: 35px; cursor: pointer; display: flex; align-items: center; justify-content: center; margin: 0 auto; box-shadow: 0 10px 20px rgba(108,92,231,0.3); }
     .btn-mic.recording { background: var(--accent); animation: pulse 1.5s infinite; }
-
     @keyframes pulse { 0% { transform: scale(1); } 70% { transform: scale(1.1); } 100% { transform: scale(1); } }
+
+    /* --- ระบบพิมพ์ (Ticket) --- */
+    .ticket { background: white; color: black; width: 58mm; padding: 6px; margin: 0 auto; font-size: 13px; line-height: 1.3; text-align: center; font-family: 'Kanit', sans-serif; }
+    .ticket .big { font-size: 28px; font-weight: 800; margin: 4px 0; }
+
+    @media print {
+      @page { size: auto; margin: 0; }
+      body * { visibility: hidden !important; display: none !important; }
+      /* ส่วนที่อนุญาตให้พิมพ์ */
+      #ticketLicenseWrapper.printing, #ticketLicenseWrapper.printing * { visibility: visible !important; display: block !important; }
+      .ticket { position: absolute; top: 0; left: 0; width: 58mm; margin: 0; padding: 6px; }
+    }
   </style>
 </head>
 <body>
 
   <div class="main-container">
     <div class="top-controls">
-      <button onclick="toggleMute()" id="muteBtn" class="btn-mute" title="ปิด/เปิดเสียง">
-        <i id="muteIcon" class="fas fa-volume-up"></i>
-      </button>
-
+      <button onclick="toggleMute()" id="muteBtn" class="btn-mute"><i id="muteIcon" class="fas fa-volume-up"></i></button>
       <div class="lang-container">
-        <button onclick="changeLang('th')" id="btn-th" class="btn-lang active">
-          <img src="https://flagcdn.com/w40/th.png" alt="TH"> TH
-        </button>
-        <button onclick="changeLang('en')" id="btn-en" class="btn-lang">
-          <img src="https://flagcdn.com/w40/us.png" alt="EN"> EN
-        </button>
+        <button onclick="changeLang('th')" id="btn-th" class="btn-lang active"><img src="https://flagcdn.com/w40/th.png"> TH</button>
+        <button onclick="changeLang('en')" id="btn-en" class="btn-lang"><img src="https://flagcdn.com/w40/us.png"> EN</button>
       </div>
     </div>
 
@@ -172,11 +96,28 @@
     </div>
   </div>
 
-  <video id="video" width="320" height="240" autoplay muted playsinline style="display:none;"></video>
-  <canvas id="motionCanvas" width="320" height="240" style="display:none;"></canvas>
+  <div id="ticketLicenseWrapper" style="display: none;">
+    <div class="ticket">
+      <div style="font-size: 15px; font-weight: bold;">🧾 ใบนำทางติดต่อราชการ</div>
+      <div style="font-size: 11px; border-bottom: 1px dashed black; padding-bottom: 5px;">สำนักงานขนส่งพยัคฆภูมิพิสัย</div>
+      <div class="big" id="printLicenseType">-</div>
+      <div style="background: #000; color: #fff; padding: 4px; font-weight: bold; font-size: 14px; margin: 5px 0;" id="printLicenseNote">-</div>
+      <div style="text-align: left; margin: 10px 0; font-size: 12px; line-height: 1.4;">
+        <b>เอกสารที่ต้องใช้:</b>
+        <div id="printLicenseItems"></div>
+      </div>
+      <div style="border-top: 1px dashed black; padding-top: 5px; font-size: 10px;">
+        <div id="printLicenseTime"></div>
+        <div style="font-weight: bold; margin-top: 4px;">*ยื่นใบนี้พร้อมเอกสารที่ช่องประชาสัมพันธ์*</div>
+      </div>
+    </div>
+  </div>
 
-  <script src="script.js?v=1.9"></script>
+  <audio id="queueSound" preload="auto">
+    <source src="https://taiyang12300.github.io/sound/นำบัตรคิวยื่นต่อเจ้าหน้าที่.mp3" type="audio/mpeg">
+  </audio>
 
+  <script src="script.js?v=2.0"></script>
   <script>
     let recognition, isListening = false;
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -185,7 +126,6 @@
       window.isMuted = !window.isMuted;
       const muteBtn = document.getElementById('muteBtn');
       const muteIcon = document.getElementById('muteIcon');
-      
       if (window.isMuted) {
         window.speechSynthesis.cancel();
         muteBtn.classList.add('muted');
@@ -196,58 +136,26 @@
       }
     }
 
-    // --- ส่วนที่แก้ไข: ปรับปรุงการสลับภาษาให้ตัดเสียงและล้างสถานะทันที ---
     function changeLang(lang) {
-      // 1. สั่งหยุดเสียงทันทีและปลดล็อกสถานะ Busy เพื่อป้องกันระบบค้าง
       window.speechSynthesis.cancel();
       window.isBusy = false;
       window.currentLang = lang;
-      
-      // 2. บังคับเปิดเสียงเสมอเมื่อสลับภาษา (Logic เดิมของคุณ)
-      window.isMuted = false; 
-      const muteBtn = document.getElementById('muteBtn');
-      const muteIcon = document.getElementById('muteIcon');
-      if (muteBtn) muteBtn.classList.remove('muted');
-      if (muteIcon) muteIcon.className = 'fas fa-volume-up';
-      
-      // 3. อัปเดต UI ปุ่ม
+      window.isMuted = false;
       document.getElementById('btn-th').classList.toggle('active', lang === 'th');
       document.getElementById('btn-en').classList.toggle('active', lang === 'en');
-      
       const isTh = (lang === 'th');
       document.getElementById('userInput').placeholder = isTh ? "พิมพ์คำถามที่นี่..." : "Type your question here...";
       document.getElementById('statusText').innerText = isTh ? "แตะไมค์เพื่อเริ่มพูด" : "Tap mic to speak";
-      
-      const faqTitle = document.getElementById('faq-title-text');
-      if (faqTitle) {
-          faqTitle.innerHTML = isTh ? '<i class="fas fa-star"></i> คำถามที่พบบ่อย:' : '<i class="fas fa-star"></i> Frequently Asked Questions:';
-      }
-
-      // 4. ล้างข้อความคำตอบเก่าทิ้งทันที
-      const output = document.getElementById('response-text');
-      output.innerText = isTh ? "เปลี่ยนเป็นภาษาไทยแล้วครับ มีอะไรให้ช่วยไหม?" : "Switched to English. How can I assist you?";
-
+      document.getElementById('response-text').innerText = isTh ? "เปลี่ยนเป็นภาษาไทยแล้วครับ" : "Switched to English.";
       if (recognition) recognition.lang = isTh ? 'th-TH' : 'en-US';
       if (typeof renderFAQButtons === "function") renderFAQButtons();
-      
-      // 5. รีเซ็ตตัวละครและทักทายใหม่
-      if (typeof updateLottie === "function") updateLottie('idle');
-      window.hasGreeted = false;
-      if (typeof greetUser === "function") greetUser();
     }
 
     if (SpeechRecognition) {
       recognition = new SpeechRecognition();
       recognition.lang = 'th-TH';
-      recognition.onstart = () => {
-        isListening = true;
-        document.getElementById('micBtn').classList.add('recording');
-        if (typeof isDetecting !== 'undefined') isDetecting = false; 
-      };
-      recognition.onresult = (event) => {
-        const text = event.results[0][0].transcript;
-        processQuery(text);
-      };
+      recognition.onstart = () => { isListening = true; document.getElementById('micBtn').classList.add('recording'); };
+      recognition.onresult = (e) => { processQuery(e.results[0][0].transcript); };
       recognition.onend = () => { stopListening(); };
     }
 
@@ -255,39 +163,43 @@
       const input = document.getElementById('userInput');
       if (input.value.trim()) { processQuery(input.value.trim()); input.value = ''; }
     }
-    
     function handleKeyPress(e) { if (e.key === 'Enter') handleManualInput(); }
 
-    // --- ส่วนที่แก้ไข: เมื่อถามคำถามใหม่ ให้ตัดเสียงภาษาเก่าทิ้งทันที ---
     async function processQuery(query) {
-      window.speechSynthesis.cancel(); // ตัดเสียงเก่า
-      window.isBusy = false; // เคลียร์สถานะเพื่อให้ทำงานต่อได้ทันที
-      
-      window.isMuted = false;
-      const muteBtn = document.getElementById('muteBtn');
-      const muteIcon = document.getElementById('muteIcon');
-      if (muteBtn) muteBtn.classList.remove('muted');
-      if (muteIcon) muteIcon.className = 'fas fa-volume-up';
-
-      const output = document.getElementById('response-text');
-      output.innerText = (window.currentLang === 'th') ? "กำลังค้นหา..." : "Searching...";
+      window.speechSynthesis.cancel();
+      document.getElementById('response-text').innerText = (window.currentLang === 'th') ? "กำลังค้นหา..." : "Searching...";
       if (typeof getResponse === "function") await getResponse(query);
     }
 
-    function toggleListening() {
-      if (isListening) { recognition.stop(); } 
-      else { 
-        window.speechSynthesis.cancel();
-        updateLottie('thinking');
-        recognition.start(); 
-      }
-    }
+    function toggleListening() { if (isListening) recognition.stop(); else { window.speechSynthesis.cancel(); recognition.start(); } }
+    function stopListening() { isListening = false; document.getElementById('micBtn').classList.remove('recording'); }
 
-    function stopListening() {
-      isListening = false;
-      document.getElementById('micBtn').classList.remove('recording');
-      document.getElementById('statusText').innerText = (window.currentLang === 'th') ? "แตะไมค์เพื่อเริ่มพูด" : "Tap mic to speak";
+    // --- [ ฟังก์ชันพิมพ์ใบนำทาง ] ---
+    function printLicenseNote(type, note, items) {
+      const now = new Date();
+      document.getElementById('printLicenseType').innerText = type;
+      document.getElementById('printLicenseNote').innerText = note;
+      document.getElementById('printLicenseTime').innerText = `เวลาพิมพ์: ${now.toLocaleString('th-TH')}`;
+      const itemsHTML = items.split('\\n').map(i => `<div>[✓] ${i}</div>`).join('');
+      document.getElementById('printLicenseItems').innerHTML = itemsHTML;
+
+      const audio = document.getElementById('queueSound');
+      if (audio) { audio.currentTime = 0; audio.play().catch(e => {}); }
+
+      const wrapper = document.getElementById('ticketLicenseWrapper');
+      wrapper.style.display = 'block';
+      wrapper.classList.add('printing');
+
+      setTimeout(() => {
+        window.print();
+        setTimeout(() => {
+          wrapper.classList.remove('printing');
+          wrapper.style.display = 'none';
+          if(typeof renderFAQButtons === "function") renderFAQButtons(); 
+        }, 500);
+      }, 300);
     }
   </script>
 </body>
 </html>
+
