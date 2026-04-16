@@ -1,7 +1,6 @@
 /**
- * 🚀 สมองกลน้องนำทาง - เวอร์ชั่นสมบูรณ์แบบ (UI Final Fix)
- * ปรับปรุงล่าสุด: 16 เมษายน 2026 
- * แก้ไข: ช่องติ๊กตรงกันเป๊ะ 100%, ปุ่ม Print สวยงามมีมิติ, ระบบ Fuzzy Search
+ * 🚀 สมองกลน้องนำทาง - เวอร์ชั่นคัดกรองใบขับขี่ + ระบบปริ้นใบนำทาง
+ * ปรับปรุง: เพิ่ม Logic คัดกรองวันหมดอายุ และเชื่อมต่อระบบ Print 58mm
  */
 
 window.localDatabase = null;
@@ -15,7 +14,7 @@ const GAS_URL = "https://script.google.com/macros/s/AKfycbz1bkIsQ588u-rpjY-8nMly
 
 let idleTimer = null; 
 let speechSafetyTimeout = null; 
-const IDLE_TIME_LIMIT = 20000; 
+const IDLE_TIME_LIMIT = 15000; 
 let video = document.getElementById('video');
 let isDetecting = true; 
 let personInFrameTime = null; 
@@ -24,7 +23,9 @@ let lastDetectionTime = 0;
 const DETECTION_INTERVAL = 200; 
 
 // --- 1. ระบบจัดการสถานะ ---
-function resetSystemState() { stopAllSpeech(); }
+function resetSystemState() {
+    stopAllSpeech();
+}
 
 function updateInteractionTime() {
     lastSeenTime = Date.now();
@@ -43,7 +44,10 @@ function forceUnmute() {
 // --- 2. ระบบ Reset หน้าจอ ---
 function resetToHome() {
     const now = Date.now();
-    if (window.isBusy || personInFrameTime !== null || (now - lastSeenTime < IDLE_TIME_LIMIT)) return;
+    if (window.isBusy || personInFrameTime !== null || (now - lastSeenTime < IDLE_TIME_LIMIT)) {
+        if (!isAtHome) restartIdleTimer(); 
+        return;
+    }
     if (isAtHome) return; 
 
     resetSystemState();
@@ -61,7 +65,7 @@ function restartIdleTimer() {
     if (!isAtHome) idleTimer = setTimeout(resetToHome, IDLE_TIME_LIMIT); 
 }
 
-// --- 3. ระบบดวงตา AI ---
+// --- 3. ระบบดวงตา AI (Face-API) ---
 async function initCamera() {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 } });
@@ -94,12 +98,11 @@ async function detectPerson() {
 
     if (face) {
         if (personInFrameTime === null) personInFrameTime = now;
-        window.PersonInFrame = true;
-        if ((now - personInFrameTime) >= 3000 && isAtHome && !window.isBusy && !window.hasGreeted) greetUser(); 
+        window.detectedGender = face.gender; 
+        if ((now - personInFrameTime) >= 2000 && isAtHome && !window.isBusy && !window.hasGreeted) greetUser(); 
         lastSeenTime = now; 
     } else {
         if (personInFrameTime !== null && (now - lastSeenTime > 3000)) {
-            window.PersonInFrame = false; 
             personInFrameTime = null;   
             window.hasGreeted = false;  
             if (!isAtHome) restartIdleTimer();
@@ -112,31 +115,27 @@ function greetUser() {
     if (window.hasGreeted || window.isBusy) return;
     forceUnmute();
     isAtHome = false; 
-    const text = window.currentLang === 'th' ? "สวัสดีตอนเช้าครับ มีอะไรให้น้องนำทางช่วยดูแลไหมครับ?" : "Good morning! How can I help you?";
+    const isThai = window.currentLang === 'th';
+    const text = isThai ? "สวัสดีครับ มีอะไรให้น้องนำทางช่วยดูแลไหมครับ?" : "Hello! How can I help you today?";
     window.hasGreeted = true; 
     displayResponse(text);
     speak(text);
 }
 
-// --- 4. 🚩 ระบบคัดกรองใบขับขี่ & Checklist (UI FIX) ---
-
-function checkChecklist() {
-    const checks = document.querySelectorAll('.doc-check');
-    const printBtn = document.getElementById('btnPrintGuide');
-    if (!printBtn) return;
-    const allChecked = checks.length > 0 && Array.from(checks).every(c => c.checked);
-    printBtn.style.display = allChecked ? "block" : "none";
-}
+// --- 4. 🚩 ระบบคัดกรองใบขับขี่ (Logic ใหม่ของพี่) ---
 
 function startLicenseCheck(type) {
     isAtHome = false;
-    const msg = window.currentLang === 'th' ? `ใบขับขี่ ${type} ของท่าน หมดอายุหรือยังครับ?` : `Is your ${type} license expired?`;
+    const isThai = window.currentLang === 'th';
+    const msg = isThai ? `ใบขับขี่ ${type} ของท่าน หมดอายุหรือยังครับ?` : `Is your ${type} license expired?`;
+    
     displayResponse(msg);
     speak(msg);
 
+    // แสดงปุ่มเลือกสถานะวันหมดอายุ
     renderOptionButtons([
-        { th: "✅ ยังไม่หมดอายุ / ไม่เกิน 1 ปี", en: "Not expired", action: () => showLicenseChecklist(type, 'normal') },
-        { th: "⚠️ หมดอายุเกิน 1 ปี (ไม่เกิน 3 ปี)", en: "Expired 1-3 years", action: () => showLicenseChecklist(type, 'over1') },
+        { th: "✅ ยังไม่หมดอายุ / ไม่เกิน 1 ปี", en: "Not expired / Under 1 year", action: () => showLicenseChecklist(type, 'normal') },
+        { th: "⚠️ หมดอายุเกิน 1 ปี (แต่ไม่เกิน 3 ปี)", en: "Expired 1-3 years", action: () => showLicenseChecklist(type, 'over1') },
         { th: "❌ หมดอายุเกิน 3 ปี", en: "Expired over 3 years", action: () => showLicenseChecklist(type, 'over3') }
     ]);
 }
@@ -144,60 +143,46 @@ function startLicenseCheck(type) {
 function showLicenseChecklist(type, expiry) {
     const isThai = window.currentLang === 'th';
     const isTemp = type.includes("ชั่วคราว") || type.includes("2 ปี");
+    
     let docs = ["บัตรประชาชน (ตัวจริง)", "ใบขับขี่เดิม", "ใบรับรองแพทย์ (ไม่เกิน 1 เดือน)"];
     let note = "";
 
+    // กฎเหล็กของพี่: ชั่วคราวไม่ต้องอบรม
     if (isTemp) {
-        if (expiry === 'normal') note = "ไม่ต้องอบรม ต่อได้ทันที";
-        else if (expiry === 'over1') note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนใหม่";
-        else if (expiry === 'over3') note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนและสอบขับรถใหม่";
+        if (expiry === 'normal') {
+            note = "ไม่ต้องอบรม ต่อได้ทันที";
+        } else if (expiry === 'over1') {
+            note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนใหม่";
+        } else if (expiry === 'over3') {
+            note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนและสอบขับรถใหม่";
+        }
     } else {
-        if (expiry === 'normal') { docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)"); note = "อบรมออนไลน์ 1 ชม. และต่อได้ทันที"; }
-        else if (expiry === 'over1') { docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)"); note = "อบรมออนไลน์ และต้องสอบข้อเขียนใหม่"; }
-        else if (expiry === 'over3') note = "ต้องอบรม 5 ชม. ที่ขนส่งเท่านั้น + สอบข้อเขียน + สอบขับรถ";
+        // กรณี 5 ปี เป็น 5 ปี
+        if (expiry === 'normal') {
+            docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)");
+            note = "อบรมออนไลน์ 1 ชม. และต่อได้ทันที";
+        } else if (expiry === 'over1') {
+            docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)");
+            note = "อบรมออนไลน์ และต้องสอบข้อเขียนใหม่";
+        } else if (expiry === 'over3') {
+            note = "ต้องอบรม 5 ชม. ที่ขนส่งเท่านั้น + สอบข้อเขียน + สอบขับรถ";
+        }
     }
 
-    let resultHTML = `
-        <div style="text-align:left; background:#fff; border-radius:15px; padding:20px; box-shadow:0 8px 20px rgba(0,0,0,0.1); border:1px solid #eee;">
-            <div style="display:flex; align-items:center; margin-bottom:12px;">
-                <div style="background:#6c5ce7; width:6px; height:22px; border-radius:10px; margin-right:12px;"></div>
-                <strong style="font-size:22px; color:#2d3436;">${type}</strong>
-            </div>
-            <div style="background:#fff9f0; border-left:5px solid #fab1a0; padding:12px; border-radius:8px; margin-bottom:20px;">
-                <span style="color:#e17055; font-weight:bold; font-size:16px;">💡 ${note}</span>
-            </div>
-            <p style="margin-bottom:15px; font-weight:600; color:#636e72;">กรุณาติ๊กตรวจสอบเอกสาร:</p>
-            <div id="checklist-items">
-    `;
-
-    docs.forEach((d, idx) => {
-        resultHTML += `
-            <div style="margin-bottom:12px; display:flex; align-items:flex-start; background:#f8f9fd; padding:12px; border-radius:12px; border:1px solid #f0f0f5;">
-                <input type="checkbox" class="doc-check" id="chk-${idx}" onchange="checkChecklist()" 
-                    style="width:26px; height:26px; cursor:pointer; flex-shrink:0; accent-color:#6c5ce7; margin:0;">
-                <label for="chk-${idx}" style="font-size:18px; margin-left:15px; color:#2d3436; cursor:pointer; line-height:1.5; flex:1;">${d}</label>
-            </div>
-        `;
-    });
-
-    resultHTML += `
-            </div>
-            <button id="btnPrintGuide" onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}')" 
-                style="display:none; width:100%; padding:20px; background:linear-gradient(135deg, #2ecc71, #27ae60); color:white; border:none; border-radius:18px; font-weight:bold; font-size:22px; margin-top:20px; cursor:pointer; box-shadow:0 10px 20px rgba(46, 204, 113, 0.3); transition: transform 0.2s;">
-                🖨️ ปริ้นใบนำทาง
-            </button>
-        </div>
-    `;
+    let resultHTML = `<strong>${type}</strong><br><span style="color:blue;">${note}</span><hr>`;
+    docs.forEach(d => { resultHTML += `<div>[ ] ${d}</div>`; });
+    resultHTML += `<br><button onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}')" style="width:100%; padding:15px; background:#28a745; color:white; border:none; border-radius:10px; font-weight:bold; font-size:18px;">🖨️ ปริ้นใบนำทาง</button>`;
 
     displayResponse(resultHTML);
-    speak(isThai ? `เตรียมเอกสารตามรายการนี้ให้ครบ แล้วกดปริ้นใบนำทางครับ` : `Please check documents and print your guide.`);
+    speak(isThai ? `เตรียมเอกสารตามรายการนี้ และสามารถปริ้นใบนำทางได้เลยครับ` : `Please prepare these documents and print your guide.`);
 }
 
-// --- 5. ระบบค้นหาและจัดการคำถาม (Similarity Search) ---
+// --- 5. ระบบค้นหาและจัดการคำถาม ---
 
 async function getResponse(userQuery) {
     if (!userQuery || !window.localDatabase) return;
     if (window.isBusy) stopAllSpeech();
+    
     isAtHome = false; 
     updateInteractionTime(); 
     window.isBusy = true;
@@ -205,83 +190,63 @@ async function getResponse(userQuery) {
 
     const query = userQuery.toLowerCase().trim();
 
+    // เช็ค Keyword ใบขับขี่
     if ((query.includes("ใบขับขี่") || query.includes("license")) && (query.includes("ต่อ") || query.includes("renew"))) {
-        if (!query.includes("ชั่วคราว") && !query.includes("5 ปี") && !query.includes("5ปี") && !query.includes("2 ปี") && !query.includes("2ปี")) {
-            const askMsg = window.currentLang === 'th' ? "ใบขับขี่ของท่านเป็นแบบชั่วคราว หรือแบบ 5 ปีครับ?" : "Temporary or 5-year?";
-            displayResponse(askMsg); speak(askMsg);
+        if (!query.includes("ชั่วคราว") && !query.includes("5 ปี") && !query.includes("5ปี")) {
+            const askMsg = (window.currentLang === 'th') ? "ไม่ทราบว่าใบขับขี่ของท่านเป็นแบบชั่วคราว หรือแบบ 5 ปีครับ?" : "Is your license Temporary or 5-year?";
+            displayResponse(askMsg);
+            speak(askMsg);
             renderOptionButtons([
-                { th: "แบบชั่วคราว (2 ปี)", en: "Temporary", action: () => startLicenseCheck("แบบชั่วคราว (2 ปี)") },
-                { th: "แบบ 5 ปี", en: "5-year", action: () => startLicenseCheck("แบบ 5 ปี") }
+                { th: "แบบชั่วคราว (2 ปี)", en: "Temporary (2 years)", action: () => startLicenseCheck("แบบชั่วคราว (2 ปี)") },
+                { th: "แบบ 5 ปี", en: "5-year type", action: () => startLicenseCheck("แบบ 5 ปี") }
             ]);
-            window.isBusy = false; return;
+            window.isBusy = false; 
+            return;
         }
     }
 
+    // ระบบค้นหาจาก Database ปกติ
     try {
         let bestMatch = { answer: "", score: 0 };
         for (const sheetName of Object.keys(window.localDatabase)) {
             if (["Lottie_State", "Config", "FAQ"].includes(sheetName)) continue;
             window.localDatabase[sheetName].forEach(item => {
                 const keys = item[0] ? item[0].toString().toLowerCase() : "";
-                if (keys === "") return;
-                if (keys.includes(query) || query.includes(keys)) {
+                if (keys.includes(query)) {
                     bestMatch = { answer: (window.currentLang === 'th' ? item[1] : item[2] || item[1]), score: 10 };
-                } 
-                else if (bestMatch.score < 8) {
-                    let sim = calculateSimilarity(query, keys);
-                    if (sim > 0.75) bestMatch = { answer: (window.currentLang === 'th' ? item[1] : item[2] || item[1]), score: sim * 10 };
                 }
             });
         }
-        if (bestMatch.score > 0) { displayResponse(bestMatch.answer); speak(bestMatch.answer); }
-        else { speak("ขออภัยครับ น้องหาข้อมูลไม่พบ"); setTimeout(renderFAQButtons, 3000); }
+
+        if (bestMatch.score > 0) {
+            displayResponse(bestMatch.answer);
+            speak(bestMatch.answer);
+        } else {
+            const fb = window.currentLang === 'th' ? "ขออภัยครับ น้องหาข้อมูลไม่พบ" : "No info found.";
+            displayResponse(fb);
+            speak(fb);
+            setTimeout(renderFAQButtons, 3000);
+        }
     } catch (err) { window.isBusy = false; }
 }
 
-function calculateSimilarity(s1, s2) {
-    let longer = s1.length < s2.length ? s2 : s1;
-    let shorter = s1.length < s2.length ? s1 : s2;
-    if (longer.length === 0) return 1.0;
-    return (longer.length - editDistance(longer, shorter)) / longer.length;
-}
-
-function editDistance(s1, s2) {
-    let costs = [];
-    for (let i = 0; i <= s1.length; i++) {
-        let lastValue = i;
-        for (let j = 0; j <= s2.length; j++) {
-            if (i === 0) costs[j] = j;
-            else if (j > 0) {
-                let newVal = costs[j - 1];
-                if (s1.charAt(i - 1) !== s2.charAt(j - 1)) newVal = Math.min(Math.min(newVal, lastValue), costs[j]) + 1;
-                costs[j - 1] = lastValue; lastValue = newVal;
-            }
-        }
-        if (i > 0) costs[s2.length] = lastValue;
-    }
-    return costs[s2.length];
-}
-
 // --- 6. ระบบเสียงและ UI ---
+
 function speak(text) {
     if (!text || window.isMuted) return;
     window.speechSynthesis.cancel();
     forceUnmute();
-    const safetyTime = (text.length * 200) + 5000;
-    if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
-    speechSafetyTimeout = setTimeout(() => { if (window.isBusy) { window.isBusy = false; updateLottie('idle'); } }, safetyTime);
-
     const msg = new SpeechSynthesisUtterance(text.replace(/[*#-]/g, ""));
-    msg.lang = window.currentLang === 'th' ? 'th-TH' : 'en-US';
+    msg.lang = (window.currentLang === 'th') ? 'th-TH' : 'en-US';
     msg.onstart = () => { window.isBusy = true; updateLottie('talking'); };
-    msg.onend = () => { if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout); window.isBusy = false; updateLottie('idle'); };
+    msg.onend = () => { window.isBusy = false; updateLottie('idle'); };
     window.speechSynthesis.speak(msg);
 }
 
 const stopAllSpeech = () => {
     window.speechSynthesis.cancel();
-    if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
-    window.isBusy = false; updateLottie('idle');
+    window.isBusy = false;
+    updateLottie('idle');
 };
 
 function renderFAQButtons() {
@@ -289,8 +254,8 @@ function renderFAQButtons() {
     if (!container || !window.localDatabase) return;
     container.innerHTML = "";
     window.localDatabase["FAQ"].slice(1).forEach((row) => {
-        const qText = window.currentLang === 'th' ? row[0] : row[1];
-        if (qText && qText.toString().trim() !== "") {
+        const qText = (window.currentLang === 'th') ? row[0] : row[1];
+        if (qText) {
             const btn = document.createElement('button');
             btn.className = 'faq-btn';
             btn.innerText = qText;
@@ -308,8 +273,11 @@ function renderOptionButtons(options) {
         const btn = document.createElement('button');
         btn.className = 'faq-btn';
         btn.style.border = "2px solid #6c5ce7";
-        btn.innerText = window.currentLang === 'th' ? opt.th : opt.en;
-        btn.onclick = () => { stopAllSpeech(); if (opt.action) opt.action(); };
+        btn.innerText = (window.currentLang === 'th') ? opt.th : opt.en;
+        btn.onclick = () => { 
+            stopAllSpeech(); 
+            if (opt.action) opt.action();
+        };
         container.appendChild(btn);
     });
 }
@@ -326,7 +294,7 @@ function updateLottie(state) {
 }
 
 function displayResponse(text) {
-    document.getElementById('response-text').innerHTML = text.replace(/\\n/g, '<br>').replace(/\n/g, '<br>');
+    document.getElementById('response-text').innerHTML = text.replace(/\n/g, '<br>');
 }
 
 async function initDatabase() {
@@ -335,7 +303,8 @@ async function initDatabase() {
         const json = await res.json();
         if (json.database) {
             window.localDatabase = json.database;
-            renderFAQButtons(); initCamera();
+            renderFAQButtons();
+            initCamera();
             displayResponse("ระบบพร้อมให้บริการแล้วครับ");
         }
     } catch (e) { setTimeout(initDatabase, 5000); }
