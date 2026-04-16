@@ -139,7 +139,7 @@ async function detectPerson() {
         const box = f.detection.box;
         const centerX = box.x + (box.width / 2);
         // เงื่อนไข: มั่นใจเกิน 75%, ขนาดใบหน้ากว้างพอ, และอยู่บริเวณกลางตู้ (CX: 349)
-        return f.detection.score > 0.75 && box.width > 80 && (centerX > 100 && centerX < 540);
+        return f.detection.score > 0.60 && box.width > 150 && (centerX > 100 && centerX < 540);
     });
 
     if (face) {
