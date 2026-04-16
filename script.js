@@ -8,7 +8,7 @@ window.currentLang = 'th';
 window.isMuted = false; 
 window.isBusy = false; 
 window.hasGreeted = false;
-window.isAtHome = true; 
+window.window.window.isAtHome = true; 
 
 const GAS_URL = "https://script.google.com/macros/s/AKfycbz1bkIsQ588u-rpjY-8nMlya5_c0DsIabRvyPyCC_sPs5vyeJ_1wcOBaqKfg7cvlM3XJw/exec"; 
 
@@ -34,7 +34,7 @@ function resetSystemState() {
 function updateInteractionTime() {
     lastSeenTime = Date.now();
     console.log("🖱️ [Log] Interaction detected. Timer Reset.");
-    if (!isAtHome) restartIdleTimer();
+    if (!window.window.isAtHome) restartIdleTimer();
 }
 
 document.addEventListener('mousedown', updateInteractionTime);
@@ -46,7 +46,7 @@ window.switchLanguage = function(lang) {
     const welcomeMsg = (lang === 'th') ? "เปลี่ยนเป็นภาษาไทยแล้วครับ" : "Switched to English.";
     displayResponse(welcomeMsg);
     renderFAQButtons(); 
-    isAtHome = false; 
+    window.isAtHome = false; 
     updateInteractionTime();
 };
 
@@ -64,17 +64,17 @@ function resetToHome() {
     console.log(`⏳ [Debug Reset] Busy: ${window.isBusy}, PersonInFrame: ${personInFrameTime !== null}, Idle: ${Math.floor((now - lastSeenTime)/1000)}s`);
 
     if (window.isBusy || personInFrameTime !== null || (now - lastSeenTime < IDLE_TIME_LIMIT)) {
-        if (!isAtHome) restartIdleTimer(); 
+        if (!window.isAtHome) restartIdleTimer(); 
         return;
     }
-    if (isAtHome) return; 
+    if (window.isAtHome) return; 
 
     console.log("🏠 [Action] Returning to Home Screen.");
     resetSystemState();
     forceUnmute(); 
     window.hasGreeted = false;      
     personInFrameTime = null;       
-    isAtHome = true; 
+    window.isAtHome = true; 
 
     displayResponse(window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone.");
     renderFAQButtons(); 
@@ -83,7 +83,7 @@ function resetToHome() {
 
 function restartIdleTimer() {
     if (idleTimer) clearTimeout(idleTimer);
-    if (!isAtHome) idleTimer = setTimeout(resetToHome, IDLE_TIME_LIMIT); 
+    if (!window.isAtHome) idleTimer = setTimeout(resetToHome, IDLE_TIME_LIMIT); 
 }
 
 /**
@@ -158,11 +158,11 @@ async function detectPerson() {
         const stayDuration = now - personInFrameTime;
 
         // --- [Log นับถอยหลังการทักทาย] ---
-        if (stayDuration < 2000 && isAtHome && !window.hasGreeted) {
+        if (stayDuration < 2000 && window.isAtHome && !window.hasGreeted) {
              console.log(`⏱️ Greeting in: ${((2000 - stayDuration)/1000).toFixed(1)}s`);
         }
 
-        if (stayDuration >= 2000 && window.isAtHome && !window.isBusy && !window.hasGreeted) {
+        if (stayDuration >= 2000 && window.window.isAtHome && !window.isBusy && !window.hasGreeted) {
             console.log("👋 [AI Action] Triggering GreetUser now!");
             greetUser(); 
         }
@@ -176,7 +176,7 @@ async function detectPerson() {
             window.PersonInFrame = false; 
             personInFrameTime = null;   
             window.hasGreeted = false;  
-            if (!window.isAtHome) restartIdleTimer(); 
+            if (!window.window.isAtHome) restartIdleTimer(); 
         }
     }
     requestAnimationFrame(detectPerson);
@@ -185,7 +185,7 @@ async function detectPerson() {
 function greetUser() {
     if (window.hasGreeted || window.isBusy) return; 
     forceUnmute();
-    isAtHome = false; 
+    window.isAtHome = false; 
     
     const hour = new Date().getHours();
     const isThai = window.currentLang === 'th';
@@ -265,7 +265,7 @@ async function getResponse(userQuery) {
     logQuestionToSheet(userQuery);
 
     if (window.isBusy) { stopAllSpeech(); window.isBusy = false; }
-    isAtHome = false; 
+    window.isAtHome = false; 
     updateInteractionTime(); 
     resetSystemState(); 
     window.isBusy = true;
