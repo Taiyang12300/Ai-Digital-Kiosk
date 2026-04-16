@@ -1,6 +1,5 @@
 /**
- * 🚀 สมองกลน้องนำทาง - เวอร์ชั่น Face-API (ตาสับปะรด)
- * ปรับปรุง: ใช้การจับใบหน้า, แยกเพศ, และแก้บั๊กสลับภาษาแล้วไม่พูด
+ * 🚀 สมองกลน้องนำทาง - เวอร์ชั่น Face-API (ตาสับปะรด) + Smart Search สมบูรณ์
  */
 
 window.localDatabase = null;
@@ -104,7 +103,6 @@ async function detectPerson() {
     const face = predictions.find(f => {
         const box = f.detection.box;
         const centerX = box.x + (box.width / 2);
-        // จูนค่าตามที่พี่ทดสอบ: มั่นใจ > 0.55, กว้าง > 120
         return f.detection.score > 0.55 && box.width > 120 && (centerX > 100 && centerX < 540);
     });
 
@@ -112,9 +110,7 @@ async function detectPerson() {
         if (personInFrameTime === null) personInFrameTime = now;
         window.PersonInFrame = true;
         window.detectedGender = face.gender; 
-        
         const stayDuration = now - personInFrameTime;
-        // ทักทายถ้าอยู่หน้าแรก และยืนนิ่ง 1.5 วินาที
         if (stayDuration >= 1500 && isAtHome && !window.isBusy && !window.hasGreeted) {
             greetUser(); 
         }
@@ -130,10 +126,8 @@ async function detectPerson() {
 }
 
 function greetUser() {
-    // ปลดล็อคเงื่อนไขเพื่อให้ปุ่มสลับภาษาสั่งงานได้
     forceUnmute();
     isAtHome = false; 
-    
     const hour = new Date().getHours();
     const isThai = window.currentLang === 'th';
     const gender = window.detectedGender || 'male';
@@ -159,7 +153,7 @@ function greetUser() {
     speak(finalGreet);
 }
 
-// --- 4. ระบบ Search & Log (คงเดิม) ---
+// --- 4. ระบบ Search & Log (ดึง Logic ฉลาดๆ มาใส่) ---
 async function logQuestionToSheet(userQuery) {
     if (!userQuery || !GAS_URL) return;
     try {
@@ -177,9 +171,52 @@ async function getResponse(userQuery) {
     window.isBusy = true;
     updateLottie('thinking');
 
-    const query = userQuery.toLowerCase().trim();
-    // ... (ส่วน Search Logic ของพี่คงเดิม) ...
-    // [หมายเหตุ: ผมข้ามส่วน Search เพื่อให้โค้ดสั้นลง แต่พี่ใช้ตัวเดิมของพี่ต่อได้เลย]
+    const query = userQuery.toLowerCase().trim().replace(/[?？!！]/g, "");
+
+    try {
+        let bestMatch = { answer: "", score: 0, debugKey: "" };
+
+        for (const sheetName of Object.keys(window.localDatabase)) {
+            if (["Lottie_State", "Config", "FAQ"].includes(sheetName)) continue;
+            const rows = window.localDatabase[sheetName];
+            for (const item of rows) {
+                const rawKeys = item[0] ? item[0].toString().toLowerCase() : "";
+                if (!rawKeys) continue;
+                
+                const keyList = rawKeys.split(/[,|\n]/).map(k => k.trim()).filter(k => k !== "");
+                let ans = window.currentLang === 'th' ? (item[1] || "") : (item[2] || item[1]);
+                
+                for (const key of keyList) {
+                    let score = 0;
+                    const lowerKey = key.toLowerCase();
+                    if (query === lowerKey) {
+                        score = 10.0;
+                    } else {
+                        const keyTokens = lowerKey.split(/[\s,/-]+/).filter(t => t.length > 1);
+                        let matchCount = 0;
+                        keyTokens.forEach(kt => { if (query.includes(kt)) matchCount++; });
+                        let tokenScore = keyTokens.length > 0 ? (matchCount / keyTokens.length) : 0;
+                        let simScore = calculateSimilarity(query, lowerKey);
+                        score = (tokenScore * 5) + (simScore * 1);
+                    }
+
+                    if (score > bestMatch.score) {
+                        bestMatch = { answer: ans, score: score, debugKey: lowerKey };
+                    }
+                }
+            }
+        }
+
+        if (bestMatch.score >= 0.4 && bestMatch.answer !== "") { 
+            displayResponse(bestMatch.answer);
+            speak(bestMatch.answer);
+        } else {
+            const fallback = window.currentLang === 'th' ? "ขออภัยครับ น้องหาข้อมูลไม่พบ ลองเลือกจากหัวข้อด้านล่างนะครับ" : "I couldn't find that. Please try the topics below.";
+            displayResponse(fallback);
+            speak(fallback);
+            renderFAQButtons(); 
+        }
+    } catch (err) { console.error(err); resetSystemState(); }
 }
 
 // --- 5. ระบบเสียง ---
@@ -211,14 +248,14 @@ async function initDatabase() {
             window.localDatabase = json.database;
             renderFAQButtons();
             initCamera(); 
-            displayResponse("ระบบพร้อมให้บริการแล้วครับ");
+            displayResponse("สวัสดีตอนเช้าครับ ระบบพร้อมให้บริการแล้ว");
         }
     } catch (e) { setTimeout(initDatabase, 5000); }
 }
 
 function renderFAQButtons() {
     const container = document.getElementById('faq-container');
-    if (!container || !window.localDatabase) return;
+    if (!container || !window.localDatabase || !window.localDatabase["FAQ"]) return;
     container.innerHTML = "";
     window.localDatabase["FAQ"].slice(1).forEach((row) => {
         const qText = (window.currentLang === 'th') ? row[0] : row[1];
@@ -246,6 +283,31 @@ function updateLottie(state) {
 function displayResponse(text) {
     const box = document.getElementById('response-text');
     if (box) box.innerHTML = text.replace(/\n/g, '<br>');
+}
+
+// ฟังก์ชันคำนวณความเหมือน (ที่หายไปในโค้ดใหม่)
+function calculateSimilarity(s1, s2) {
+    let longer = s1.length < s2.length ? s2 : s1;
+    let shorter = s1.length < s2.length ? s1 : s2;
+    if (longer.length === 0) return 1.0;
+    return (longer.length - editDistance(longer, shorter)) / longer.length;
+}
+
+function editDistance(s1, s2) {
+    let costs = [];
+    for (let i = 0; i <= s1.length; i++) {
+        let lastValue = i;
+        for (let j = 0; j <= s2.length; j++) {
+            if (i === 0) costs[j] = j;
+            else if (j > 0) {
+                let newVal = costs[j - 1];
+                if (s1.charAt(i - 1) !== s2.charAt(j - 1)) newVal = Math.min(Math.min(newVal, lastValue), costs[j]) + 1;
+                costs[j - 1] = lastValue; lastValue = newVal;
+            }
+        }
+        if (i > 0) costs[s2.length] = lastValue;
+    }
+    return costs[s2.length];
 }
 
 initDatabase();
