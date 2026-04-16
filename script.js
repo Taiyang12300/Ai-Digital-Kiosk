@@ -135,10 +135,10 @@ async function detectPerson() {
         const width = f.bottomRight[0] - f.topLeft[0];
         const centerX = f.topLeft[0] + (width / 2);
         
-        // เงื่อนไข: ความเชื่อมั่น > 90%, ขนาดใบหน้า > 80px, และอยู่กลางจอ (150-490)
-        return f.probability[0] > 0.90 && 
-               width > 80 && 
-               (centerX > 150 && centerX < 490);
+        // เงื่อนไข: ความเชื่อมั่น > 80%, ขนาดใบหน้า > 45px, และอยู่กลางจอ (50-270)
+        return f.probability[0] > 0.80 && 
+               width > 45 && 
+               (centerX > 50 && centerX < 270);
     });
 
     if (face) {
