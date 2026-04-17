@@ -1,6 +1,6 @@
 /**
- * 🚀 สมองกลน้องนำทาง - Ultimate Full Version
- * ระบบ: คัดกรองใบขับขี่ + ปริ้นใบนำทาง + Fuzzy Search + Time-Based Greeting
+ * 🚀 สมองกลน้องนำทาง - Ultimate Hybrid Version (Face-API + COCO Features)
+ * รวมระบบ: คัดกรองใบขับขี่ + ปริ้น + สุ่มคำทักทาย + บันทึกสถิติลง Sheet
  */
 
 window.localDatabase = null;
@@ -13,6 +13,7 @@ let isAtHome = true;
 const GAS_URL = "https://script.google.com/macros/s/AKfycbz1bkIsQ588u-rpjY-8nMlya5_c0DsIabRvyPyCC_sPs5vyeJ_1wcOBaqKfg7cvlM3XJw/exec"; 
 
 let idleTimer = null; 
+let speechSafetyTimeout = null;
 const IDLE_TIME_LIMIT = 15000; 
 let video = document.getElementById('video');
 let isDetecting = true; 
@@ -21,7 +22,8 @@ let lastSeenTime = Date.now();
 let lastDetectionTime = 0;
 const DETECTION_INTERVAL = 200; 
 
-// --- 1. ระบบจัดการสถานะ & Reset ---
+// --- 1. ระบบจัดการสถานะ & Log สถิติ ---
+
 function updateInteractionTime() {
     lastSeenTime = Date.now();
     if (!isAtHome) restartIdleTimer();
@@ -30,10 +32,14 @@ function updateInteractionTime() {
 document.addEventListener('mousedown', updateInteractionTime);
 document.addEventListener('touchstart', updateInteractionTime);
 
-function forceUnmute() {
-    window.isMuted = false;
-    const muteBtn = document.getElementById('muteBtn');
-    if (muteBtn) muteBtn.classList.remove('muted');
+// ✅ ดึงความสามารถ COCO: บันทึกคำถามลง Google Sheet
+async function logQuestionToSheet(userQuery) {
+    if (!userQuery || !GAS_URL) return;
+    try {
+        const finalUrl = `${GAS_URL}?action=logOnly&query=${encodeURIComponent(userQuery)}`;
+        await fetch(finalUrl, { mode: 'no-cors' });
+        console.log("📊 [Log] บันทึกสถิติคำถามลง Sheet เรียบร้อย");
+    } catch (e) { console.error("❌ [Log Error]:", e); }
 }
 
 function resetToHome() {
@@ -45,44 +51,29 @@ function resetToHome() {
     if (isAtHome) return; 
 
     stopAllSpeech();
-    forceUnmute(); 
     window.hasGreeted = false;      
     personInFrameTime = null;       
     isAtHome = true; 
 
     displayResponse(window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone.");
     renderFAQButtons(); 
-    console.log("🔄 [HOME] ระบบ Reset กลับหน้าหลักเรียบร้อย");
 }
 
 function restartIdleTimer() {
     if (idleTimer) clearTimeout(idleTimer);
-    if (!isAtHome) {
-        console.log(`⏲️ [IDLE] เริ่มนับถอยหลังกลับหน้าแรก (${IDLE_TIME_LIMIT/1000}s)`);
-        idleTimer = setTimeout(resetToHome, IDLE_TIME_LIMIT); 
-    }
+    if (!isAtHome) idleTimer = setTimeout(resetToHome, IDLE_TIME_LIMIT);
 }
 
 // --- 2. ระบบดวงตา AI (Face-API) ---
-async function initCamera() {
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 } });
-        if (video) {
-            video.srcObject = stream;
-            video.onloadedmetadata = () => { video.play(); loadFaceModels(); };
-        }
-    } catch (err) { console.error("❌ Camera Error:", err); }
-}
 
 async function loadFaceModels() {
-    console.log("--- ⏳ เริ่มต้นโหลดโมเดล AI ---");
     const MODEL_URL = 'https://taiyang12300.github.io/model/';
     try {
         await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
         await faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL);
         console.log("✅ โหลดโมเดล AI สำเร็จ");
         requestAnimationFrame(detectPerson);
-    } catch (err) { console.error("❌ โหลดโมเดลไม่สำเร็จ:", err); }
+    } catch (err) { console.error("❌ โมเดล AI โหลดไม่สำเร็จ"); }
 }
 
 async function detectPerson() {
@@ -93,14 +84,6 @@ async function detectPerson() {
 
     const predictions = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withAgeAndGender();
     
-    if (predictions.length > 0) {
-        const f = predictions[0];
-        const box = f.detection.box;
-        const cx = Math.round(box.x + (box.width / 2));
-        const conf = Math.round(f.detection.score * 100);
-        if (conf > 40) console.log(`👤 ตรวจพบ: W=${Math.round(box.width)}, CX=${cx}, CONF=${conf}%`);
-    }
-
     const face = predictions.find(f => {
         const box = f.detection.box;
         const centerX = box.x + (box.width / 2);
@@ -108,20 +91,14 @@ async function detectPerson() {
     });
 
     if (face) {
-        if (personInFrameTime === null) {
-            console.log("🎯 เป้าหมายเข้าเกณฑ์: เริ่มนับวินาทีสะสม");
-            personInFrameTime = now;
-        }
+        if (personInFrameTime === null) personInFrameTime = now;
         window.detectedGender = face.gender; 
-        const stayDuration = now - personInFrameTime;
-        if (stayDuration >= 2000 && isAtHome && !window.isBusy && !window.hasGreeted) {
-            console.log("👋 ครบ 2 วินาที: น้องเริ่มทักทาย");
+        if ((now - personInFrameTime) >= 2000 && isAtHome && !window.isBusy && !window.hasGreeted) {
             greetUser(); 
         }
         lastSeenTime = now; 
     } else {
         if (personInFrameTime !== null && (now - lastSeenTime > 3000)) {
-            console.log("🚫 หายไปเกิน 3 วิ: Reset สถานะคนออกจากเฟรม");
             personInFrameTime = null;   
             window.hasGreeted = false;  
             if (!isAtHome) restartIdleTimer();
@@ -130,11 +107,10 @@ async function detectPerson() {
     requestAnimationFrame(detectPerson);
 }
 
+// ✅ ดึงความสามารถ COCO: ระบบสุ่มคำทักทายตามช่วงเวลา
 function greetUser() {
     if (window.hasGreeted || window.isBusy) return;
-    forceUnmute();
     isAtHome = false; 
-    
     const hour = new Date().getHours();
     const isThai = window.currentLang === 'th';
     const gender = window.detectedGender || 'male';
@@ -147,16 +123,28 @@ function greetUser() {
         ? (gender === 'male' ? "คุณผู้ชาย" : "คุณผู้หญิง")
         : (gender === 'male' ? "Sir" : "Madam");
 
-    const text = isThai 
-        ? `${timeGreet}${personType} มีอะไรให้น้องนำทางช่วยดูแลไหมครับ?` 
-        : `${timeGreet}, ${personType}! How can I help you today?`;
+    const greetingsTh = [
+        `${timeGreet}${personType} มีอะไรให้น้องนำทางช่วยดูแลไหมครับ?`,
+        `สวัสดีครับ ผมน้องนำทาง ยินดีที่ได้ให้บริการครับ วันนี้มาติดต่อเรื่องอะไรดีครับ?`,
+        `${timeGreet} เชิญสอบถามข้อมูลการทำใบขับขี่กับผมได้เลยครับ`
+    ];
+    
+    const greetingsEn = [
+        `${timeGreet}, ${personType}! How can I help you today?`,
+        `Welcome! I'm Nong Nam Thang. Need any help with our services?`,
+        `Hello! Feel free to ask me about driver's license renewals.`
+    ];
+
+    const list = isThai ? greetingsTh : greetingsEn;
+    const finalGreet = list[Math.floor(Math.random() * list.length)];
 
     window.hasGreeted = true; 
-    displayResponse(text);
-    speak(text);
+    displayResponse(finalGreet);
+    speak(finalGreet);
 }
 
-// --- 3. 🚩 ระบบคัดกรองใบขับขี่ ---
+// --- 3. 🚩 ระบบคัดกรองใบขับขี่ & ปริ้น ---
+
 function startLicenseCheck(type) {
     isAtHome = false;
     const isThai = window.currentLang === 'th';
@@ -195,10 +183,9 @@ function showLicenseChecklist(type, expiry) {
 
     const resultHTML = `
         <div class="checklist-card">
-            <strong style="font-size:22px;">${type}</strong><br>
+            <strong>${type}</strong><br>
             <div style="background:#e8f0fe; color:#1a73e8; padding:8px; border-radius:5px; margin-top:5px; font-weight:bold;">💡 ${note}</div>
-            <hr style="margin:15px 0; border:0; border-top:1px solid #eee;">
-            <p style="font-size:15px; color:#666; margin-bottom:10px;">กรุณาติ๊กตรวจสอบเอกสารให้ครบเพื่อปริ้นใบนำทาง:</p>
+            <p style="font-size:14px; margin-top:10px;">กรุณาติ๊กตรวจสอบเอกสารให้ครบเพื่อปริ้นใบนำทาง:</p>
             ${checklistHTML}
             <button id="btnPrintGuide" style="display:none;" onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}')">🖨️ ปริ้นใบนำทาง</button>
         </div>`;
@@ -214,9 +201,12 @@ function checkChecklist() {
     printBtn.style.display = allChecked ? 'block' : 'none';
 }
 
-// --- 4. ระบบ Search (Fuzzy Matching) ---
+// --- 4. ระบบ Search (Smart Logic จาก COCO) ---
+
 async function getResponse(userQuery) {
     if (!userQuery || !window.localDatabase) return;
+    logQuestionToSheet(userQuery); // ✅ บันทึกสถิติคำถาม
+
     if (window.isBusy) stopAllSpeech();
     isAtHome = false; 
     updateInteractionTime(); 
@@ -225,8 +215,9 @@ async function getResponse(userQuery) {
 
     const query = userQuery.toLowerCase().trim();
 
+    // คัดกรองคำถามกว้างเรื่องใบขับขี่
     if ((query.includes("ใบขับขี่") || query.includes("license")) && (query.includes("ต่อ") || query.includes("renew"))) {
-        if (!query.includes("ชั่วคราว") && !query.includes("5 ปี") && !query.includes("5ปี")) {
+        if (!query.includes("ชั่วคราว") && !query.includes("5 ปี")) {
             const askMsg = (window.currentLang === 'th') ? "ใบขับขี่ของท่านเป็นแบบชั่วคราว หรือแบบ 5 ปีครับ?" : "Is it Temporary or 5-year?";
             displayResponse(askMsg); speak(askMsg);
             renderOptionButtons([
@@ -243,25 +234,35 @@ async function getResponse(userQuery) {
             if (["Lottie_State", "Config", "FAQ"].includes(sheetName)) continue;
             window.localDatabase[sheetName].forEach(item => {
                 const key = item[0] ? item[0].toString().toLowerCase() : "";
-                let currentScore = key.includes(query) ? 10 : calculateSimilarity(query, key) * 10;
-                if (currentScore > 6 && currentScore > bestMatch.score) {
+                if (!key) return;
+
+                // ✅ ใช้ Logic การคำนวณคะแนนที่ละเอียดขึ้นจาก COCO
+                let simScore = calculateSimilarity(query, key);
+                let currentScore = key.includes(query) ? 1.0 : simScore;
+
+                // Bonus สำหรับเคสระบุปี
+                if ((query.includes("5 ปี") && key.includes("5 ปี")) || (query.includes("2 ปี") && key.includes("2 ปี"))) currentScore += 0.5;
+
+                if (currentScore > 0.6 && currentScore > bestMatch.score) {
                     bestMatch = { answer: (window.currentLang === 'th' ? item[1] : item[2] || item[1]), score: currentScore };
                 }
             });
         }
-        if (bestMatch.score > 0) { displayResponse(bestMatch.answer); speak(bestMatch.answer); }
-        else { 
-            const fb = window.currentLang === 'th' ? "ขออภัยครับ น้องหาข้อมูลไม่พบ" : "No info found."; 
+
+        if (bestMatch.score > 0) { 
+            displayResponse(bestMatch.answer); speak(bestMatch.answer); 
+        } else { 
+            const fb = window.currentLang === 'th' ? "ขออภัยครับ น้องหาข้อมูลไม่พบ ลองเลือกจากหัวข้อด้านล่างนะครับ" : "No info found. Try topics below."; 
             displayResponse(fb); speak(fb); setTimeout(renderFAQButtons, 3000); 
         }
     } catch (err) { window.isBusy = false; }
 }
 
 // --- 5. ระบบเสียง & UI ---
+
 function speak(text) {
     if (!text || window.isMuted) return;
     window.speechSynthesis.cancel();
-    forceUnmute();
     const msg = new SpeechSynthesisUtterance(text.replace(/[*#-]/g, ""));
     msg.lang = (window.currentLang === 'th') ? 'th-TH' : 'en-US';
     msg.onstart = () => { window.isBusy = true; updateLottie('talking'); };
@@ -273,12 +274,11 @@ function stopAllSpeech() { window.speechSynthesis.cancel(); window.isBusy = fals
 
 function changeLanguage(lang) {
     window.currentLang = lang;
-    isAtHome = true;           // แก้บั๊ก: สลับภาษาแล้วน้องกลับมาทักทายใหม่ได้
+    isAtHome = true;
     window.hasGreeted = false; 
     personInFrameTime = null;
     renderFAQButtons();
-    displayResponse(lang === 'th' ? "เลือกภาษาเรียบร้อยครับ" : "Language changed.");
-    console.log(`🌐 สลับเป็นภาษา: ${lang} และรีเซ็ตสถานะหน้าหลัก`);
+    displayResponse(lang === 'th' ? "เปลี่ยนเป็นภาษาไทยแล้วครับ" : "Language changed to English.");
 }
 
 function renderFAQButtons() {
@@ -310,6 +310,7 @@ function renderOptionButtons(options) {
     });
 }
 
+// Logic คำนวณความใกล้เคียง
 function calculateSimilarity(s1, s2) {
     let longer = s1.length < s2.length ? s2 : s1;
     let shorter = s1.length < s2.length ? s1 : s2;
@@ -353,10 +354,18 @@ async function initDatabase() {
         const json = await res.json();
         if (json.database) {
             window.localDatabase = json.database;
-            renderFAQButtons(); initCamera();
-            displayResponse("สวัสดีครับ ระบบพร้อมให้บริการแล้ว");
+            renderFAQButtons(); 
+            initCamera();
+            displayResponse("กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ");
         }
     } catch (e) { setTimeout(initDatabase, 5000); }
+}
+
+async function initCamera() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 } });
+        if (video) { video.srcObject = stream; video.onloadedmetadata = () => { video.play(); loadFaceModels(); }; }
+    } catch (err) { console.error("❌ Camera Error"); }
 }
 
 initDatabase();
