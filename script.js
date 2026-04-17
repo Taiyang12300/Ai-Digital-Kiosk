@@ -42,21 +42,32 @@ async function logQuestionToSheet(userQuery) {
     } catch (e) { console.error("❌ [Log Error]:", e); }
 }
 
+function forceUnmute() {
+    window.isMuted = false;
+    const muteBtn = document.getElementById('muteBtn');
+    if (muteBtn) muteBtn.classList.remove('muted');
+}
+
 function resetToHome() {
     const now = Date.now();
+    console.log(`⏳ [Debug Reset] Busy: ${window.isBusy}, PersonInFrame: ${personInFrameTime !== null}, Idle: ${Math.floor((now - lastSeenTime)/1000)}s`);
+
     if (window.isBusy || personInFrameTime !== null || (now - lastSeenTime < IDLE_TIME_LIMIT)) {
         if (!isAtHome) restartIdleTimer(); 
         return;
     }
     if (isAtHome) return; 
 
-    stopAllSpeech();
+    console.log("🏠 [Action] Returning to Home Screen.");
+    resetSystemState();
+    forceUnmute(); 
     window.hasGreeted = false;      
     personInFrameTime = null;       
     isAtHome = true; 
 
     displayResponse(window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone.");
     renderFAQButtons(); 
+    if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
 }
 
 function restartIdleTimer() {
@@ -110,6 +121,7 @@ async function detectPerson() {
 // ✅ ดึงความสามารถ COCO: ระบบสุ่มคำทักทายตามช่วงเวลา
 function greetUser() {
     if (window.hasGreeted || window.isBusy) return;
+    forceUnmute();
     isAtHome = false; 
     const hour = new Date().getHours();
     const isThai = window.currentLang === 'th';
