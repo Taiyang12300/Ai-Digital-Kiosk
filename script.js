@@ -15,7 +15,7 @@ const GAS_URL = "https://script.google.com/macros/s/AKfycbz1bkIsQ588u-rpjY-8nMly
 
 let idleTimer = null; 
 let speechSafetyTimeout = null;
-const IDLE_TIME_LIMIT = 15000; 
+const IDLE_TIME_LIMIT = 5000; 
 let video; // ประกาศไว้รอรับค่าใน initCamera
 let isDetecting = true; 
 let personInFrameTime = null; 
