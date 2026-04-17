@@ -9,7 +9,7 @@
   <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-
+  
   <style>
     :root { --primary: #6c5ce7; --bg: #f9f9fb; --accent: #ff7675; }
     
@@ -52,14 +52,28 @@
     .btn-mic.recording { background: var(--accent); animation: pulse 1.5s infinite; }
     @keyframes pulse { 0% { transform: scale(1); } 70% { transform: scale(1.1); } 100% { transform: scale(1); } }
 
-    /* --- ระบบพิมพ์ (Ticket) --- */
+    /* --- [ใหม่] ระบบ Checklist --- */
+    .checklist-card { text-align: left; background: white; padding: 15px; border-radius: 12px; border: 1px solid #ddd; }
+    .check-item { display: flex; align-items: center; margin-bottom: 12px; background: #f0f2f5; padding: 10px; border-radius: 8px; cursor: pointer; }
+    .check-item input { width: 22px; height: 22px; cursor: pointer; accent-color: #28a745; }
+    .check-item label { margin-left: 12px; font-size: 18px; cursor: pointer; color: #333; flex: 1; }
+
+    /* --- [ใหม่] ปุ่มปริ้นในหน้าจอ (ซ่อนไว้รอติ๊ก) --- */
+    #btnPrintGuide { 
+        display: none !important; /* ซ่อนเด็ดขาดในตอนแรก */
+        width: 100%; padding: 15px; background: #28a745; color: white; 
+        border: none; border-radius: 10px; font-weight: bold; 
+        font-size: 20px; cursor: pointer; margin-top: 15px; 
+    }
+    #btnPrintGuide.show-btn { display: block !important; } /* แสดงเมื่อติ๊กครบ */
+
+    /* --- ระบบพิมพ์ (Ticket 58mm) --- */
     .ticket { background: white; color: black; width: 58mm; padding: 6px; margin: 0 auto; font-size: 13px; line-height: 1.3; text-align: center; font-family: 'Kanit', sans-serif; }
     .ticket .big { font-size: 28px; font-weight: 800; margin: 4px 0; }
 
     @media print {
       @page { size: auto; margin: 0; }
       body * { visibility: hidden !important; display: none !important; }
-      /* ส่วนที่อนุญาตให้พิมพ์ */
       #ticketLicenseWrapper.printing, #ticketLicenseWrapper.printing * { visibility: visible !important; display: block !important; }
       .ticket { position: absolute; top: 0; left: 0; width: 58mm; margin: 0; padding: 6px; }
     }
@@ -117,7 +131,8 @@
     <source src="https://taiyang12300.github.io/sound/นำบัตรคิวยื่นต่อเจ้าหน้าที่.mp3" type="audio/mpeg">
   </audio>
 
-  <script src="script.js?v=2.0"></script>
+  <script src="script.js?v=2.1"></script>
+
   <script>
     let recognition, isListening = false;
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -177,31 +192,26 @@
     // --- [ ฟังก์ชันพิมพ์ใบนำทาง ] ---
     function printLicenseNote(type, note, items) {
       const now = new Date();
-      // แสดงข้อมูลในหน้า Ticket
       document.getElementById('printLicenseType').innerText = type;
       document.getElementById('printLicenseNote').innerText = note;
-      document.getElementById('printLicenseTime').innerText = `พิมพ์เมื่อ: ${now.toLocaleDateString('th-TH')} ${now.toLocaleTimeString('th-TH')} น.`;
+      document.getElementById('printLicenseTime').innerText = `เวลาพิมพ์: ${now.toLocaleString('th-TH')}`;
       
-      // จัดการรายการเอกสาร (รองรับทั้ง \n และ Array)
       const docArray = items.includes('\\n') ? items.split('\\n') : items.split('\n');
       const itemsHTML = docArray.map(i => `<div style="margin-bottom:2px;">• ${i}</div>`).join('');
       document.getElementById('printLicenseItems').innerHTML = itemsHTML;
 
-      // เล่นเสียงแจ้งเตือน
       const audio = document.getElementById('queueSound');
-      if (audio) { audio.currentTime = 0; audio.play().catch(e => console.log("Audio play blocked")); }
+      if (audio) { audio.currentTime = 0; audio.play().catch(e => {}); }
 
-      // สั่งพิมพ์
       const wrapper = document.getElementById('ticketLicenseWrapper');
       wrapper.style.display = 'block';
       wrapper.classList.add('printing');
 
       setTimeout(() => {
-        window.print(); // สั่งปริ้นออกทางเครื่องพิมพ์ 58mm
+        window.print();
         setTimeout(() => {
           wrapper.classList.remove('printing');
           wrapper.style.display = 'none';
-          // กลับหน้าแรกหลังจากปริ้นเสร็จ
           if(typeof renderFAQButtons === "function") renderFAQButtons(); 
         }, 500);
       }, 300);
@@ -209,4 +219,3 @@
   </script>
 </body>
 </html>
-
