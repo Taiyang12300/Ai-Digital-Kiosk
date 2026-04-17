@@ -196,12 +196,13 @@ function showLicenseChecklist(type, expiry) {
 function checkChecklist() {
     const checks = document.querySelectorAll('.doc-check');
     const printBtn = document.getElementById('btnPrintGuide');
+    
     if (!printBtn) return;
 
-    // เช็คว่าติ๊กครบทุกช่องหรือยัง
+    // ตรวจสอบว่า checkbox ทุกอันถูกติ๊กหรือยัง
     const allChecked = checks.length > 0 && Array.from(checks).every(c => c.checked);
     
-    // ถ้าครบให้ใส่ Class 'show-btn' เพื่อให้ CSS สั่งแสดงผล
+    // ใช้ classList แทนการเขียน style ตรงๆ จะเสถียรกว่ามากครับพี่
     if (allChecked) {
         printBtn.classList.add('show-btn');
     } else {
