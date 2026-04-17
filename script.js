@@ -178,8 +178,8 @@ function showLicenseChecklist(type, expiry) {
 
     if (isTemp) {
         if (expiry === 'normal') note = "ไม่ต้องอบรม ต่อได้ทันที";
-        else if (expiry === 'over1') note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนใหม่";
-        else if (expiry === 'over3') note = "อบรมสำนักงาน ต้องสอบข้อเขียนและสอบขับรถใหม่";
+        else if (expiry === 'over1') note = "อบรมสำนักงาน 5 ชั่วโมง และสอบข้อเขียนใหม่";
+        else if (expiry === 'over3') note = "อบรมสำนักงาน 5 ชั่วโมง สอบข้อเขียนและสอบขับรถใหม่";
     } else {
         if (expiry === 'normal') {
             docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)");
