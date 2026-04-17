@@ -71,16 +71,25 @@ async function initCamera() {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 } });
         if (video) {
             video.srcObject = stream;
-            video.onloadedmetadata = () => { video.play(); loadFaceModels(); };
+            video.onloadedmetadata = () => { 
+                video.play(); 
+                loadFaceModels(); 
+            };
         }
     } catch (err) { console.error("❌ Camera Error:", err); }
 }
 
 async function loadFaceModels() {
+    console.log("--- ⏳ เริ่มต้นโหลดโมเดล AI ---");
     const MODEL_URL = 'https://taiyang12300.github.io/model/';
-    await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-    await faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL);
-    requestAnimationFrame(detectPerson);
+    try {
+        await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+        await faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL);
+        console.log("✅ โหลดโมเดล AI สำเร็จ (TinyFace & AgeGender)");
+        requestAnimationFrame(detectPerson);
+    } catch (err) {
+        console.error("❌ โหลดโมเดลไม่สำเร็จ:", err);
+    }
 }
 
 async function detectPerson() {
@@ -90,19 +99,41 @@ async function detectPerson() {
     lastDetectionTime = now;
 
     const predictions = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withAgeAndGender();
+    
+    // แสดง Log เมื่อมีการตรวจจับ (ช่วยให้รู้ว่า AI กำลังทำงานอยู่ตลอดเวลา)
+    if (predictions.length > 0) {
+        predictions.forEach((f, idx) => {
+            const box = f.detection.box;
+            const cx = Math.round(box.x + (box.width / 2));
+            const conf = Math.round(f.detection.score * 100);
+            const gender = f.gender === 'male' ? 'ชาย' : 'หญิง';
+            const genderConf = Math.round(f.genderProbability * 100);
+            
+            console.log(`👤 ตรวจพบ [${idx+1}]: W=${Math.round(box.width)}, CX=${cx}, CONF=${conf}%, เพศ=${gender}(${genderConf}%)`);
+        });
+    }
+
     const face = predictions.find(f => {
         const box = f.detection.box;
         const centerX = box.x + (box.width / 2);
-        return f.detection.score > 0.55 && box.width > 90 && (centerX > 100 && centerX < 540);
+        // เงื่อนไขการกรองเพื่อ "ทักทาย"
+        return f.detection.score > 0.55 && box.width > 90 && (centerX > 80 && centerX < 560);
     });
 
     if (face) {
-        if (personInFrameTime === null) personInFrameTime = now;
+        if (personInFrameTime === null) {
+            console.log("🎯 เป้าหมายอยู่ในเกณฑ์ทักทาย (รอครบ 2 วินาที)");
+            personInFrameTime = now;
+        }
         window.detectedGender = face.gender; 
-        if ((now - personInFrameTime) >= 2000 && isAtHome && !window.isBusy && !window.hasGreeted) greetUser(); 
+        if ((now - personInFrameTime) >= 2000 && isAtHome && !window.isBusy && !window.hasGreeted) {
+            console.log("👋 เริ่มการทักทาย...");
+            greetUser(); 
+        }
         lastSeenTime = now; 
     } else {
         if (personInFrameTime !== null && (now - lastSeenTime > 3000)) {
+            console.log("🚫 เป้าหมายออกจากเฟรมหรือไม่อยู่ในเกณฑ์");
             personInFrameTime = null;   
             window.hasGreeted = false;  
             if (!isAtHome) restartIdleTimer();
@@ -349,4 +380,27 @@ async function initDatabase() {
     } catch (e) { setTimeout(initDatabase, 5000); }
 }
 
+function calculateSimilarity(s1, s2) {
+    let longer = s1.length < s2.length ? s2 : s1;
+    let shorter = s1.length < s2.length ? s1 : s2;
+    if (longer.length === 0) return 1.0;
+    return (longer.length - editDistance(longer, shorter)) / longer.length;
+}
+
+function editDistance(s1, s2) {
+    let costs = [];
+    for (let i = 0; i <= s1.length; i++) {
+        let lastValue = i;
+        for (let j = 0; j <= s2.length; j++) {
+            if (i === 0) costs[j] = j;
+            else if (j > 0) {
+                let newVal = costs[j - 1];
+                if (s1.charAt(i - 1) !== s2.charAt(j - 1)) newVal = Math.min(Math.min(newVal, lastValue), costs[j]) + 1;
+                costs[j - 1] = lastValue; lastValue = newVal;
+            }
+        }
+        if (i > 0) costs[s2.length] = lastValue;
+    }
+    return costs[s2.length];
+}
 initDatabase();
