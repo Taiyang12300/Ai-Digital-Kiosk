@@ -144,9 +144,11 @@ function showLicenseChecklist(type, expiry) {
     const isThai = window.currentLang === 'th';
     const isTemp = type.includes("ชั่วคราว") || type.includes("2 ปี");
     
+    // รักษารายการเอกสารเดิมของพี่ไว้ครบถ้วน
     let docs = ["บัตรประชาชน (ตัวจริง)", "ใบขับขี่เดิม", "ใบรับรองแพทย์ (ไม่เกิน 1 เดือน)"];
     let note = "";
 
+    // รักษา Logic การคัดกรองเดิมของพี่ไว้ทั้งหมด
     if (isTemp) {
         if (expiry === 'normal') note = "ไม่ต้องอบรม ต่อได้ทันที";
         else if (expiry === 'over1') note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนใหม่";
@@ -163,32 +165,48 @@ function showLicenseChecklist(type, expiry) {
         }
     }
 
-    // สร้างรายการ Checklist ที่ติ๊กได้จริง
-    let checklistItems = "";
+    // สร้าง Checklist โดยใช้ Class จาก Index (เพื่อให้ติ๊กได้จริง)
+    let checklistHTML = "";
     docs.forEach((d, idx) => {
-        checklistItems += `
-            <div style="display:flex; align-items:center; margin-bottom:10px; background:#f8f9fa; padding:10px; border-radius:8px;">
-                <input type="checkbox" class="doc-check" id="chk-${idx}" onchange="checkChecklist()" style="width:20px; height:20px; cursor:pointer;">
-                <label for="chk-${idx}" style="margin-left:10px; font-size:16px; cursor:pointer;">${d}</label>
+        checklistHTML += `
+            <div class="check-item" onclick="document.getElementById('chk-${idx}').click()">
+                <input type="checkbox" class="doc-check" id="chk-${idx}" onchange="checkChecklist()" onclick="event.stopPropagation()">
+                <label>${d}</label>
             </div>`;
     });
 
-    // กำหนดให้ปุ่มปริ้นเริ่มต้นด้วย display:none (ซ่อนไว้)
-    let resultHTML = `
-        <div style="text-align:left; padding:10px; background:white; border-radius:10px;">
-            <strong style="font-size:20px;">${type}</strong><br>
-            <span style="color:blue; font-weight:bold;">💡 ${note}</span>
-            <hr style="margin:10px 0;">
-            <p style="font-size:14px; color:gray;">กรุณาติ๊กเอกสารให้ครบเพื่อปริ้น:</p>
-            ${checklistItems}
-            <button id="btnPrintGuide" onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}')" 
-                style="display:none; width:100%; padding:15px; background:#28a745; color:white; border:none; border-radius:10px; font-weight:bold; font-size:18px; margin-top:10px;">
+    // ปุ่มปริ้นจะถูกคุมด้วย ID และ Class เพื่อให้ซ่อน/แสดงได้แม่นยำ
+    const resultHTML = `
+        <div class="checklist-card">
+            <strong style="font-size:22px;">${type}</strong><br>
+            <div style="background:#e8f0fe; color:#1a73e8; padding:8px; border-radius:5px; margin-top:5px; font-weight:bold;">💡 ${note}</div>
+            <hr style="margin:15px 0; border:0; border-top:1px solid #eee;">
+            <p style="font-size:15px; color:#666; margin-bottom:10px;">กรุณาติ๊กตรวจสอบเอกสารให้ครบเพื่อปริ้น:</p>
+            ${checklistHTML}
+            <button id="btnPrintGuide" onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}')">
                 🖨️ ปริ้นใบนำทาง
             </button>
         </div>`;
 
     displayResponse(resultHTML);
-    speak(isThai ? "กรุณาตรวจสอบเอกสารให้ครบถ้วนก่อนปริ้นครับ" : "Please check all documents before printing.");
+    speak(isThai ? "กรุณาติ๊กตรวจสอบเอกสารให้ครบ แล้วกดปุ่มปริ้นครับ" : "Please check all items to print.");
+}
+
+// ฟังก์ชันควบคุมการ แสดง/ซ่อน ปุ่มปริ้น
+function checkChecklist() {
+    const checks = document.querySelectorAll('.doc-check');
+    const printBtn = document.getElementById('btnPrintGuide');
+    if (!printBtn) return;
+
+    // เช็คว่าติ๊กครบทุกช่องหรือยัง
+    const allChecked = checks.length > 0 && Array.from(checks).every(c => c.checked);
+    
+    // ถ้าครบให้ใส่ Class 'show-btn' เพื่อให้ CSS สั่งแสดงผล
+    if (allChecked) {
+        printBtn.classList.add('show-btn');
+    } else {
+        printBtn.classList.remove('show-btn');
+    }
 }
 
 // ฟังก์ชันสำคัญ: ตรวจสอบการติ๊กเพื่อแสดง/ซ่อนปุ่มปริ้น
