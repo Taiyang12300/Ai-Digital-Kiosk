@@ -1,6 +1,5 @@
 /**
- * 🚀 สมองกลน้องนำทาง - เวอร์ชั่นคัดกรองใบขับขี่ + ระบบปริ้นใบนำทาง
- * ปรับปรุง: แก้ไขให้ Checklist ติ๊กได้จริง และปุ่ม Print จะแสดงเมื่อติ๊กครบ
+ * 🚀 สมองกลน้องนำทาง - เวอร์ชั่นแก้ไขสมบูรณ์ (ติ๊กได้ + ปริ้นได้)
  */
 
 window.localDatabase = null;
@@ -13,7 +12,6 @@ let isAtHome = true;
 const GAS_URL = "https://script.google.com/macros/s/AKfycbz1bkIsQ588u-rpjY-8nMlya5_c0DsIabRvyPyCC_sPs5vyeJ_1wcOBaqKfg7cvlM3XJw/exec"; 
 
 let idleTimer = null; 
-let speechSafetyTimeout = null; 
 const IDLE_TIME_LIMIT = 15000; 
 let video = document.getElementById('video');
 let isDetecting = true; 
@@ -122,29 +120,45 @@ function greetUser() {
     speak(text);
 }
 
-// --- 4. 🚩 ระบบคัดกรองใบขับขี่ (Logic ติ๊กได้จริง) ---
+// --- 4. 🚩 ระบบคัดกรองใบขับขี่ ---
 
 function checkChecklist() {
     const checks = document.querySelectorAll('.doc-check');
     const printBtn = document.getElementById('btnPrintGuide');
     if (!printBtn) return;
-    
-    // ตรวจสอบว่าติ๊กครบทุกช่องหรือไม่
     const allChecked = checks.length > 0 && Array.from(checks).every(c => c.checked);
+    printBtn.style.display = allChecked ? "block" : "none";
+}
+
+// ฟังก์ชันปริ้นที่เพิ่มเข้ามาใหม่ (สำคัญมาก)
+function printLicenseNote(type, note, docs) {
+    const printWindow = window.open('', '_blank', 'width=300,height=600');
+    const docList = docs.split('\\n').map(d => `<li>${d}</li>`).join('');
     
-    // แสดงปุ่มปริ้นเมื่อติ๊กครบเท่านั้น
-    if (allChecked) {
-        printBtn.style.display = "block";
-    } else {
-        printBtn.style.display = "none";
-    }
+    printWindow.document.write(`
+        <html>
+        <body style="font-family:sans-serif; width:58mm; padding:5px; font-size:12px;">
+            <center>
+                <h3 style="margin:5px 0;">ใบนัดแนะเอกสาร</h3>
+                <p><strong>${type}</strong></p>
+            </center>
+            <hr>
+            <p>💡 ${note}</p>
+            <p><strong>เอกสารที่ต้องใช้:</strong></p>
+            <ul style="padding-left:15px;">${docList}</ul>
+            <hr>
+            <center><p>ขอบคุณที่ใช้บริการครับ<br>ขนส่งพยัคฆภูมิพิสัย</p></center>
+            <script>window.onload = function() { window.print(); window.close(); }</script>
+        </body>
+        </html>
+    `);
+    printWindow.document.close();
 }
 
 function startLicenseCheck(type) {
     isAtHome = false;
     const isThai = window.currentLang === 'th';
     const msg = isThai ? `ใบขับขี่ ${type} ของท่าน หมดอายุหรือยังครับ?` : `Is your ${type} license expired?`;
-    
     displayResponse(msg);
     speak(msg);
 
@@ -158,11 +172,9 @@ function startLicenseCheck(type) {
 function showLicenseChecklist(type, expiry) {
     const isThai = window.currentLang === 'th';
     const isTemp = type.includes("ชั่วคราว") || type.includes("2 ปี");
-    
     let docs = ["บัตรประชาชน (ตัวจริง)", "ใบขับขี่เดิม", "ใบรับรองแพทย์ (ไม่เกิน 1 เดือน)"];
     let note = "";
 
-    // กฎการอบรมตามประเภทใบขับขี่
     if (isTemp) {
         if (expiry === 'normal') note = "ไม่ต้องอบรม ต่อได้ทันที";
         else if (expiry === 'over1') note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนใหม่";
@@ -179,7 +191,6 @@ function showLicenseChecklist(type, expiry) {
         }
     }
 
-    // สร้าง HTML ใหม่แบบสะอาด ป้องกันโค้ดหลุด (Fix จากรูป 59348.jpg)
     let checklistItems = "";
     docs.forEach((d, idx) => {
         checklistItems += `
@@ -197,7 +208,7 @@ function showLicenseChecklist(type, expiry) {
             <p style="font-size:15px; color:#636e72; margin-bottom:10px;">กรุณาตรวจสอบเอกสาร (ติ๊กให้ครบเพื่อปริ้น):</p>
             ${checklistItems}
             <button id="btnPrintGuide" onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}')" 
-                style="display:none; width:100%; padding:15px; background:#28a745; color:white; border:none; border-radius:10px; font-weight:bold; font-size:20px; cursor:pointer; margin-top:15px; box-shadow: 0 4px 6px rgba(40,167,69,0.2);">
+                style="display:none; width:100%; padding:15px; background:#28a745; color:white; border:none; border-radius:10px; font-weight:bold; font-size:20px; cursor:pointer; margin-top:15px;">
                 🖨️ ปริ้นใบนำทาง
             </button>
         </div>`;
@@ -206,12 +217,11 @@ function showLicenseChecklist(type, expiry) {
     speak(isThai ? "กรุณาติ๊กตรวจสอบเอกสารให้ครบ แล้วกดปุ่มปริ้นใบนำทางครับ" : "Please check all documents to print your guide.");
 }
 
-// --- 5. ระบบค้นหาและจัดการคำถาม ---
+// --- 5. ระบบค้นหาคำถาม ---
 
 async function getResponse(userQuery) {
     if (!userQuery || !window.localDatabase) return;
     if (window.isBusy) stopAllSpeech();
-    
     isAtHome = false; 
     updateInteractionTime(); 
     window.isBusy = true;
@@ -239,12 +249,9 @@ async function getResponse(userQuery) {
             if (["Lottie_State", "Config", "FAQ"].includes(sheetName)) continue;
             window.localDatabase[sheetName].forEach(item => {
                 const keys = item[0] ? item[0].toString().toLowerCase() : "";
-                if (keys.includes(query)) {
-                    bestMatch = { answer: (window.currentLang === 'th' ? item[1] : item[2] || item[1]), score: 10 };
-                }
+                if (keys.includes(query)) bestMatch = { answer: (window.currentLang === 'th' ? item[1] : item[2] || item[1]), score: 10 };
             });
         }
-
         if (bestMatch.score > 0) {
             displayResponse(bestMatch.answer);
             speak(bestMatch.answer);
@@ -301,10 +308,7 @@ function renderOptionButtons(options) {
         btn.className = 'faq-btn';
         btn.style.border = "2px solid #6c5ce7";
         btn.innerText = (window.currentLang === 'th') ? opt.th : opt.en;
-        btn.onclick = () => { 
-            stopAllSpeech(); 
-            if (opt.action) opt.action();
-        };
+        btn.onclick = () => { stopAllSpeech(); if (opt.action) opt.action(); };
         container.appendChild(btn);
     });
 }
