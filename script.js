@@ -161,26 +161,39 @@ function startLicenseCheck(type) {
 function showLicenseChecklist(type, expiry) {
     const isThai = window.currentLang === 'th';
     const isTemp = type.includes("ชั่วคราว") || type.includes("2 ปี");
+    
+    // รักษารายการเอกสารเดิมของพี่ไว้ครบถ้วน
     let docs = ["บัตรประชาชน (ตัวจริง)", "ใบขับขี่เดิม", "ใบรับรองแพทย์ (ไม่เกิน 1 เดือน)"];
     let note = "";
 
+    // รักษา Logic การคัดกรองเดิมของพี่ไว้ทั้งหมด
     if (isTemp) {
         if (expiry === 'normal') note = "ไม่ต้องอบรม ต่อได้ทันที";
         else if (expiry === 'over1') note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนใหม่";
         else if (expiry === 'over3') note = "อบรมสำนักงาน ต้องสอบข้อเขียนและสอบขับรถใหม่";
     } else {
-        if (expiry === 'normal') { docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)"); note = "อบรมออนไลน์ 1 ชม. และต่อได้ทันที"; }
-        else if (expiry === 'over1') { docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)"); note = "อบรมออนไลน์ 2 ชม. และต้องสอบข้อเขียนใหม่"; }
-        else if (expiry === 'over3') { note = "ต้องอบรม 5 ชม. ที่ขนส่งเท่านั้น + สอบข้อเขียน + สอบขับรถ"; }
+        if (expiry === 'normal') {
+            docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)");
+            note = "อบรมออนไลน์ 1 ชม. และต่อได้ทันที";
+        } else if (expiry === 'over1') {
+            docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)");
+            note = "อบรมออนไลน์ 2 ชม. และต้องสอบข้อเขียนใหม่";
+        } else if (expiry === 'over3') {
+            note = "ต้องอบรม 5 ชม. ที่ขนส่งเท่านั้น + สอบข้อเขียน + สอบขับรถ";
+        }
     }
 
+    // สร้าง Checklist โดยใช้ Class จาก Index (เพื่อให้ติ๊กได้จริง)
     let checklistHTML = "";
     docs.forEach((d, idx) => {
-        checklistHTML += `<div class="check-item" onclick="document.getElementById('chk-${idx}').click()">
-            <input type="checkbox" class="doc-check" id="chk-${idx}" onchange="checkChecklist()" onclick="event.stopPropagation()">
-            <label>${d}</label></div>`;
+        checklistHTML += `
+            <div class="check-item" onclick="document.getElementById('chk-${idx}').click()">
+                <input type="checkbox" class="doc-check" id="chk-${idx}" onchange="checkChecklist()" onclick="event.stopPropagation()">
+                <label>${d}</label>
+            </div>`;
     });
 
+    // ปุ่มปริ้นจะถูกคุมด้วย ID และ Class เพื่อให้ซ่อน/แสดงได้แม่นยำ
     const resultHTML = `
         <div class="checklist-card">
             <strong style="font-size:22px;">${type}</strong><br>
@@ -188,8 +201,11 @@ function showLicenseChecklist(type, expiry) {
             <hr style="margin:15px 0; border:0; border-top:1px solid #eee;">
             <p style="font-size:15px; color:#666; margin-bottom:10px;">กรุณาติ๊กตรวจสอบเอกสารให้ครบเพื่อปริ้นใบนำทาง:</p>
             ${checklistHTML}
-            <button id="btnPrintGuide" style="display:none;" onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}')">🖨️ ปริ้นใบนำทาง</button>
+            <button id="btnPrintGuide" onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}')">
+                🖨️ ปริ้นใบนำทาง
+            </button>
         </div>`;
+
     displayResponse(resultHTML);
     speak(isThai ? "กรุณาติ๊กตรวจสอบเอกสารให้ครบ เพื่อปริ้นใบนำทางครับ" : "Please check all items to print.");
 }
