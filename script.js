@@ -293,16 +293,40 @@ async function getResponse(userQuery) {
 // --- 5. ระบบเสียง & UI ---
 
 function speak(text) {
-    if (!text || window.isMuted) return;
+    if (!text) return;
     window.speechSynthesis.cancel();
+    forceUnmute();
+    const safetyTime = (text.length * 200) + 5000;
+    if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
+    
+    speechSafetyTimeout = setTimeout(() => {
+        if (window.isBusy) { 
+            console.warn("🛡️ [Speech] Safety Timeout triggered.");
+            window.isBusy = false; updateLottie('idle'); restartIdleTimer(); 
+        }
+    }, safetyTime);
+
     const msg = new SpeechSynthesisUtterance(text.replace(/[*#-]/g, ""));
     msg.lang = (window.currentLang === 'th') ? 'th-TH' : 'en-US';
     msg.onstart = () => { window.isBusy = true; updateLottie('talking'); };
-    msg.onend = () => { window.isBusy = false; updateLottie('idle'); };
+    msg.onend = () => { 
+        if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
+        window.isBusy = false; updateLottie('idle'); updateInteractionTime(); 
+    };
     window.speechSynthesis.speak(msg);
 }
 
-function stopAllSpeech() { window.speechSynthesis.cancel(); window.isBusy = false; updateLottie('idle'); }
+const stopAllSpeech = () => {
+    window.speechSynthesis.cancel();
+    if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
+    window.isBusy = false;
+    updateLottie('idle');
+    console.log("🛑 [Action] Speech Terminated.");
+};
+
+window.addEventListener('pagehide', stopAllSpeech);
+window.addEventListener('beforeunload', stopAllSpeech);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') stopAllSpeech(); });
 
 function changeLanguage(lang) {
     window.currentLang = lang;
