@@ -175,6 +175,7 @@ function showLicenseChecklist(type, expiry) {
     let docs = ["บัตรประชาชน (ตัวจริง)", "ใบขับขี่เดิม", "ใบรับรองแพทย์ (ไม่เกิน 1 เดือน)"];
     let note = "";
 
+    // กำหนดเงื่อนไขเอกสารและการอบรม
     if (isTemp) {
         if (expiry === 'normal') note = "ไม่ต้องอบรม ต่อได้ทันที";
         else if (expiry === 'over1') note = "ไม่ต้องอบรม แต่ต้องสอบข้อเขียนใหม่";
@@ -191,17 +192,19 @@ function showLicenseChecklist(type, expiry) {
         }
     }
 
+    // สร้าง Checklist แบบป้องกันโค้ดหลุด (ใช้ Backtick เพื่อความชัวร์)
     let checklistItems = "";
     docs.forEach((d, idx) => {
         checklistItems += `
             <div style="display:flex; align-items:center; margin-bottom:12px; background:#f0f2f5; padding:10px; border-radius:8px; cursor:pointer;" onclick="document.getElementById('chk-${idx}').click()">
-                <input type="checkbox" class="doc-check" id="chk-${idx}" onchange="checkChecklist()" onclick="event.stopPropagation()" style="width:25px; height:25px; cursor:pointer; accent-color:#6c5ce7;">
+                <input type="checkbox" class="doc-check" id="chk-${idx}" onchange="checkChecklist()" onclick="event.stopPropagation()" style="width:25px; height:25px; cursor:pointer;">
                 <label style="margin-left:12px; font-size:18px; cursor:pointer; color:#2d3436; flex:1;">${d}</label>
             </div>`;
     });
 
+    // ปุ่มปริ้นจะถูกซ่อนไว้ด้วย display:none และจะแสดงเมื่อฟังก์ชัน checkChecklist สั่งเปิดเท่านั้น
     const resultHTML = `
-        <div style="text-align:left; background:white; padding:15px; border-radius:12px;">
+        <div style="text-align:left; background:white; padding:15px; border-radius:12px; border:1px solid #ddd;">
             <strong style="font-size:22px; color:#2d3436;">${type}</strong><br>
             <div style="background:#e8f0fe; color:#1a73e8; padding:8px; border-radius:5px; margin-top:5px; font-weight:bold;">💡 ${note}</div>
             <hr style="margin:15px 0; border:0; border-top:1px solid #eee;">
@@ -214,7 +217,7 @@ function showLicenseChecklist(type, expiry) {
         </div>`;
 
     displayResponse(resultHTML);
-    speak(isThai ? "กรุณาติ๊กตรวจสอบเอกสารให้ครบ แล้วกดปุ่มปริ้นใบนำทางครับ" : "Please check all documents to print your guide.");
+    speak(isThai ? "กรุณาติ๊กตรวจสอบเอกสารให้ครบ แล้วกดปุ่มปริ้นครับ" : "Please check all documents to print.");
 }
 
 // --- 5. ระบบค้นหาคำถาม ---
