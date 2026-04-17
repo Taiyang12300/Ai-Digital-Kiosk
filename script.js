@@ -1,7 +1,7 @@
 /**
- * 🚀 สมองกลน้องนำทาง - Ultimate Hybrid Version (Face-API + COCO Features)
+ * 🚀 สมองกลน้องนำทาง - Ultimate Hybrid Version (Google Voice Optimized)
  * รวมระบบ: คัดกรองใบขับขี่ + ปริ้น + สุ่มคำทักทาย + บันทึกสถิติลง Sheet
- * ปรับปรุง: ระบบหยุดเสียงเมื่อปิดแท็บ และแก้ไข Bug ตัวแปร Video
+ * ปรับปรุง: ล็อกเสียง Google Thai เพื่อความลื่นไหล และระบบป้องกันเสียงค้าง
  */
 
 window.localDatabase = null;
@@ -283,7 +283,7 @@ async function getResponse(userQuery) {
     } catch (err) { window.isBusy = false; }
 }
 
-// --- 5. ระบบเสียง & UI ---
+// --- 5. ระบบเสียง (ปรับปรุงให้ใช้ Google Voice) ---
 function speak(text) {
     if (!text || window.isMuted) return;
     window.speechSynthesis.cancel();
@@ -303,8 +303,20 @@ function speak(text) {
     }, safetyTime);
 
     const msg = new SpeechSynthesisUtterance(text.replace(/[*#-]/g, ""));
-    msg.lang = (window.currentLang === 'th') ? 'th-TH' : 'en-US';
-    msg.rate = 1.0; 
+    
+    // 🔍 ล็อกเป้าหมายเสียง Google
+    const voices = window.speechSynthesis.getVoices();
+    if (window.currentLang === 'th') {
+        msg.lang = 'th-TH';
+        const googleThai = voices.find(v => v.name.includes('Google') && v.lang.includes('th'));
+        if (googleThai) msg.voice = googleThai;
+    } else {
+        msg.lang = 'en-US';
+        const googleEn = voices.find(v => v.name.includes('Google') && v.lang.includes('en'));
+        if (googleEn) msg.voice = googleEn;
+    }
+
+    msg.rate = 1.05; // ความเร็วที่ฟังดูเป็นธรรมชาติที่สุด
     msg.pitch = 1.0;
     msg.volume = 1.0;
 
@@ -320,6 +332,9 @@ function speak(text) {
     };
     window.speechSynthesis.speak(msg);
 }
+
+// โหลดเสียงล่วงหน้า (สำหรับ Chrome)
+window.speechSynthesis.onvoiceschanged = () => { window.speechSynthesis.getVoices(); };
 
 function stopAllSpeech() {
     window.speechSynthesis.cancel();
@@ -427,7 +442,7 @@ async function initDatabase() {
 
 async function initCamera() {
     try {
-        video = document.getElementById('video'); // กำหนดค่า video ที่นี่
+        video = document.getElementById('video'); 
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 } });
         if (video) { video.srcObject = stream; video.onloadedmetadata = () => { video.play(); loadFaceModels(); }; }
     } catch (err) { console.error("❌ Camera Error"); }
