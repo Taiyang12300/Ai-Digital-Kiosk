@@ -41,48 +41,35 @@
     .faq-title { width: 100%; margin: 10px 0; font-weight: 500; color: #636e72; font-size: 16px; display: flex; align-items: center; gap: 8px; }
     .faq-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; width: 100%; margin-bottom: 30px; }
     .faq-btn { padding: 12px; background: white; color: var(--primary); border: 2px solid #e0e0ff; border-radius: 15px; font-size: 15px; cursor: pointer; transition: all 0.2s; font-weight: 500; min-height: 60px; display: flex; align-items: center; justify-content: center; text-align: center; }
-    .faq-btn:active { transform: scale(0.95); background: var(--primary); color: white; }
 
-    .input-section { width: 100%; display: flex; gap: 10px; margin-bottom: 20px; }
-    #userInput { flex: 1; padding: 15px; border-radius: 30px; border: 2px solid #ddd; outline: none; font-size: 16px; font-family: 'Sarabun'; }
-    .btn-send { width: 50px; height: 50px; border-radius: 50%; border: none; background: var(--primary); color: white; cursor: pointer; font-size: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-
-    .mic-section { margin-bottom: 30px; text-align: center; }
-    .btn-mic { width: 90px; height: 90px; border-radius: 50%; border: none; background: var(--primary); color: white; font-size: 35px; cursor: pointer; display: flex; align-items: center; justify-content: center; margin: 0 auto; box-shadow: 0 10px 20px rgba(108,92,231,0.3); }
-    .btn-mic.recording { background: var(--accent); animation: pulse 1.5s infinite; }
-    @keyframes pulse { 0% { transform: scale(1); } 70% { transform: scale(1.1); } 100% { transform: scale(1); } }
-
-    /* --- [ใหม่] ระบบ Checklist --- */
+    /* --- ระบบ Checklist --- */
     .checklist-card { text-align: left; background: white; padding: 15px; border-radius: 12px; border: 1px solid #ddd; }
     .check-item { display: flex; align-items: center; margin-bottom: 12px; background: #f0f2f5; padding: 10px; border-radius: 8px; cursor: pointer; }
     .check-item input { width: 22px; height: 22px; cursor: pointer; accent-color: #28a745; }
     .check-item label { margin-left: 12px; font-size: 18px; cursor: pointer; color: #333; flex: 1; }
 
-    /* --- [ใหม่] ปุ่มปริ้นในหน้าจอ (ซ่อนไว้รอติ๊ก) --- */
     #btnPrintGuide { 
-        display: none !important; /* ซ่อนเด็ดขาดในตอนแรก */
+        display: none !important; 
         width: 100%; padding: 15px; background: #28a745; color: white; 
         border: none; border-radius: 10px; font-weight: bold; 
         font-size: 20px; cursor: pointer; margin-top: 15px; 
     }
-    #btnPrintGuide.show-btn { display: block !important; } /* แสดงเมื่อติ๊กครบ */
+    #btnPrintGuide.show-btn { display: block !important; }
 
-        /* --- ระบบพิมพ์ (Ticket 58mm) จัดกลาง + เข้มพิเศษ --- */
+    /* --- ระบบพิมพ์ (Ticket 58mm) จัดวางพิเศษ + เข้มพิเศษ --- */
     .ticket { 
         background: white; 
-        color: black; 
+        color: #000 !important; 
         width: 58mm; 
-        padding: 5px; 
+        padding: 5px 2px; 
         margin: 0 auto; 
         font-family: 'Kanit', sans-serif; 
-        text-align: center; /* จัดกึ่งกลางทั้งหมด */
-        font-weight: bold;  /* ตัวหนาทั้งหมด */
+        text-align: center;
     }
 
-    /* บังคับให้ทุกตัวอักษรในตั๋วเป็นตัวเข้ม */
     .ticket * { 
-        font-weight: 800 !important; 
-        text-align: center !important; 
+        font-weight: 900 !important; /* บังคับดำหนาสุด */
+        color: #000 !important;
     }
 
     .ticket .big { 
@@ -90,19 +77,25 @@
         margin: 8px 0; 
         line-height: 1.1;
         display: block;
+        text-align: center;
     }
 
     #printLicenseItems {
-        margin: 10px 0;
-        font-size: 14px;
-        line-height: 1.5;
+        margin: 10px 5px 10px 12px; 
+        font-size: 16px; 
+        line-height: 1.6;
+        text-align: left !important; 
         display: block;
-        width: 100%;
     }
 
     #printLicenseItems div {
-        margin-bottom: 5px;
-        width: 100%;
+        text-align: left !important;
+        margin-bottom: 4px;
+        white-space: nowrap; 
+    }
+
+    #printLicenseTime, #printLicenseNote, .ticket-footer {
+        text-align: center !important;
     }
 
     @media print {
@@ -112,16 +105,7 @@
           visibility: visible !important; 
           display: block !important; 
       }
-      .ticket { 
-          position: absolute; 
-          top: 0; 
-          left: 0; 
-          width: 58mm; 
-          margin: 0; 
-          padding: 5px; 
-      }
-    }
-
+      .ticket { position: absolute; top: 0; left: 0; width: 58mm; margin: 0; padding: 5px; }
     }
   </style>
 </head>
@@ -159,16 +143,16 @@
   <div id="ticketLicenseWrapper" style="display: none;">
     <div class="ticket">
       <div style="font-size: 15px; font-weight: bold;">🧾 ใบนำทางติดต่อราชการ</div>
-      <div style="font-size: 11px; border-bottom: 1px dashed black; padding-bottom: 5px;">สำนักงานขนส่งอำเภอพยัคฆภูมิพิสัย</div>
+      <div style="font-size: 11px; border-bottom: 1px dashed black; padding-bottom: 5px;">สำนักงานขนส่งพยัคฆภูมิพิสัย</div>
       <div class="big" id="printLicenseType">-</div>
-      <div style="background: #000; color: #fff; padding: 4px; font-weight: bold; font-size: 14px; margin: 5px 0;" id="printLicenseNote">-</div>
-      <div style="text-align: left; margin: 10px 0; font-size: 12px; line-height: 1.4;">
-        <b>เอกสารที่ต้องใช้:</b>
-        <div id="printLicenseItems"></div>
-      </div>
-      <div style="border-top: 1px dashed black; padding-top: 5px; font-size: 10px;">
-        <div id="printLicenseTime"></div>
-        <div style="font-weight: bold; margin-top: 4px;">*ยื่นใบนี้พร้อมเอกสารที่งานใบอนุญาตขับรถชั้น 2*</div>
+      <div style="background: #000; color: #fff !important; padding: 4px; font-weight: bold; font-size: 14px; margin: 5px 0; text-align: center;" id="printLicenseNote">-</div>
+      
+      <div style="text-align: left; margin: 10px 0 0 12px; font-size: 13px;"><b>เอกสารที่ต้องใช้:</b></div>
+      <div id="printLicenseItems"></div>
+      
+      <div style="border-top: 1px dashed black; padding-top: 5px;" class="ticket-footer">
+        <div id="printLicenseTime" style="font-size: 10px;"></div>
+        <div style="font-weight: bold; margin-top: 4px; font-size: 11px;">*ยื่นใบนี้ที่งานใบอนุญาตขับรถชั้น 2*</div>
       </div>
     </div>
   </div>
@@ -235,7 +219,7 @@
     function toggleListening() { if (isListening) recognition.stop(); else { window.speechSynthesis.cancel(); recognition.start(); } }
     function stopListening() { isListening = false; document.getElementById('micBtn').classList.remove('recording'); }
 
-    // --- [ ฟังก์ชันพิมพ์ใบนำทาง ] ---
+    // --- [ ฟังก์ชันพิมพ์ใบนำทาง ปรับปรุงใหม่ ] ---
     function printLicenseNote(type, note, items) {
       const now = new Date();
       document.getElementById('printLicenseType').innerText = type;
@@ -243,7 +227,11 @@
       document.getElementById('printLicenseTime').innerText = `เวลาพิมพ์: ${now.toLocaleString('th-TH')}`;
       
       const docArray = items.includes('\\n') ? items.split('\\n') : items.split('\n');
-      const itemsHTML = docArray.map(i => `<div style="margin-bottom:2px;">• ${i}</div>`).join('');
+      // เปลี่ยนเป็นเครื่องหมายถูก [ ✓ ] และชิดซ้าย
+      const itemsHTML = docArray
+        .filter(item => item.trim() !== "")
+        .map(i => `<div>[ ✓ ] ${i.trim()}</div>`)
+        .join('');
       document.getElementById('printLicenseItems').innerHTML = itemsHTML;
 
       const audio = document.getElementById('queueSound');
