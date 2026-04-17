@@ -70,17 +70,18 @@
     /* --- ระบบพิมพ์ (Ticket 58mm) ฉบับปรับปรุงใหม่ --- */
     .ticket { 
         background: white; 
-        color: black; 
+        color: #000 !important; 
         width: 58mm; 
         padding: 5px; 
         margin: 0 auto; 
         font-family: 'Kanit', sans-serif; 
         text-align: center;
-        font-weight: bold;
     }
 
+    /* บังคับทุกส่วนในตั๋วให้เข้มดำสนิท */
     .ticket * { 
-        font-weight: 800 !important; 
+        font-weight: 900 !important; 
+        color: #000 !important;
     }
 
     .ticket .big { 
@@ -91,18 +92,32 @@
         text-align: center;
     }
 
+    /* จุดแก้ไข: เปลี่ยนหมายเหตุให้เป็นตัวหนังสือดำหนาบนพื้นขาวเพื่อให้พิมพ์ชัด */
+    #printLicenseNote {
+        background: transparent !important; 
+        color: #000 !important; 
+        border: 1px dashed #000; 
+        padding: 4px; 
+        font-weight: 900 !important; 
+        font-size: 15px; 
+        margin: 5px 0; 
+        text-align: center;
+        display: block;
+    }
+
     #printLicenseItems {
-        margin: 10px 0 10px 8px; /* เว้นระยะจากขอบซ้ายเล็กน้อย */
-        font-size: 14px;
-        line-height: 1.5;
+        margin: 10px 0 10px 8px; 
+        font-size: 12px; /* ลดขนาดลงตามคำสั่ง */
+        line-height: 1.4;
         display: block;
         width: 100%;
-        text-align: left !important; /* บังคับรายการเอกสารชิดซ้าย */
+        text-align: left !important;
     }
 
     #printLicenseItems div {
-        margin-bottom: 4px;
+        margin-bottom: 3px;
         text-align: left !important;
+        font-weight: 900 !important;
     }
 
     @media print {
@@ -159,7 +174,7 @@
       <div style="font-size: 15px; font-weight: bold;">🧾 ใบนำทางติดต่อราชการ</div>
       <div style="font-size: 11px; border-bottom: 1px dashed black; padding-bottom: 5px;">สำนักงานขนส่งอำเภอพยัคฆภูมิพิสัย</div>
       <div class="big" id="printLicenseType">-</div>
-      <div style="background: #000; color: #fff; padding: 4px; font-weight: bold; font-size: 14px; margin: 5px 0; text-align: center;" id="printLicenseNote">-</div>
+      <div id="printLicenseNote">-</div>
       <div style="text-align: left; margin: 10px 0 0 8px; font-size: 12px;">
         <b>เอกสารที่ต้องใช้:</b>
         <div id="printLicenseItems"></div>
@@ -233,29 +248,26 @@
     function toggleListening() { if (isListening) recognition.stop(); else { window.speechSynthesis.cancel(); recognition.start(); } }
     function stopListening() { isListening = false; document.getElementById('micBtn').classList.remove('recording'); }
 
-    // --- [ ฟังก์ชันพิมพ์ใบนำทาง - แก้ไขให้ชิดซ้ายและใช้เครื่องหมายถูก ] ---
+    // --- [ ฟังก์ชันพิมพ์ใบนำทาง - แก้ไขให้เข้มและตัวหนาพิเศษ ] ---
     function printLicenseNote(type, note, items) {
   const now = new Date();
   document.getElementById('printLicenseType').innerText = type;
   document.getElementById('printLicenseNote').innerText = note;
   document.getElementById('printLicenseTime').innerText = `เวลาพิมพ์: ${now.toLocaleString('th-TH')}`;
   
-  // แยกรายการเอกสาร
   const docArray = items.includes('\\n') ? items.split('\\n') : items.split('\n');
   
-  // สร้าง HTML: ใช้ [ ✓ ], ชิดซ้าย, และบังคับตัวหนา 900 (เข้มสุด)
+  // สร้าง HTML: ใช้ [ ✓ ] ชิดซ้าย และบังคับตัวหนาสุด (900)
   const itemsHTML = docArray
-    .filter(i => i.trim() !== "") // กรองบรรทัดว่างออก
-    .map(i => `<div style="text-align: left !important; font-weight: 900 !important; color: #000 !important; margin-bottom: 4px;">[ ✓ ] ${i.trim()}</div>`)
+    .filter(i => i.trim() !== "")
+    .map(i => `<div style="text-align: left !important; font-weight: 900 !important; color: #000 !important; margin-bottom: 3px;">[ ✓ ] ${i.trim()}</div>`)
     .join('');
     
   document.getElementById('printLicenseItems').innerHTML = itemsHTML;
 
-  // เล่นเสียงแจ้งเตือน
   const audio = document.getElementById('queueSound');
   if (audio) { audio.currentTime = 0; audio.play().catch(e => {}); }
 
-  // สั่งพิมพ์
   const wrapper = document.getElementById('ticketLicenseWrapper');
   wrapper.style.display = 'block';
   wrapper.classList.add('printing');
