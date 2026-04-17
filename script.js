@@ -100,7 +100,7 @@ async function detectPerson() {
 
     const predictions = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withAgeAndGender();
     
-    // แสดง Log เมื่อมีการตรวจจับ (ช่วยให้รู้ว่า AI กำลังทำงานอยู่ตลอดเวลา)
+    // 1. Log การตรวจจับพื้นฐาน (W, CX, CONF, Gender)
     if (predictions.length > 0) {
         predictions.forEach((f, idx) => {
             const box = f.detection.box;
@@ -108,35 +108,54 @@ async function detectPerson() {
             const conf = Math.round(f.detection.score * 100);
             const gender = f.gender === 'male' ? 'ชาย' : 'หญิง';
             const genderConf = Math.round(f.genderProbability * 100);
-            
             console.log(`👤 ตรวจพบ [${idx+1}]: W=${Math.round(box.width)}, CX=${cx}, CONF=${conf}%, เพศ=${gender}(${genderConf}%)`);
         });
     }
 
+    // 2. ค้นหาใบหน้าที่อยู่ในเกณฑ์ (กรองค่าตามที่พี่ตั้งไว้)
     const face = predictions.find(f => {
         const box = f.detection.box;
         const centerX = box.x + (box.width / 2);
-        // เงื่อนไขการกรองเพื่อ "ทักทาย"
         return f.detection.score > 0.55 && box.width > 90 && (centerX > 80 && centerX < 560);
     });
 
     if (face) {
+        // --- ส่วนที่ 1: นับเวลาสะสมเพื่อทักทาย ---
         if (personInFrameTime === null) {
-            console.log("🎯 เป้าหมายอยู่ในเกณฑ์ทักทาย (รอครบ 2 วินาที)");
+            console.log("🎯 [START] เป้าหมายเข้าเกณฑ์: เริ่มนับเวลาสะสม (Target: 2.0s)");
             personInFrameTime = now;
         }
+
+        const durationInFrame = ((now - personInFrameTime) / 1000).toFixed(1);
+        
+        // Log เฉพาะทุกๆ 0.5 วินาที เพื่อไม่ให้ Log รกเกินไปแต่ยังเห็นความต่อเนื่อง
+        if (Math.round((now - personInFrameTime) % 500) < 200) {
+            console.log(`⏳ กำลังนับเวลา: ${durationInFrame} / 2.0 วินาที`);
+        }
+
         window.detectedGender = face.gender; 
+
         if ((now - personInFrameTime) >= 2000 && isAtHome && !window.isBusy && !window.hasGreeted) {
-            console.log("👋 เริ่มการทักทาย...");
+            console.log("👋 [ACTION] ครบ 2 วินาทีแล้ว: น้องเริ่มทักทาย!");
             greetUser(); 
         }
-        lastSeenTime = now; 
+        lastSeenTime = now; // อัปเดตเวลาล่าสุดที่เจอหน้า
     } else {
-        if (personInFrameTime !== null && (now - lastSeenTime > 3000)) {
-            console.log("🚫 เป้าหมายออกจากเฟรมหรือไม่อยู่ในเกณฑ์");
-            personInFrameTime = null;   
-            window.hasGreeted = false;  
-            if (!isAtHome) restartIdleTimer();
+        // --- ส่วนที่ 2: นับเวลาถอยหลังเมื่อคนหายไปจากกล้อง ---
+        if (personInFrameTime !== null) {
+            const timeSinceLastSeen = ((now - lastSeenTime) / 1000).toFixed(1);
+            
+            if (now - lastSeenTime > 3000) {
+                console.log("🚫 [RESET] หายไปเกิน 3.0 วินาที: ล้างค่า PersonInFrame และสถานะการทักทาย");
+                personInFrameTime = null;   
+                window.hasGreeted = false;  
+                if (!isAtHome) restartIdleTimer();
+            } else {
+                // Log บอกว่าน้องกำลังรอคนเดิมกลับมา (เผื่อเขาแค่ก้มหน้าหรือหันหลังแป๊บเดียว)
+                if (Math.round((now - lastSeenTime) % 500) < 200) {
+                    console.log(`❓ เป้าหมายหายไป: กำลังรอเช็คอีก ${timeSinceLastSeen} / 3.0 วินาที`);
+                }
+            }
         }
     }
     requestAnimationFrame(detectPerson);
