@@ -183,9 +183,10 @@ function showLicenseChecklist(type, expiry) {
 
     const resultHTML = `
         <div class="checklist-card">
-            <strong>${type}</strong><br>
+            <strong style="font-size:22px;">${type}</strong><br>
             <div style="background:#e8f0fe; color:#1a73e8; padding:8px; border-radius:5px; margin-top:5px; font-weight:bold;">💡 ${note}</div>
-            <p style="font-size:14px; margin-top:10px;">กรุณาติ๊กตรวจสอบเอกสารให้ครบเพื่อปริ้นใบนำทาง:</p>
+            <hr style="margin:15px 0; border:0; border-top:1px solid #eee;">
+            <p style="font-size:15px; color:#666; margin-bottom:10px;">กรุณาติ๊กตรวจสอบเอกสารให้ครบเพื่อปริ้นใบนำทาง:</p>
             ${checklistHTML}
             <button id="btnPrintGuide" style="display:none;" onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}')">🖨️ ปริ้นใบนำทาง</button>
         </div>`;
