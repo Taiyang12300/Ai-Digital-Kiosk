@@ -194,19 +194,25 @@ function showLicenseChecklist(type, expiry) {
 
 // ฟังก์ชันควบคุมการ แสดง/ซ่อน ปุ่มปริ้น
 function checkChecklist() {
+    // 1. ดึง Checkbox ทั้งหมด
     const checks = document.querySelectorAll('.doc-check');
+    // 2. หาปุ่มปริ้น
     const printBtn = document.getElementById('btnPrintGuide');
     
+    // ถ้ายังหาปุ่มไม่เจอ (เพราะ HTML ยังโหลดไม่เสร็จ) ให้จบการทำงานก่อน
     if (!printBtn) return;
 
-    // ตรวจสอบว่า checkbox ทุกอันถูกติ๊กหรือยัง
+    // 3. ตรวจสอบว่าติ๊กครบทุกช่องหรือยัง
     const allChecked = checks.length > 0 && Array.from(checks).every(c => c.checked);
     
-    // ใช้ classList.add('show-btn') เพื่อให้ทำงานร่วมกับ CSS ใน Index ได้แม่นยำครับ
     if (allChecked) {
+        // ✅ ติ๊กครบ: บังคับให้ปุ่มแสดงตัว (ใช้ทั้ง Class และ Style Direct)
         printBtn.classList.add('show-btn');
+        printBtn.style.setProperty('display', 'block', 'important');
     } else {
+        // ❌ ติ๊กไม่ครบ: สั่งซ่อน
         printBtn.classList.remove('show-btn');
+        printBtn.style.setProperty('display', 'none', 'important');
     }
 }
 
