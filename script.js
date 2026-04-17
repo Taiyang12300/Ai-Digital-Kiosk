@@ -291,43 +291,67 @@ async function getResponse(userQuery) {
 }
 
 // --- 5. ระบบเสียง & UI ---
-
 function speak(text) {
-    if (!text) return;
+    if (!text || window.isMuted) return;
+
+    // ล้างคิวเก่าและ Resume ระบบเผื่อค้าง
     window.speechSynthesis.cancel();
-    forceUnmute();
+    if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+    }
+
+    // Safety Timeout กัน AI ค้างสถานะ Talking
     const safetyTime = (text.length * 200) + 5000;
     if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
     
     speechSafetyTimeout = setTimeout(() => {
         if (window.isBusy) { 
-            console.warn("🛡️ [Speech] Safety Timeout triggered.");
-            window.isBusy = false; updateLottie('idle'); restartIdleTimer(); 
+            window.isBusy = false; 
+            updateLottie('idle'); 
+            restartIdleTimer(); 
         }
     }, safetyTime);
 
     const msg = new SpeechSynthesisUtterance(text.replace(/[*#-]/g, ""));
     msg.lang = (window.currentLang === 'th') ? 'th-TH' : 'en-US';
-    msg.onstart = () => { window.isBusy = true; updateLottie('talking'); };
+    
+    // ตั้งค่าเสียงให้ฟังง่ายขึ้น
+    msg.rate = 1.0; 
+    msg.pitch = 1.0;
+    msg.volume = 1.0;
+
+    msg.onstart = () => { 
+        window.isBusy = true; 
+        updateLottie('talking'); 
+    };
     msg.onend = () => { 
         if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
-        window.isBusy = false; updateLottie('idle'); updateInteractionTime(); 
+        window.isBusy = false; 
+        updateLottie('idle'); 
+        updateInteractionTime(); 
     };
+    
+    // สั่งพูดจริง
     window.speechSynthesis.speak(msg);
 }
 
-const stopAllSpeech = () => {
+function stopAllSpeech() {
     window.speechSynthesis.cancel();
     if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
     window.isBusy = false;
     updateLottie('idle');
-    console.log("🛑 [Action] Speech Terminated.");
-};
+}
 
-window.addEventListener('pagehide', stopAllSpeech);
-window.addEventListener('beforeunload', stopAllSpeech);
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') stopAllSpeech(); });
+// ระบบบังคับให้ Browser ยอมรับการเล่นเสียง (เรียกใช้เมื่อมีการกดปุ่ม)
+function unlockAudio() {
+    const synth = window.speechSynthesis;
+    const utterance = new SpeechSynthesisUtterance('');
+    synth.speak(utterance);
+    console.log("🔊 Audio Unlocked");
+}
 
+// ผูกระบบปลดล็อคเสียงเข้ากับปุ่มต่างๆ
+document.addEventListener('click', () => { if(!window.hasGreeted) unlockAudio(); }, { once: true });
 function changeLanguage(lang) {
     window.currentLang = lang;
     isAtHome = true;
