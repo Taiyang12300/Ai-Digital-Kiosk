@@ -93,7 +93,7 @@ async function detectPerson() {
     const face = predictions.find(f => {
         const box = f.detection.box;
         const centerX = box.x + (box.width / 2);
-        return f.detection.score > 0.60 && box.width > 160 && (centerX > 100 && centerX < 540);
+        return f.detection.score > 0.55 && box.width > 90 && (centerX > 100 && centerX < 540);
     });
 
     if (face) {
