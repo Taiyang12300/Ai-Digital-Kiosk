@@ -67,82 +67,81 @@
     }
     #btnPrintGuide.show-btn { display: block !important; }
 
-    /* --- ระบบพิมพ์ (Ticket 58mm) ฉบับปรับปรุงใหม่ --- */
-    .ticket { 
-        background: white; 
-        color: #000 !important; 
-        width: 57mm; 
-        padding: 5px; 
-        margin: 0 auto; 
-        font-family: 'Kanit', sans-serif; 
-        text-align: center;
-    }
+    /* --- ระบบพิมพ์ (Ticket 57mm/58mm) ปรับปรุงกันตกขอบ --- */
+.ticket { 
+    background: white; 
+    color: #000 !important; 
+    /* ปรับเหลือ 52mm เพื่อให้มีช่องว่างขอบขวา และกัน Browser คำนวณพลาด */
+    width: 52mm; 
+    padding: 5px 2px 5px 8px; /* เพิ่ม padding-left (8px) เพื่อดันเนื้อหาไปทางขวา */
+    margin: 0 auto; 
+    font-family: 'Kanit', sans-serif; 
+    text-align: center;
+    box-sizing: border-box; /* สำคัญมาก: เพื่อให้ padding ไม่ไปเพิ่มความกว้าง 52mm */
+}
 
-    /* บังคับทุกส่วนในตั๋วให้เข้มดำสนิท */
-    .ticket * { 
-        font-weight: 900 !important; 
-        color: #000 !important;
-    }
+/* บังคับทุกส่วนในตั๋วให้เข้มดำสนิท */
+.ticket * { 
+    font-weight: 900 !important; 
+    color: #000 !important;
+}
 
-    .ticket .big { 
-        font-size: 26px; 
-        margin: 8px 0; 
-        line-height: 1.1;
-        display: block;
-        text-align: center;
-    }
+.ticket .big { 
+    font-size: 24px; /* ลดขนาดลงนิดนึงกันล้นบรรทัด */
+    margin: 8px 0; 
+    line-height: 1.1;
+    display: block;
+    text-align: center;
+}
 
-        /* จุดแก้ไข: จัดกึ่งกลางหมายเหตุและคุมขอบไม่ให้ตก */
-    #printLicenseNote {
-        background: transparent !important; 
-        color: #000 !important; 
-        border: 1px dashed #000; 
-        padding: 6px 2px; /* เพิ่มพื้นที่ด้านบนล่าง ลดด้านข้าง */
-        font-weight: 900 !important; 
-        font-size: 14px; 
-        margin: 5px auto; 
-        
-        /* แก้ไขปัญหาตกขอบ */
-        text-align: center !important;  /* บังคับกึ่งกลาง */
-        display: block;
-        width: 100%;                    /* เต็มความกว้าง 58mm */
-        box-sizing: border-box;         /* รวมขอบในความกว้าง */
-        word-wrap: break-word;          /* ถ้าคำยาวเกินให้ตัดลงบรรทัดใหม่ */
-        line-height: 1.2;               /* ระยะห่างบรรทัดไม่ให้ชิดกันเกินไป */
-    }
+#printLicenseNote {
+    background: transparent !important; 
+    color: #000 !important; 
+    border: 1px dashed #000; 
+    padding: 6px 4px;
+    font-weight: 900 !important; 
+    font-size: 14px; 
+    margin: 5px 2mm; /* เพิ่ม margin ซ้ายขวา 2mm เพื่อหลบขอบ */
+    text-align: center !important;
+    display: block;
+    width: auto; /* เปลี่ยนจาก 100% เป็น auto เพื่อให้เคารพ margin */
+    box-sizing: border-box;
+    word-wrap: break-word;
+    line-height: 1.2;
+}
 
-    #printLicenseItems {
-        margin: 10px 0 10px 8px; 
-        font-size: 12px; /* ขนาดเล็กตามสั่ง */
-        line-height: 1.4;
-        display: block;
-        width: 100%;
-        text-align: left !important;
-    }
+#printLicenseItems {
+    margin: 10px 0 10px 5px; /* ลด margin-left ลงนิดนึง */
+    font-size: 12px; 
+    line-height: 1.4;
+    display: block;
+    text-align: left !important;
+}
 
-    #printLicenseItems div {
-        margin-bottom: 3px;
-        text-align: left !important;
-        font-weight: 900 !important;
-        color: #000 !important;
-    }
+@media print {
+  @page { 
+      size: 58mm auto; /* บังคับขนาดกระดาษที่ไดรเวอร์ */
+      margin: 0; 
+  }
+  body * { visibility: hidden !important; display: none !important; }
+  
+  #ticketLicenseWrapper.printing, #ticketLicenseWrapper.printing * { 
+      visibility: visible !important; 
+      display: block !important; 
+  }
 
-    @media print {
-      @page { size: auto; margin: 0; }
-      body * { visibility: hidden !important; display: none !important; }
-      #ticketLicenseWrapper.printing, #ticketLicenseWrapper.printing * { 
-          visibility: visible !important; 
-          display: block !important; 
-      }
-      .ticket { 
-          position: absolute; 
-          top: 0; 
-          left: 0; 
-          width: 57mm; 
-          margin: 0; 
-          padding: 5px; 
-      }
-    }
+  .ticket { 
+      position: absolute; 
+      top: 0; 
+      left: 0; 
+      width: 57mm; /* ขนาดกระดาษจริง */
+      padding-left: 5mm; /* 💡 จุดตาย: ดันเนื้อหาทั้งหมดออกจากขอบซ้าย 5 มม. */
+      padding-right: 2mm;
+      margin: 0; 
+      box-sizing: border-box;
+  }
+}
+
   </style>
 </head>
 <body>
