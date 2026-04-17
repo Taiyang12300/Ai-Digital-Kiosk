@@ -9,8 +9,7 @@
   <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-  <script src="script.js"></script>
-  
+
   <style>
     :root { --primary: #6c5ce7; --bg: #f9f9fb; --accent: #ff7675; }
     
@@ -178,24 +177,31 @@
     // --- [ ฟังก์ชันพิมพ์ใบนำทาง ] ---
     function printLicenseNote(type, note, items) {
       const now = new Date();
+      // แสดงข้อมูลในหน้า Ticket
       document.getElementById('printLicenseType').innerText = type;
       document.getElementById('printLicenseNote').innerText = note;
-      document.getElementById('printLicenseTime').innerText = `เวลาพิมพ์: ${now.toLocaleString('th-TH')}`;
-      const itemsHTML = items.split('\\n').map(i => `<div>[✓] ${i}</div>`).join('');
+      document.getElementById('printLicenseTime').innerText = `พิมพ์เมื่อ: ${now.toLocaleDateString('th-TH')} ${now.toLocaleTimeString('th-TH')} น.`;
+      
+      // จัดการรายการเอกสาร (รองรับทั้ง \n และ Array)
+      const docArray = items.includes('\\n') ? items.split('\\n') : items.split('\n');
+      const itemsHTML = docArray.map(i => `<div style="margin-bottom:2px;">• ${i}</div>`).join('');
       document.getElementById('printLicenseItems').innerHTML = itemsHTML;
 
+      // เล่นเสียงแจ้งเตือน
       const audio = document.getElementById('queueSound');
-      if (audio) { audio.currentTime = 0; audio.play().catch(e => {}); }
+      if (audio) { audio.currentTime = 0; audio.play().catch(e => console.log("Audio play blocked")); }
 
+      // สั่งพิมพ์
       const wrapper = document.getElementById('ticketLicenseWrapper');
       wrapper.style.display = 'block';
       wrapper.classList.add('printing');
 
       setTimeout(() => {
-        window.print();
+        window.print(); // สั่งปริ้นออกทางเครื่องพิมพ์ 58mm
         setTimeout(() => {
           wrapper.classList.remove('printing');
           wrapper.style.display = 'none';
+          // กลับหน้าแรกหลังจากปริ้นเสร็จ
           if(typeof renderFAQButtons === "function") renderFAQButtons(); 
         }, 500);
       }, 300);
