@@ -235,35 +235,40 @@
 
     // --- [ ฟังก์ชันพิมพ์ใบนำทาง - แก้ไขให้ชิดซ้ายและใช้เครื่องหมายถูก ] ---
     function printLicenseNote(type, note, items) {
-      const now = new Date();
-      document.getElementById('printLicenseType').innerText = type;
-      document.getElementById('printLicenseNote').innerText = note;
-      document.getElementById('printLicenseTime').innerText = `เวลาพิมพ์: ${now.toLocaleString('th-TH')}`;
-      
-      const docArray = items.includes('\\n') ? items.split('\\n') : items.split('\n');
-      // ใช้ [ ✓ ] และกำหนดให้ชิดซ้าย
-      const itemsHTML = docArray
-        .filter(i => i.trim() !== "")
-        .map(i => `<div style="text-align: left;">[ ✓ ] ${i.trim()}</div>`)
-        .join('');
-      document.getElementById('printLicenseItems').innerHTML = itemsHTML;
+  const now = new Date();
+  document.getElementById('printLicenseType').innerText = type;
+  document.getElementById('printLicenseNote').innerText = note;
+  document.getElementById('printLicenseTime').innerText = `เวลาพิมพ์: ${now.toLocaleString('th-TH')}`;
+  
+  // แยกรายการเอกสาร
+  const docArray = items.includes('\\n') ? items.split('\\n') : items.split('\n');
+  
+  // สร้าง HTML: ใช้ [ ✓ ], ชิดซ้าย, และบังคับตัวหนา 900 (เข้มสุด)
+  const itemsHTML = docArray
+    .filter(i => i.trim() !== "") // กรองบรรทัดว่างออก
+    .map(i => `<div style="text-align: left !important; font-weight: 900 !important; color: #000 !important; margin-bottom: 4px;">[ ✓ ] ${i.trim()}</div>`)
+    .join('');
+    
+  document.getElementById('printLicenseItems').innerHTML = itemsHTML;
 
-      const audio = document.getElementById('queueSound');
-      if (audio) { audio.currentTime = 0; audio.play().catch(e => {}); }
+  // เล่นเสียงแจ้งเตือน
+  const audio = document.getElementById('queueSound');
+  if (audio) { audio.currentTime = 0; audio.play().catch(e => {}); }
 
-      const wrapper = document.getElementById('ticketLicenseWrapper');
-      wrapper.style.display = 'block';
-      wrapper.classList.add('printing');
+  // สั่งพิมพ์
+  const wrapper = document.getElementById('ticketLicenseWrapper');
+  wrapper.style.display = 'block';
+  wrapper.classList.add('printing');
 
-      setTimeout(() => {
-        window.print();
-        setTimeout(() => {
-          wrapper.classList.remove('printing');
-          wrapper.style.display = 'none';
-          if(typeof renderFAQButtons === "function") renderFAQButtons(); 
-        }, 500);
-      }, 300);
-    }
+  setTimeout(() => {
+    window.print();
+    setTimeout(() => {
+      wrapper.classList.remove('printing');
+      wrapper.style.display = 'none';
+      if(typeof renderFAQButtons === "function") renderFAQButtons(); 
+    }, 500);
+  }, 300);
+}
   </script>
 </body>
 </html>
