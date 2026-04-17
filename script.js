@@ -195,11 +195,26 @@ function showLicenseChecklist(type, expiry) {
 }
 
 function checkChecklist() {
+    // 1. ดึง Checkbox ทั้งหมด
     const checks = document.querySelectorAll('.doc-check');
+    // 2. หาปุ่มปริ้น
     const printBtn = document.getElementById('btnPrintGuide');
+    
+    // ถ้ายังหาปุ่มไม่เจอ (เพราะ HTML ยังโหลดไม่เสร็จ) ให้จบการทำงานก่อน
     if (!printBtn) return;
+
+    // 3. ตรวจสอบว่าติ๊กครบทุกช่องหรือยัง
     const allChecked = checks.length > 0 && Array.from(checks).every(c => c.checked);
-    printBtn.style.display = allChecked ? 'block' : 'none';
+    
+    if (allChecked) {
+        // ✅ ติ๊กครบ: บังคับให้ปุ่มแสดงตัว (ใช้ทั้ง Class และ Style Direct)
+        printBtn.classList.add('show-btn');
+        printBtn.style.setProperty('display', 'block', 'important');
+    } else {
+        // ❌ ติ๊กไม่ครบ: สั่งซ่อน
+        printBtn.classList.remove('show-btn');
+        printBtn.style.setProperty('display', 'none', 'important');
+    }
 }
 
 // --- 4. ระบบ Search (Smart Logic จาก COCO) ---
