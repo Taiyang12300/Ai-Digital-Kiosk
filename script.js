@@ -202,25 +202,12 @@ function checkChecklist() {
     // ตรวจสอบว่า checkbox ทุกอันถูกติ๊กหรือยัง
     const allChecked = checks.length > 0 && Array.from(checks).every(c => c.checked);
     
-    // ใช้ classList แทนการเขียน style ตรงๆ จะเสถียรกว่ามากครับพี่
+    // ใช้ classList.add('show-btn') เพื่อให้ทำงานร่วมกับ CSS ใน Index ได้แม่นยำครับ
     if (allChecked) {
         printBtn.classList.add('show-btn');
     } else {
         printBtn.classList.remove('show-btn');
     }
-}
-
-// ฟังก์ชันสำคัญ: ตรวจสอบการติ๊กเพื่อแสดง/ซ่อนปุ่มปริ้น
-function checkChecklist() {
-    const checks = document.querySelectorAll('.doc-check');
-    const printBtn = document.getElementById('btnPrintGuide');
-    if (!printBtn) return;
-    
-    // ตรวจสอบว่า checkbox ทุกอันถูกติ๊กหรือยัง
-    const allChecked = Array.from(checks).every(c => c.checked);
-    
-    // ถ้าติ๊กครบให้แสดงปุ่ม (block) ถ้าไม่ครบให้ซ่อน (none)
-    printBtn.style.display = allChecked ? "block" : "none";
 }
 
 // --- 5. ระบบค้นหาและจัดการคำถาม ---
