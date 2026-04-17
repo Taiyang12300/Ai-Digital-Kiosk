@@ -67,15 +67,61 @@
     }
     #btnPrintGuide.show-btn { display: block !important; } /* แสดงเมื่อติ๊กครบ */
 
-    /* --- ระบบพิมพ์ (Ticket 58mm) --- */
-    .ticket { background: white; color: black; width: 58mm; padding: 6px; margin: 0 auto; font-size: 13px; line-height: 1.3; text-align: center; font-family: 'Kanit', sans-serif; }
-    .ticket .big { font-size: 28px; font-weight: 800; margin: 4px 0; }
+        /* --- ระบบพิมพ์ (Ticket 58mm) จัดกลาง + เข้มพิเศษ --- */
+    .ticket { 
+        background: white; 
+        color: black; 
+        width: 58mm; 
+        padding: 5px; 
+        margin: 0 auto; 
+        font-family: 'Kanit', sans-serif; 
+        text-align: center; /* จัดกึ่งกลางทั้งหมด */
+        font-weight: bold;  /* ตัวหนาทั้งหมด */
+    }
+
+    /* บังคับให้ทุกตัวอักษรในตั๋วเป็นตัวเข้ม */
+    .ticket * { 
+        font-weight: 800 !important; 
+        text-align: center !important; 
+    }
+
+    .ticket .big { 
+        font-size: 26px; 
+        margin: 8px 0; 
+        line-height: 1.1;
+        display: block;
+    }
+
+    #printLicenseItems {
+        margin: 10px 0;
+        font-size: 14px;
+        line-height: 1.5;
+        display: block;
+        width: 100%;
+    }
+
+    #printLicenseItems div {
+        margin-bottom: 5px;
+        width: 100%;
+    }
 
     @media print {
       @page { size: auto; margin: 0; }
       body * { visibility: hidden !important; display: none !important; }
-      #ticketLicenseWrapper.printing, #ticketLicenseWrapper.printing * { visibility: visible !important; display: block !important; }
-      .ticket { position: absolute; top: 0; left: 0; width: 58mm; margin: 0; padding: 6px; }
+      #ticketLicenseWrapper.printing, #ticketLicenseWrapper.printing * { 
+          visibility: visible !important; 
+          display: block !important; 
+      }
+      .ticket { 
+          position: absolute; 
+          top: 0; 
+          left: 0; 
+          width: 58mm; 
+          margin: 0; 
+          padding: 5px; 
+      }
+    }
+
     }
   </style>
 </head>
