@@ -1,6 +1,6 @@
 /**
  * 🚀 สมองกลน้องนำทาง - Ultimate Hybrid Version (Deep Mic Reset Edition)
- * แก้ไข: ระบบจัดการสิทธิ์ไมโครโฟน เพื่อป้องกันไมค์ตีกันในเมนูใบขับขี่
+ * แก้ไข: ป้องกันไมค์ตีกันในระบบใบขับขี่ และเพิ่มความเสถียรในการสลับโหมดไมค์
  */
 
 window.localDatabase = null;
@@ -25,13 +25,13 @@ const DETECTION_INTERVAL = 200;
 let wakeWordRecognition;
 let isWakeWordActive = false;
 
-// --- 🚩 ฟังก์ชันใหม่: หยุดไมค์ทั้งหมดเพื่อป้องกันการแย่งสิทธิ์ ---
+// --- 🚩 เพิ่มฟังก์ชันกลาง: เคลียร์สิทธิ์ไมโครโฟนทั้งหมด ---
 function forceStopAllMic() {
     isWakeWordActive = false;
     if (wakeWordRecognition) {
         try { wakeWordRecognition.abort(); } catch(e) {}
     }
-    // ตรวจสอบหากมีการใช้ไมค์หลัก (toggleListening) ให้หยุดด้วย
+    // หยุดการฟังหลักหากมี Instance ค้างอยู่
     if (window.recognition) {
         try { window.recognition.abort(); } catch(e) {}
     }
@@ -62,7 +62,7 @@ function setupWakeWord() {
         console.log("👂 WakeWord Detected:", text);
 
         if (text.includes("น้องนำทาง") || text.includes("สวัสดีน้องนำทาง")) {
-            stopWakeWord();
+            stopWakeWord(); 
 
             const responses = window.currentLang === 'th' 
                 ? ["ครับผม", "ครับ มีอะไรให้ช่วยไหมครับ", "สวัสดีครับ สอบถามข้อมูลได้เลยครับ"]
@@ -93,7 +93,7 @@ function setupWakeWord() {
 
 async function handleMicButtonClick() {
     console.log("🖱️ [Manual] Force Unlocking Mic...");
-    forceStopAllMic(); // 🚩 ใช้ฟังก์ชันล้างสิทธิ์ไมค์
+    forceStopAllMic(); // 🚩 เคลียร์สิทธิ์ก่อนเริ่มใหม่
     
     window.speechSynthesis.cancel(); 
     if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
@@ -122,7 +122,7 @@ function stopWakeWord() {
     isWakeWordActive = false; 
     if (!wakeWordRecognition) return;
     try {
-        wakeWordRecognition.abort();
+        wakeWordRecognition.abort(); 
         console.log("🔇 [System] Wake Word Stopped");
     } catch (e) {}
 }
@@ -246,6 +246,12 @@ function greetUser() {
         `${timeGreet} ต้องการให้น้องช่วยเรื่องอะไรมั้ยครับ`
     ];
     
+    const greetingsEn = [
+        `${timeGreet}, ${personType}! You can call my name to ask anything.`,
+        `Welcome! I'm Nong Nam Thang. Just call my name.`,
+        `Hello! Feel free to call "Nong Nam Thang" for assistance.`
+    ];
+
     const list = isThai ? greetingsTh : greetingsEn;
     const finalGreet = list[Math.floor(Math.random() * list.length)];
 
@@ -256,17 +262,17 @@ function greetUser() {
     });
 }
 
-// --- 3. ระบบคัดกรองใบขับขี่ & 4. Search ---
+// --- 🚩 3. ระบบคัดกรองใบขับขี่ (แก้ไขให้เสถียร ไม่ตีกับไมค์) ---
 
 function startLicenseCheck(type) {
-    forceStopAllMic(); // 🚩 เคลียร์ไมค์ก่อนเริ่มชุดคำถามใหม่
+    forceStopAllMic(); // หยุดไมค์แอบฟังก่อนเริ่มถาม
     isAtHome = false;
     const isThai = window.currentLang === 'th';
     const msg = isThai ? `ใบขับขี่ ${type} ของท่าน หมดอายุหรือยังครับ?` : `Is your ${type} license expired?`;
     displayResponse(msg);
     
     speak(msg, () => {
-        window.isBusy = false; // พูดจบแล้วปลดล็อคสถานะแต่ไม่เปิดไมค์เอง
+        window.isBusy = false; // ปลดล็อคสถานะเมื่อพูดจบ แต่ไม่ต้องแอบฟัง (รอคนกดปุ่ม)
     });
 
     renderOptionButtons([
@@ -302,13 +308,12 @@ function showLicenseChecklist(type, expiry) {
     });
 
     const resultHTML = `<div class="checklist-card"><strong style="font-size:22px;">${type}</strong><br><div style="background:#e8f0fe; color:#1a73e8; padding:8px; border-radius:5px; margin-top:5px; font-weight:bold;">💡 ${note}</div><hr style="margin:15px 0; border:0; border-top:1px solid #eee;">${checklistHTML}<button id="btnPrintGuide" style="display:none;" onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}'); setTimeout(() => { resetToHome(); }, 2000);">🖨️ ปริ้นใบนำทาง</button></div>`;
-    
     displayResponse(resultHTML);
     speak(isThai ? "กรุณาติ๊กตรวจสอบเอกสารให้ครบ เพื่อปริ้นใบนำทางครับ" : "Please check all items to print.");
 }
 
 function checkChecklist() {
-    updateInteractionTime(); // รีเซ็ตเวลาเพื่อป้องกันหน้า Home เด้งแทรก
+    updateInteractionTime(); // กันหน้า Home เด้งแทรก
     const checks = document.querySelectorAll('.doc-check');
     const printBtn = document.getElementById('btnPrintGuide');
     if (!printBtn) return;
@@ -329,12 +334,12 @@ async function getResponse(userQuery) {
     const query = userQuery.toLowerCase().trim();
     if ((query.includes("ใบขับขี่") || query.includes("license")) && (query.includes("ต่อ") || query.includes("renew"))) {
         if (!query.includes("ชั่วคราว") && !query.includes("5 ปี")) {
-            forceStopAllMic(); // 🚩 หยุดไมค์ก่อนเข้าสู่โหมดเลือกประเภท
+            forceStopAllMic(); // 🚩 หยุดไมค์ทันทีเมื่อเข้าโหมดเมนู
             const askMsg = (window.currentLang === 'th') ? "ใบขับขี่ของท่านเป็นแบบชั่วคราว หรือแบบ 5 ปีครับ?" : "Is it Temporary or 5-year?";
             displayResponse(askMsg); 
             
             speak(askMsg, () => {
-                window.isBusy = false; // ปลดล็อคสถานะแต่ไม่เปิดไมค์ซ้ำ
+                window.isBusy = false; // พูดจบปลดล็อคสถานะรอคลิก
             });
 
             renderOptionButtons([
@@ -374,7 +379,7 @@ async function getResponse(userQuery) {
 function speak(text, callback = null) {
     if (!text || window.isMuted) return;
     
-    stopWakeWord();
+    stopWakeWord(); 
     window.speechSynthesis.cancel();
 
     const safetyTime = (text.length * 200) + 5000;
@@ -410,7 +415,7 @@ function speak(text, callback = null) {
         if (callback) {
             callback();
         } else if (personInFrameTime !== null) {
-            // 🚩 ตรวจสอบสิทธิ์ไมค์ก่อนเปิด Wake Word อีกครั้ง
+            // 🚩 เช็คก่อนเปิด Wake Word ว่ามีการเปิดไมค์หลักอยู่หรือไม่
             const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
             if (!isListeningNow) {
                 setTimeout(startWakeWord, 500); 
