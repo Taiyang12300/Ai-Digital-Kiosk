@@ -86,17 +86,17 @@ function setupWakeWord() {
     wakeWordRecognition.lang = 'th-TH';
 
     wakeWordRecognition.onresult = (event) => {
-        const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
-        if (window.isBusy || isListeningNow) return;
+    // ตรวจสอบทั้งตัวแปร Global และสถานะ Busy
+    const isMainMicListening = window.isListening || false; 
+    if (window.isBusy || isMainMicListening) return;
 
-        const lastResultIndex = event.results.length - 1;
-        const text = event.results[lastResultIndex][0].transcript.trim().toLowerCase();
-        
-        // 🚩 ตรวจสอบคีย์เวิร์ดอย่างเคร่งครัด
-        const isKeyword = text.includes("น้องนำทาง") || text.includes("สวัสดีน้องนำทาง");
-        
-        if (isKeyword) {
-            console.log("👂 WakeWord Detected:", text);
+    const lastResultIndex = event.results.length - 1;
+    const text = event.results[lastResultIndex][0].transcript.trim().toLowerCase();
+    
+    const isKeyword = text.includes("น้องนำทาง") || text.includes("สวัสดีน้องนำทาง");
+    
+    if (isKeyword) {
+        console.log("✅ [Authorized] WakeWord Correct!");
             stopWakeWord(); 
 
             const responses = window.currentLang === 'th' 
