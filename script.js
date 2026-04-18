@@ -325,12 +325,14 @@ async function getResponse(userQuery) {
     if ((query.includes("ใบขับขี่") || query.includes("license")) && (query.includes("ต่อ") || query.includes("renew"))) {
         if (!query.includes("ชั่วคราว") && !query.includes("5 ปี")) {
             const askMsg = (window.currentLang === 'th') ? "ใบขับขี่ของท่านเป็นแบบชั่วคราว หรือแบบ 5 ปีครับ?" : "Is it Temporary or 5-year?";
-            displayResponse(askMsg); speak(askMsg);
+            displayResponse(askMsg); 
+            speak(askMsg);
             renderOptionButtons([
                 { th: "แบบชั่วคราว (2 ปี)", en: "Temporary (2 years)", action: () => startLicenseCheck("แบบชั่วคราว (2 ปี)") },
                 { th: "แบบ 5 ปี", en: "5-year type", action: () => startLicenseCheck("แบบ 5 ปี") }
             ]);
-            window.isBusy = false; return;
+            window.isBusy = false; // 🚩 แก้ไข: ปลดล็อคสถานะทันทีเพื่อให้กดปุ่มตัวเลือกได้
+            return;
         }
     }
 
@@ -419,7 +421,11 @@ function renderFAQButtons() {
         const qText = (window.currentLang === 'th') ? row[0] : row[1];
         if (qText) {
             const btn = document.createElement('button'); btn.className = 'faq-btn'; btn.innerText = qText;
-            btn.onclick = () => { stopAllSpeech(); getResponse(qText); };
+            btn.onclick = () => { 
+                stopAllSpeech(); 
+                window.isBusy = false; // 🚩 แก้ไข: มั่นใจว่าสถานะไม่ค้าง
+                getResponse(qText); 
+            };
             container.appendChild(btn);
         }
     });
@@ -431,7 +437,11 @@ function renderOptionButtons(options) {
     options.forEach(opt => {
         const btn = document.createElement('button'); btn.className = 'faq-btn'; btn.style.border = "2px solid #6c5ce7";
         btn.innerText = (window.currentLang === 'th' ? opt.th : opt.en);
-        btn.onclick = () => { stopAllSpeech(); if (opt.action) opt.action(); };
+        btn.onclick = () => { 
+            stopAllSpeech(); 
+            window.isBusy = false; // 🚩 แก้ไข: ปลดล็อคสถานะเมื่อมีการคลิกปุ่มตัวเลือก
+            if (opt.action) opt.action(); 
+        };
         container.appendChild(btn);
     });
 }
