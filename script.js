@@ -1,6 +1,6 @@
 /**
  * 🚀 สมองกลน้องนำทาง - Ultimate Hybrid Version (Deep Mic Reset Edition)
- * แก้ไข: ป้องกันไมค์ตีกันในระบบใบขับขี่ และเพิ่มความเสถียรในการสลับโหมดไมค์
+ * แก้ไข: ระบบกรอง Wake Word และรองรับการเล่นเสียงผ่านลิงก์ไม่ให้ขัดจังหวะ
  */
 
 window.localDatabase = null;
@@ -25,20 +25,52 @@ const DETECTION_INTERVAL = 200;
 let wakeWordRecognition;
 let isWakeWordActive = false;
 
-// --- 🚩 เพิ่มฟังก์ชันกลาง: เคลียร์สิทธิ์ไมโครโฟนทั้งหมด ---
+// --- 🚩 ฟังก์ชันกลางสำหรับจัดการสิทธิ์และการเล่นเสียง ---
+
 function forceStopAllMic() {
     isWakeWordActive = false;
     if (wakeWordRecognition) {
         try { wakeWordRecognition.abort(); } catch(e) {}
     }
-    // หยุดการฟังหลักหากมี Instance ค้างอยู่
     if (window.recognition) {
         try { window.recognition.abort(); } catch(e) {}
     }
     console.log("🛑 [System] All Microphones Released.");
 }
 
-// --- 1. ระบบจัดการสถานะ & Wake Word Setup ---
+// 🚩 ฟังก์ชันเล่นเสียงผ่านลิงก์ (แก้ปัญหาโดนขัดจังหวะ)
+function playAudioLink(url, callback = null) {
+    if (!url) return;
+    
+    stopAllSpeech(); 
+    forceStopAllMic(); 
+    
+    window.isBusy = true;
+    updateLottie('talking');
+    
+    const audio = new Audio(url);
+    
+    audio.onended = () => {
+        window.isBusy = false;
+        updateLottie('idle');
+        updateInteractionTime();
+        if (callback) callback();
+        else if (personInFrameTime !== null) setTimeout(startWakeWord, 500);
+    };
+
+    audio.onerror = () => {
+        window.isBusy = false;
+        updateLottie('idle');
+        console.error("❌ Audio link error");
+    };
+
+    audio.play().catch(e => {
+        window.isBusy = false;
+        console.error("Play blocked:", e);
+    });
+}
+
+// --- 1. ระบบจัดการสถานะ & Wake Word Setup (แก้ไขความแม่นยำ) ---
 
 function setupWakeWord() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -59,9 +91,12 @@ function setupWakeWord() {
 
         const lastResultIndex = event.results.length - 1;
         const text = event.results[lastResultIndex][0].transcript.trim().toLowerCase();
-        console.log("👂 WakeWord Detected:", text);
-
-        if (text.includes("น้องนำทาง") || text.includes("สวัสดีน้องนำทาง")) {
+        
+        // 🚩 ตรวจสอบคีย์เวิร์ดอย่างเคร่งครัด
+        const isKeyword = text.includes("น้องนำทาง") || text.includes("สวัสดีน้องนำทาง");
+        
+        if (isKeyword) {
+            console.log("👂 WakeWord Detected:", text);
             stopWakeWord(); 
 
             const responses = window.currentLang === 'th' 
@@ -75,11 +110,12 @@ function setupWakeWord() {
                 window.isBusy = false; 
                 setTimeout(() => {
                     if (typeof toggleListening === "function") {
-                        console.log("🎤 [Auto] Triggering Main Mic...");
                         toggleListening(); 
                     }
                 }, 200);
             });
+        } else {
+            console.log("🚫 [Ignored]:", text); // ไม่ใช่คีย์เวิร์ด ไม่ต้องทำงาน
         }
     };
 
@@ -93,8 +129,7 @@ function setupWakeWord() {
 
 async function handleMicButtonClick() {
     console.log("🖱️ [Manual] Force Unlocking Mic...");
-    forceStopAllMic(); // 🚩 เคลียร์สิทธิ์ก่อนเริ่มใหม่
-    
+    forceStopAllMic(); 
     window.speechSynthesis.cancel(); 
     if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
     window.isBusy = false; 
@@ -262,17 +297,17 @@ function greetUser() {
     });
 }
 
-// --- 🚩 3. ระบบคัดกรองใบขับขี่ (แก้ไขให้เสถียร ไม่ตีกับไมค์) ---
+// --- 🚩 3. ระบบคัดกรองใบขับขี่ ---
 
 function startLicenseCheck(type) {
-    forceStopAllMic(); // หยุดไมค์แอบฟังก่อนเริ่มถาม
+    forceStopAllMic(); 
     isAtHome = false;
     const isThai = window.currentLang === 'th';
     const msg = isThai ? `ใบขับขี่ ${type} ของท่าน หมดอายุหรือยังครับ?` : `Is your ${type} license expired?`;
     displayResponse(msg);
     
     speak(msg, () => {
-        window.isBusy = false; // ปลดล็อคสถานะเมื่อพูดจบ แต่ไม่ต้องแอบฟัง (รอคนกดปุ่ม)
+        window.isBusy = false; 
     });
 
     renderOptionButtons([
@@ -313,7 +348,7 @@ function showLicenseChecklist(type, expiry) {
 }
 
 function checkChecklist() {
-    updateInteractionTime(); // กันหน้า Home เด้งแทรก
+    updateInteractionTime(); 
     const checks = document.querySelectorAll('.doc-check');
     const printBtn = document.getElementById('btnPrintGuide');
     if (!printBtn) return;
@@ -334,12 +369,12 @@ async function getResponse(userQuery) {
     const query = userQuery.toLowerCase().trim();
     if ((query.includes("ใบขับขี่") || query.includes("license")) && (query.includes("ต่อ") || query.includes("renew"))) {
         if (!query.includes("ชั่วคราว") && !query.includes("5 ปี")) {
-            forceStopAllMic(); // 🚩 หยุดไมค์ทันทีเมื่อเข้าโหมดเมนู
+            forceStopAllMic(); 
             const askMsg = (window.currentLang === 'th') ? "ใบขับขี่ของท่านเป็นแบบชั่วคราว หรือแบบ 5 ปีครับ?" : "Is it Temporary or 5-year?";
             displayResponse(askMsg); 
             
             speak(askMsg, () => {
-                window.isBusy = false; // พูดจบปลดล็อคสถานะรอคลิก
+                window.isBusy = false; 
             });
 
             renderOptionButtons([
@@ -415,7 +450,6 @@ function speak(text, callback = null) {
         if (callback) {
             callback();
         } else if (personInFrameTime !== null) {
-            // 🚩 เช็คก่อนเปิด Wake Word ว่ามีการเปิดไมค์หลักอยู่หรือไม่
             const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
             if (!isListeningNow) {
                 setTimeout(startWakeWord, 500); 
