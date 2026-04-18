@@ -66,41 +66,40 @@ function setupWakeWord() {
 
     wakeWordRecognition = new SpeechRecognition();
     wakeWordRecognition.continuous = true; 
-    wakeWordRecognition.interimResults = false;
+    // 🚩 ปรับเป็น true เพื่อให้เจอ Keyword ปุ๊บ ทำงานปั๊บ ไม่ต้องรอคนพูดจนจบประโยคยาวๆ
+    wakeWordRecognition.interimResults = true; 
     wakeWordRecognition.lang = 'th-TH';
 
-        wakeWordRecognition.onresult = (event) => {
+    wakeWordRecognition.onresult = (event) => {
         const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
         if (!window.allowWakeWord || window.isBusy || isListeningNow) return;
 
-        const lastResultIndex = event.results.length - 1;
-        const text = event.results[lastResultIndex][0].transcript.trim();
+        let transcript = "";
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+            transcript += event.results[i][0].transcript;
+        }
 
-        // ตรวจสอบ Keyword
-        if (text.includes("น้องนำทาง") || text.includes("สวัสดีน้องนำทาง") || text.includes("นำทาง")) {
+        // 🚩 ตรวจสอบ Keyword (เน้นคำว่า นำทาง)
+        if (transcript.includes("น้องนำทาง") || transcript.includes("นำทาง")) {
+            console.log("🎯 Keyword Matched!");
+            
             isWakeWordActive = false; 
             window.isBusy = true;
             forceStopAllMic(); 
 
+            // 🚩 สุ่มคำตอบรับให้น้องนำทางดูมีชีวิตชีวาและนอบน้อม
             let msg = "";
             if (window.currentLang === 'th') {
-                // 🚩 สุ่มคำตอบรับแบบผสม (เพื่อความหลากหลายสูงสุด)
                 const affirmations = ["ครับผม", "สวัสดีครับ", "น้องนำทางมาแล้วครับ", "ครับท่าน"];
-                const questions = ["มีอะไรให้น้องนำทางช่วยไหมครับ?", "ต้องการสอบถามข้อมูลด้านไหนดีครับ?", "บอกน้องนำทางได้เลยนะครับ", "ให้น้องนำทางช่วยอะไรดีครับ?"];
+                const questions = ["มีอะไรให้น้องนำทางช่วยไหมครับ?", "สอบถามข้อมูลได้เลยนะครับ", "ให้น้องนำทางช่วยเรื่องไหนดีครับ?"];
                 
                 const randomAff = affirmations[Math.floor(Math.random() * affirmations.length)];
                 const randomQue = questions[Math.floor(Math.random() * questions.length)];
                 
-                // สุ่มว่าจะตอบแค่คำรับ หรือตอบแบบรับ+ถามต่อ
-                const patterns = [
-                    `${randomAff}... ${randomQue}`,
-                    `${randomAff}ครับ... ${randomQue}`,
-                    `${randomAff}`
-                ];
-                msg = patterns[Math.floor(Math.random() * patterns.length)];
+                // ผสมคำตอบรับกับคำถาม
+                msg = `${randomAff}... ${randomQue}`;
             } else {
-                const responsesEn = ["Yes!", "How can I help you?", "Hello! I'm listening.", "Yes, Sir!"];
-                msg = responsesEn[Math.floor(Math.random() * responsesEn.length)];
+                msg = "Yes! How can I help you?";
             }
             
             displayResponse(msg);
@@ -108,25 +107,31 @@ function setupWakeWord() {
             speak(msg, () => {
                 window.isBusy = false; 
                 setTimeout(() => { 
-                    if (typeof toggleListening === "function") {
-                        toggleListening(); 
-                    }
-                }, 400);
+                    if (typeof toggleListening === "function") toggleListening(); 
+                }, 300);
             });
         }
     };
 
     wakeWordRecognition.onend = () => {
-        // 🚩 จุดที่ไมค์ชอบเปิด-ปิดเอง: แก้โดยเช็คสถานะ Active ให้เด็ดขาด
-        setTimeout(() => {
-            const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
-            if (window.allowWakeWord && isWakeWordActive && !window.isBusy && !isListeningNow && personInFrameTime !== null) {
+        // 🚩 ถ้าไมค์ตัดอัตโนมัติจากเบราว์เซอร์ ให้รีบเปิดใหม่ทันทีถ้าสถานะยังพร้อม
+        if (window.allowWakeWord && isWakeWordActive && !window.isBusy && !isListening && personInFrameTime !== null) {
+            setTimeout(() => {
                 try { 
-                    wakeWordRecognition.start(); 
-                    console.log("🔄 [System] WakeWord re-synced.");
+                    // เช็คซ้ำอีกรอบก่อน start เพื่อความชัวร์
+                    if (!window.isBusy) {
+                        wakeWordRecognition.start(); 
+                        console.log("🔄 [System] Mic stand-by.");
+                    }
                 } catch(e) { isWakeWordActive = false; }
-            }
-        }, 1000); 
+            }, 500); // ลดเวลาลงเพื่อให้ไมค์กลับมาทำงานต่อเนื่องที่สุด
+        }
+    };
+
+    // 🚩 กรณี Error ให้เงียบไว้ หรือแค่ Log ลง Console ไม่ต้องให้น้องบ่นเรื่องระบบ
+    wakeWordRecognition.onerror = (event) => {
+        console.error("🎤 Mic Error Detail:", event.error);
+        isWakeWordActive = false;
     };
 }
 
