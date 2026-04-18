@@ -65,7 +65,6 @@ function setupWakeWord() {
     if (wakeWordRecognition) { try { wakeWordRecognition.abort(); } catch(e) {} }
 
     wakeWordRecognition = new SpeechRecognition();
-    // 🚩 ปรับเป็น true เพื่อให้ฟังต่อเนื่อง ไม่ปิดตัวเองเมื่อเจอเสียงแทรก
     wakeWordRecognition.continuous = true; 
     wakeWordRecognition.interimResults = false;
     wakeWordRecognition.lang = 'th-TH';
@@ -76,40 +75,42 @@ function setupWakeWord() {
 
         const lastResultIndex = event.results.length - 1;
         const text = event.results[lastResultIndex][0].transcript.trim();
-        
-        console.log("👂 Heard:", text); // ไว้ดูใน Console ว่าไมค์ได้ยินคำว่าอะไร
 
-        // 🚩 คัดกรองคำที่ดังเข้าไมค์: ต้องมีคำสำคัญถึงจะทำงาน
         if (text.includes("น้องนำทาง") || text.includes("สวัสดีน้องนำทาง") || text.includes("นำทาง")) {
-            console.log("🎯 Keyword Matched!");
-            forceStopAllMic(); // เจอคำที่ถูกต้อง "ค่อยสั่งปิดไมค์" เพื่อสลับไปฟังคำถาม
+            // 🚩 สั่งหยุดสถานะดักฟังทันที เพื่อป้องกัน onend ทำงานซ้อน
+            isWakeWordActive = false; 
             window.isBusy = true;
-            
+            forceStopAllMic(); 
+
             const responses = window.currentLang === 'th' ? ["ครับผม", "สวัสดีครับ มีอะไรให้น้องช่วยไหมครับ"] : ["Yes!", "Hello!"];
             const msg = responses[Math.floor(Math.random() * responses.length)];
             
             displayResponse(msg);
+            
+            // พูดตอบรับ และส่งต่อให้ toggleListening (ตัวรับคำถามหลัก)
             speak(msg, () => {
                 window.isBusy = false; 
-                setTimeout(() => { if (typeof toggleListening === "function") toggleListening(); }, 200);
+                // หน่วงเวลาเล็กน้อยเพื่อให้เสียงพูดจบสนิทจริงๆ ก่อนเริ่มฟังคำถาม
+                setTimeout(() => { 
+                    if (typeof toggleListening === "function") {
+                        toggleListening(); 
+                    }
+                }, 400);
             });
-        } else {
-            // ถ้าเสียงที่เข้าไมค์ไม่ใช่ Keyword ให้ปล่อยผ่านไปเฉยๆ ไม่ต้องสั่ง Restart ไมค์
-            console.log("🍃 Noise ignored.");
         }
     };
 
     wakeWordRecognition.onend = () => {
-        // Restart เฉพาะตอนที่ไมค์หลุดจริงๆ (เช่น หมดเวลาของเบราว์เซอร์) 
-        // และต้องไม่อยู่ในขณะที่ "น้องกำลังพูด"
+        // 🚩 จุดที่ไมค์ชอบเปิด-ปิดเอง: แก้โดยเช็คสถานะ Active ให้เด็ดขาด
         setTimeout(() => {
-            if (window.allowWakeWord && isWakeWordActive && !window.isBusy && personInFrameTime !== null) {
+            const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
+            if (window.allowWakeWord && isWakeWordActive && !window.isBusy && !isListeningNow && personInFrameTime !== null) {
                 try { 
                     wakeWordRecognition.start(); 
-                    console.log("🔄 [System] Mic re-synced.");
-                } catch(e) {}
+                    console.log("🔄 [System] WakeWord re-synced.");
+                } catch(e) { isWakeWordActive = false; }
             }
-        }, 1000);
+        }, 1000); 
     };
 }
 
@@ -380,49 +381,38 @@ async function getResponse(userQuery) {
 function speak(text, callback = null) {
     if (!text || window.isMuted) return;
     
-    forceStopAllMic(); // 🚩 1. สั่งหยุดไมค์ทันทีที่เริ่มพูด
+    // 🚩 ก่อนพูดต้องสั่งหยุดไมค์ทุกชนิด และเคลียร์สถานะ Active
+    isWakeWordActive = false; 
+    forceStopAllMic(); 
+    
     window.speechSynthesis.cancel();
     window.isBusy = true;
-    
-    const safetyTime = (text.length * 200) + 5000;
-    if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
-    speechSafetyTimeout = setTimeout(() => { 
-        if (window.isBusy) { 
-            window.isBusy = false; 
-            updateLottie('idle'); 
-            if (callback) callback(); 
-        } 
-    }, safetyTime);
 
-    let cleanText = text.replace(/Queue/gi, "คิว").replace(/DLT/gi, "ดีแอลที").replace(/Smart/gi, "สมาร์ท");
-    const msg = new SpeechSynthesisUtterance(cleanText.replace(/<[^>]*>?/gm, '').replace(/[*#-]/g, ""));
-    const voices = window.speechSynthesis.getVoices();
-    
-    if (window.currentLang === 'th') {
-        msg.lang = 'th-TH';
-        const googleThai = voices.find(v => v.name.includes('Google') && v.lang.includes('th'));
-        if (googleThai) msg.voice = googleThai;
-    }
-    
+    const msg = new SpeechSynthesisUtterance(text.replace(/<[^>]*>?/gm, '').replace(/[*#-]/g, ""));
+    msg.lang = 'th-TH';
     msg.rate = 1.05;
+    
     msg.onstart = () => { updateLottie('talking'); };
     
     msg.onend = () => { 
         if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
         window.isBusy = false; 
         updateLottie('idle'); 
-        updateInteractionTime(); 
 
         if (callback) callback();
 
-        // 🚩 2. ตัดสินใจเปิดไมค์หลังจากพูดจบ และตรวจสอบเงื่อนไขความปลอดภัย
+        // 🚩 หัวใจสำคัญ: เปิดไมค์เฉพาะเมื่อ "ไม่ยุ่ง" และ "ไม่ใช่หน้าโฮม"
+        // และต้องไม่อยู่ในระหว่างโหมดฟังคำถาม (toggleListening)
         if (window.allowWakeWord && !isAtHome && !window.isBusy) {
             const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
-            if (!isListeningNow) { 
+            if (!isListeningNow) {
                 setTimeout(() => {
-                    startWakeWord();
-                    console.log("🎤 [System] Speech finished, Mic Standby.");
-                }, 800); 
+                    // ตรวจสอบความปลอดภัยอีกครั้งก่อนรัน
+                    if (!window.isBusy && !isWakeWordActive) {
+                        isWakeWordActive = true;
+                        startWakeWord();
+                    }
+                }, 1200); // หน่วงเวลา 1.2 วินาที กันเสียงสะท้อนจากลำโพง
             }
         }
     };
