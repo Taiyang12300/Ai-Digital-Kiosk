@@ -396,7 +396,6 @@ async function getResponse(userQuery) {
 // --- 5. ระบบเสียง (Google Voice) ---
 
 function speak(text, callback = null) {
-function speak(text, callback = null) {
     if (!text || window.isMuted) return;
     
     isTransitioning = true; // 🚩 ล็อกจังหวะทันทีที่เริ่มพูด
@@ -409,7 +408,7 @@ function speak(text, callback = null) {
     speechSafetyTimeout = setTimeout(() => { 
         if (window.isBusy) { 
             window.isBusy = false; 
-            isTransitioning = false; // ปลดล็อก
+            isTransitioning = false; 
             updateLottie('idle'); 
             if (callback) callback(); 
         } 
@@ -436,19 +435,18 @@ function speak(text, callback = null) {
 
         if (callback) callback();
 
-        // 🚩 แก้ไข: เพิ่ม Delay 1 วินาที และเช็คตัวล็อกก่อนเปิดไมค์
         setTimeout(() => {
             if (window.allowWakeWord && !isAtHome && !window.isBusy) {
                 const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
                 if (!isListeningNow) { 
-                    isTransitioning = false; // 🚩 ปลดล็อกก่อนเริ่ม
+                    isTransitioning = false; 
                     startWakeWord();
                     console.log("🎤 [System] Mic safety delay finished. Standby...");
                 }
             } else {
                 isTransitioning = false;
             }
-        }, 1000); // 💡 รอ 1 วินาทีให้ Chrome เคลียร์ Process เสียงให้จบ
+        }, 1000); 
     };
     window.speechSynthesis.speak(msg);
 }
