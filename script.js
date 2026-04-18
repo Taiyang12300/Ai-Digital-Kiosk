@@ -1,6 +1,6 @@
 /**
  * 🚀 สมองกลน้องนำทาง - Ultimate Hybrid Version (Legacy Search Logic & Deep Mic Reset)
- * ปรับปรุง: นำระบบคำนวณคะแนนที่แม่นยำ (Token Score + Year Bonus) กลับมาใช้
+ * แก้ไข: การเปิด-ปิดไมค์ให้สัมพันธ์กับสถานะการพูด (Speak = Stop / End = Start)
  */
 
 window.localDatabase = null;
@@ -25,7 +25,6 @@ const DETECTION_INTERVAL = 200;
 
 let wakeWordRecognition;
 let isWakeWordActive = false;
-let isTransitioning = false;
 
 // --- 🚩 ฟังก์ชันกลางสำหรับจัดการสิทธิ์และการเล่นเสียง ---
 
@@ -72,60 +71,47 @@ function setupWakeWord() {
 
     wakeWordRecognition.onresult = (event) => {
         const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
-        // ป้องกันการรับคำสั่งซ้อนถ้ากำลังยุ่งหรือปิดไมค์อยู่
+        // 🚩 แก้ไข: เพิ่มการเช็ค isBusy เพื่อไม่ให้ทำงานแทรกขณะพูด
         if (!window.allowWakeWord || window.isBusy || isListeningNow) return;
-
+        
         const lastResultIndex = event.results.length - 1;
         const text = event.results[lastResultIndex][0].transcript.trim();
-
         if (text.includes("น้องนำทาง") || text.includes("สวัสดีน้องนำทาง")) {
-            stopWakeWord(); // หยุดตัวดักฟังทันที
+            forceStopAllMic(); // หยุดดักฟังทันทีที่เจอ Keyword
             window.isBusy = true;
             const responses = window.currentLang === 'th' ? ["ครับผม", "สวัสดีครับ มีอะไรให้น้องช่วยไหมครับ"] : ["Yes!", "Hello!"];
             const msg = responses[Math.floor(Math.random() * responses.length)];
-            
             displayResponse(msg);
-            // เมื่อพูดตอบรับเสร็จ ให้เปิดไมค์รับคำสั่งจริง (toggleListening)
             speak(msg, () => {
                 window.isBusy = false; 
-                window.allowWakeWord = true; // เปิดสิทธิ์ไว้เพื่อให้ speak เปิดไมค์ต่อได้
-                setTimeout(() => { 
-                    if (typeof toggleListening === "function") toggleListening(); 
-                }, 200);
+                setTimeout(() => { if (typeof toggleListening === "function") toggleListening(); }, 200);
             });
         }
     };
 
-    // 🚩 จุดที่ต้องแก้: จัดการการรันซ้ำใน onend
     wakeWordRecognition.onend = () => {
-    // 🚩 ถ้ากำลังเปลี่ยนผ่านหน้าจอ (isTransitioning) หรือยุ่งอยู่ ห้ามเปิดไมค์เองเด็ดขาด
-    if (isTransitioning || window.isBusy || !isWakeWordActive) {
-        console.log("🎤 [System] WakeWord Loop blocked to prevent stutter.");
-        return;
-    }
-
-    setTimeout(() => {
-        const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
-        if (isWakeWordActive && window.allowWakeWord && !window.isBusy && !isListeningNow) {
-            try { wakeWordRecognition.start(); } catch(e) {}
-        }
-    }, 500);
-};
-
-    // เพิ่ม OnError เพื่อป้องกันไมค์ค้างถ้าผู้ใช้ปฏิเสธสิทธิ์
-    wakeWordRecognition.onerror = (event) => {
-        if (event.error === 'not-allowed') window.allowWakeWord = false;
-        console.error("🎤 [System] WakeWord Error:", event.error);
+        // 🚩 แก้ไข: หน่วงเวลาเล็กน้อยและเช็คเงื่อนไขก่อน Restart เพื่อไม่ให้ไมค์ "ดีด" ถี่เกินไป
+        setTimeout(() => {
+            const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
+            if (window.allowWakeWord && isWakeWordActive && !window.isBusy && !isListeningNow && personInFrameTime !== null) {
+                try { wakeWordRecognition.start(); } catch(e) {}
+            }
+        }, 800);
     };
 }
 
 function startWakeWord() {
     const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
+    // 🚩 หัวใจสำคัญ: ถ้ากำลังพูด (isBusy) หรืออยู่หน้าโฮม ห้ามเปิดไมค์เด็ดขาด
     if (!window.allowWakeWord || isAtHome || isListeningNow || window.isMuted || window.isBusy) {
         isWakeWordActive = false;
         return;
     }
-    try { isWakeWordActive = true; wakeWordRecognition.start(); } catch (e) {}
+    try { 
+        isWakeWordActive = true; 
+        wakeWordRecognition.start(); 
+        console.log("🎤 [System] Mic is listening...");
+    } catch (e) {}
 }
 
 function stopWakeWord() {
@@ -164,7 +150,7 @@ function resetToHome() {
     }
     if (isAtHome) return; 
     stopAllSpeech(); 
-    stopWakeWord(); 
+    forceStopAllMic(); // 🚩 แก้ไข: สั่งหยุดไมค์แบบเด็ดขาดเมื่อกลับหน้าโฮม
     forceUnmute(); 
     window.hasGreeted = false;
     window.allowWakeWord = false; 
@@ -212,7 +198,7 @@ async function detectPerson() {
             lastSeenTime = now; 
         } else {
             if (personInFrameTime !== null && (now - lastSeenTime > 5000)) {
-                personInFrameTime = null;   window.hasGreeted = false; window.allowWakeWord = false; stopWakeWord(); 
+                personInFrameTime = null;   window.hasGreeted = false; window.allowWakeWord = false; forceStopAllMic(); 
                 if (!isAtHome) restartIdleTimer();
             }
         }
@@ -247,16 +233,15 @@ function greetUser() {
 
     displayResponse(finalGreet);
     
-    // 🚩 ปรับ Callback: แค่คืนค่า Busy และอนุญาตสิทธิ์ WakeWord
+    // 🚩 ปรับ Callback: หลังทักทายเสร็จ allowWakeWord จึงจะเป็น true และ speak จะเป็นคนเรียก startWakeWord เอง
     speak(finalGreet, () => { 
         window.isBusy = false; 
         window.allowWakeWord = true; 
-        console.log("✅ [System] Greeting finished, ready for WakeWord.");
+        console.log("✅ [System] Greeting finished.");
     });
 }
 
-// --- 🚩 3. ระบบคัดกรองใบขับขี่ ---
-
+// --- 🚩 3. ระบบคัดกรองใบขับขี่ (คงเดิม) ---
 function startLicenseCheck(type) {
     forceStopAllMic(); isAtHome = false;
     const isThai = window.currentLang === 'th';
@@ -303,7 +288,7 @@ function checkChecklist() {
     else { printBtn.classList.remove('show-btn'); printBtn.style.setProperty('display', 'none', 'important'); }
 }
 
-// --- 🚩 4. ระบบประมวลผลคำตอบ (Smart Search Logic - ปรับปรุงใหม่) ---
+// --- 🚩 4. ระบบประมวลผลคำตอบ (คงเดิมตามที่คุณต้องการ) ---
 
 async function getResponse(userQuery) {
     if (!userQuery || !window.localDatabase) return;
@@ -316,7 +301,6 @@ async function getResponse(userQuery) {
 
     const query = userQuery.toLowerCase().trim().replace(/[?？!！]/g, "");
 
-    // [1. คัดกรองคำถามกว้างเรื่องใบขับขี่]
     const isLicense = query.includes("ใบขับขี่") || query.includes("license");
     const isRenew = query.includes("ต่อ") || query.includes("renew");
 
@@ -334,53 +318,38 @@ async function getResponse(userQuery) {
 
     try {
         let bestMatch = { answer: "", score: 0, debugKey: "" };
-        
         for (const sheetName of Object.keys(window.localDatabase)) {
             if (["Lottie_State", "Config", "FAQ"].includes(sheetName)) continue;
             window.localDatabase[sheetName].forEach(item => {
                 const rawKeys = item[0] ? item[0].toString().toLowerCase() : "";
                 if (!rawKeys) return;
-                
-                // รองรับ Multi-Keyword (แยกด้วยคอมม่าหรือขึ้นบรรทัดใหม่)
                 const keyList = rawKeys.split(/[,|\n]/).map(k => k.trim()).filter(k => k !== "");
                 let ans = window.currentLang === 'th' ? (item[1] || "") : (item[2] || item[1]);
-                
                 for (const key of keyList) {
                     let score = 0;
                     const lowerKey = key.toLowerCase();
-                    
                     if (query === lowerKey) {
-                        score = 10.0; // ตรงกันเป๊ะ
+                        score = 10.0;
                     } else {
-                        // 🚩 Legacy Logic: Token Score + Similarity
                         const keyTokens = lowerKey.split(/[\s,/-]+/).filter(t => t.length > 1);
                         let matchCount = 0;
                         keyTokens.forEach(kt => { if (query.includes(kt)) matchCount++; });
-                        
                         let tokenScore = keyTokens.length > 0 ? (matchCount / keyTokens.length) : 0;
                         let simScore = calculateSimilarity(query, lowerKey);
-
-                        // 🚩 Legacy Logic: Year Bonus
                         let yearBonus = 0;
                         const isQ5 = query.includes("5 ปี") || query.includes("5ปี");
                         const isQ2 = query.includes("2 ปี") || query.includes("2ปี") || query.includes("ชั่วคราว");
                         const isK5 = lowerKey.includes("5 ปี") || lowerKey.includes("5ปี");
                         const isK2 = lowerKey.includes("2 ปี") || lowerKey.includes("2ปี") || lowerKey.includes("ชั่วคราว");
-
                         if (isQ5 && isK5) yearBonus = 2.0;
                         if (isQ2 && isK2) yearBonus = 2.0;
                         if ((isQ5 && isK2) || (isQ2 && isK5)) yearBonus = -5.0;
-
                         score = (tokenScore * 5) + (simScore * 1) + yearBonus;
                     }
-
-                    if (score > bestMatch.score) {
-                        bestMatch = { answer: ans, score: score, debugKey: lowerKey };
-                    }
+                    if (score > bestMatch.score) { bestMatch = { answer: ans, score: score, debugKey: lowerKey }; }
                 }
             });
         }
-
         if (bestMatch.score >= 0.45 && bestMatch.answer !== "") { 
             displayResponse(bestMatch.answer); 
             speak(bestMatch.answer); 
@@ -393,13 +362,12 @@ async function getResponse(userQuery) {
     } catch (err) { window.isBusy = false; }
 }
 
-// --- 5. ระบบเสียง (Google Voice) ---
+// --- 5. ระบบเสียง (แก้ไขจังหวะไมค์) ---
 
 function speak(text, callback = null) {
     if (!text || window.isMuted) return;
     
-    isTransitioning = true; // 🚩 ล็อกจังหวะทันทีที่เริ่มพูด
-    stopWakeWord(); 
+    forceStopAllMic(); // 🚩 1. สั่งหยุดไมค์ทันทีที่เริ่มพูด
     window.speechSynthesis.cancel();
     window.isBusy = true;
     
@@ -408,7 +376,6 @@ function speak(text, callback = null) {
     speechSafetyTimeout = setTimeout(() => { 
         if (window.isBusy) { 
             window.isBusy = false; 
-            isTransitioning = false; 
             updateLottie('idle'); 
             if (callback) callback(); 
         } 
@@ -435,28 +402,27 @@ function speak(text, callback = null) {
 
         if (callback) callback();
 
-        setTimeout(() => {
-            if (window.allowWakeWord && !isAtHome && !window.isBusy) {
-                const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
-                if (!isListeningNow) { 
-                    isTransitioning = false; 
+        // 🚩 2. ตัดสินใจเปิดไมค์หลังจากพูดจบ และตรวจสอบเงื่อนไขความปลอดภัย
+        if (window.allowWakeWord && !isAtHome && !window.isBusy) {
+            const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
+            if (!isListeningNow) { 
+                setTimeout(() => {
                     startWakeWord();
-                    console.log("🎤 [System] Mic safety delay finished. Standby...");
-                }
-            } else {
-                isTransitioning = false;
+                    console.log("🎤 [System] Speech finished, Mic Standby.");
+                }, 800); 
             }
-        }, 1000); 
+        }
     };
     window.speechSynthesis.speak(msg);
 }
+
+// --- 🚩 ฟังก์ชันอำนวยความสะดวก (คงเดิม) ---
 
 function stopAllSpeech() { 
     window.speechSynthesis.cancel(); 
     if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout); 
     window.isBusy = false; 
     updateLottie('idle'); 
-    console.log("🛑 [System] Speech and SafetyTimeout cleared.");
 }
 
 function renderFAQButtons() {
@@ -554,32 +520,16 @@ async function initCamera() {
     } catch (err) { console.error("❌ Camera Error"); }
 }
 
-/**
- * 🔒 ระบบป้องกันเสียงค้างเมื่อปิดแท็บ หรือสลับหน้าจอ (Visibility & Unload)
- */
-
-// 1. เมื่อผู้ใช้สลับหน้าจอ (Switch Tab) หรือพับหน้าต่าง Browser ลง
 document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
-        console.log("🤫 [System] Page hidden: Stopping all speech and mic.");
         stopAllSpeech();
-        forceStopAllMic(); // ปิดไมค์ดักฟังด้วยเพื่อความเป็นส่วนตัว
+        forceStopAllMic();
     }
 });
 
-// 2. เมื่อผู้ใช้สั่ง Refresh หรือ ปิดแท็บ Browser (Close Tab)
 window.addEventListener('beforeunload', () => {
     stopAllSpeech();
     forceStopAllMic();
 });
-
-// 3. ฟังก์ชันพิเศษสำหรับหยุดทุกอย่าง (ใช้เรียกจากส่วนอื่นได้)
-function stopEverything() {
-    stopAllSpeech();
-    forceStopAllMic();
-    if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
-    window.isBusy = false;
-    updateLottie('idle');
-}
 
 initDatabase();
