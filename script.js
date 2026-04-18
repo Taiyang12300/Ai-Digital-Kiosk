@@ -540,8 +540,17 @@ async function initDatabase() {
     try {
         const res = await fetch(GAS_URL);
         const json = await res.json();
-        if (json.database) { window.localDatabase = json.database; renderFAQButtons(); initCamera(); displayResponse("น้องนำทาง สวัสดีครับ"); }
-    } catch (e) { setTimeout(initDatabase, 5000); }
+        if (json.database) { 
+            window.localDatabase = json.database; 
+            renderFAQButtons(); 
+            initCamera(); 
+            // 🚩 แก้ไขจุดนี้: บังคับให้ระบบเซตหน้าแรกที่ถูกต้อง
+            isAtHome = false; 
+            resetToHome(); 
+        }
+    } catch (e) { 
+        setTimeout(initDatabase, 5000); 
+    }
 }
 
 async function initCamera() {
