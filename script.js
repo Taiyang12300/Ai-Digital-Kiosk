@@ -1,7 +1,7 @@
 /**
  * 🚀 สมองกลน้องนำทาง - Ultimate Hybrid Version (Stable & Auto-Mic)
- * แก้ไข: 1. ข้อความหน้าจอสัมพันธ์กับเสียง 100% 
- * 2. สุ่มคำตอบหลากหลาย 3. ตัดไมค์ขณะพูด และเปิดไมค์อัตโนมัติ
+ * แก้ไข: 1. รับคำสั่งเฉพาะ Wake Word 2. สุ่มคำตอบหลากหลาย 
+ * 3. ตัดไมค์ขณะพูด และเปิดไมค์อัตโนมัติเมื่อพูดจบ (ถ้าคนยังอยู่)
  */
 
 window.localDatabase = null;
@@ -38,15 +38,18 @@ function setupWakeWord() {
     wakeWordRecognition.lang = 'th-TH';
 
     wakeWordRecognition.onresult = (event) => {
+        // 🔒 ถ้ากำลังยุ่ง หรือไม่มีคนอยู่หน้าจอ ห้ามประมวลผล
         if (window.isBusy || personInFrameTime === null) return;
 
         const lastResultIndex = event.results.length - 1;
         const text = event.results[lastResultIndex][0].transcript.trim().toLowerCase();
         console.log("👂 ได้ยินเสียง:", text);
 
+        // 🎯 รับคำสั่งเฉพาะ "น้องนำทาง" หรือ "สวัสดีน้องนำทาง"
         if (text.includes("น้องนำทาง") || text.includes("สวัสดีน้องนำทาง")) {
-            stopWakeWord(); 
+            stopWakeWord(); // ตัดไมค์ทันทีเมื่อได้รับคำปลุก
             
+            // 🎲 สุ่มคำตอบให้น้องดูเป็นธรรมชาติ
             const thaiResponses = [
                 "ครับผม",
                 "ครับผม มีอะไรให้น้องนำทางช่วยไหมครับ",
@@ -64,9 +67,10 @@ function setupWakeWord() {
             const list = window.currentLang === 'th' ? thaiResponses : engResponses;
             const randomMsg = list[Math.floor(Math.random() * list.length)];
 
-            // ✅ ลำดับสำคัญ: อัปเดตหน้าจอก่อน แล้วจึงสั่งพูด
             displayResponse(randomMsg);
             speak(randomMsg);
+
+            // ระบบจะเปิดไมค์ใหม่อัตโนมัติในฟังก์ชัน speak เมื่อพูดจบ
         }
     };
 
@@ -82,7 +86,7 @@ function startWakeWord() {
     try {
         wakeWordRecognition.start();
         isWakeWordActive = true;
-        console.log("🎤 [System] เปิดไมค์ Standby...");
+        console.log("🎤 [System] เปิดไมค์ Standby รอรับคำเรียก...");
     } catch (e) {}
 }
 
@@ -91,7 +95,7 @@ function stopWakeWord() {
     try {
         wakeWordRecognition.stop();
         isWakeWordActive = false;
-        console.log("🔇 [System] ปิดไมค์");
+        console.log("🔇 [System] ปิดไมค์ชั่วคราว");
     } catch (e) {}
 }
 
@@ -133,8 +137,7 @@ function resetToHome() {
     personInFrameTime = null;       
     isAtHome = true; 
 
-    const homeMsg = window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone.";
-    displayResponse(homeMsg);
+    displayResponse(window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone.");
     renderFAQButtons(); 
     if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
 }
@@ -181,6 +184,7 @@ async function detectPerson() {
             lastSeenTime = now; 
         } else {
             if (personInFrameTime !== null && (now - lastSeenTime > 3000)) {
+                console.log("🚶 Person left, stopping mic...");
                 personInFrameTime = null;   
                 window.hasGreeted = false;  
                 stopWakeWord(); 
@@ -223,7 +227,6 @@ function greetUser() {
     const finalGreet = list[Math.floor(Math.random() * list.length)];
 
     window.hasGreeted = true; 
-    // ✅ มั่นใจว่าหน้าจออัปเดตสัมพันธ์กับเสียง
     displayResponse(finalGreet);
     speak(finalGreet);
 }
@@ -268,7 +271,7 @@ function showLicenseChecklist(type, expiry) {
             </div>`;
     });
 
-    const resultHTML = `<div class="checklist-card"><strong>${type}</strong><br><div style="background:#e8f0fe; color:#1a73e8; padding:8px; border-radius:5px; margin-top:5px; font-weight:bold;">💡 ${note}</div><hr style="margin:15px 0; border:0; border-top:1px solid #eee;">${checklistHTML}<button id="btnPrintGuide" style="display:none;" onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}')">🖨️ ปริ้นใบนำทาง</button></div>`;
+    const resultHTML = `<div class="checklist-card"><strong style="font-size:22px;">${type}</strong><br><div style="background:#e8f0fe; color:#1a73e8; padding:8px; border-radius:5px; margin-top:5px; font-weight:bold;">💡 ${note}</div><hr style="margin:15px 0; border:0; border-top:1px solid #eee;">${checklistHTML}<button id="btnPrintGuide" style="display:none;" onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}')">🖨️ ปริ้นใบนำทาง</button></div>`;
     displayResponse(resultHTML);
     speak(isThai ? "กรุณาติ๊กตรวจสอบเอกสารให้ครบ เพื่อปริ้นใบนำทางครับ" : "Please check all items to print.");
 }
@@ -278,8 +281,8 @@ function checkChecklist() {
     const printBtn = document.getElementById('btnPrintGuide');
     if (!printBtn) return;
     const allChecked = checks.length > 0 && Array.from(checks).every(c => c.checked);
-    if (allChecked) { printBtn.style.display = 'block'; }
-    else { printBtn.style.display = 'none'; }
+    if (allChecked) { printBtn.classList.add('show-btn'); printBtn.style.setProperty('display', 'block', 'important'); }
+    else { printBtn.classList.remove('show-btn'); printBtn.style.setProperty('display', 'none', 'important'); }
 }
 
 async function getResponse(userQuery) {
@@ -295,8 +298,7 @@ async function getResponse(userQuery) {
     if ((query.includes("ใบขับขี่") || query.includes("license")) && (query.includes("ต่อ") || query.includes("renew"))) {
         if (!query.includes("ชั่วคราว") && !query.includes("5 ปี")) {
             const askMsg = (window.currentLang === 'th') ? "ใบขับขี่ของท่านเป็นแบบชั่วคราว หรือแบบ 5 ปีครับ?" : "Is it Temporary or 5-year?";
-            displayResponse(askMsg); 
-            speak(askMsg);
+            displayResponse(askMsg); speak(askMsg);
             renderOptionButtons([
                 { th: "แบบชั่วคราว (2 ปี)", en: "Temporary (2 years)", action: () => startLicenseCheck("แบบชั่วคราว (2 ปี)") },
                 { th: "แบบ 5 ปี", en: "5-year type", action: () => startLicenseCheck("แบบ 5 ปี") }
@@ -319,16 +321,8 @@ async function getResponse(userQuery) {
                 }
             });
         }
-        if (bestMatch.score > 0) { 
-            displayResponse(bestMatch.answer); 
-            speak(bestMatch.answer); 
-        } 
-        else { 
-            const noInfoMsg = window.currentLang === 'th' ? "ขออภัยครับ น้องหาข้อมูลไม่พบ ลองเลือกจากหัวข้อด้านล่างนะครับ" : "No info found.";
-            displayResponse(noInfoMsg);
-            speak(noInfoMsg);
-            setTimeout(renderFAQButtons, 3000); 
-        }
+        if (bestMatch.score > 0) { displayResponse(bestMatch.answer); speak(bestMatch.answer); } 
+        else { displayResponse(window.currentLang === 'th' ? "ขออภัยครับ น้องหาข้อมูลไม่พบ ลองเลือกจากหัวข้อด้านล่างนะครับ" : "No info found."); setTimeout(renderFAQButtons, 3000); }
     } catch (err) { window.isBusy = false; }
 }
 
@@ -337,6 +331,7 @@ async function getResponse(userQuery) {
 function speak(text) {
     if (!text || window.isMuted) return;
     
+    // 🚩 ป้องกันการทับซ้อนและตัดไมค์ทันทีเมื่อเริ่มพูด
     window.isBusy = true; 
     stopWakeWord();
     window.speechSynthesis.cancel();
@@ -348,11 +343,8 @@ function speak(text) {
         if (window.isBusy) { window.isBusy = false; updateLottie('idle'); restartIdleTimer(); }
     }, safetyTime);
 
-    // ลบสัญลักษณ์พิเศษก่อนพูด
-    const cleanText = text.replace(/<[^>]*>?/gm, '').replace(/[*#-]/g, "");
-    const msg = new SpeechSynthesisUtterance(cleanText);
+    const msg = new SpeechSynthesisUtterance(text.replace(/[*#-]/g, ""));
     const voices = window.speechSynthesis.getVoices();
-    
     if (window.currentLang === 'th') {
         msg.lang = 'th-TH';
         const googleThai = voices.find(v => v.name.includes('Google') && v.lang.includes('th'));
@@ -364,12 +356,18 @@ function speak(text) {
     }
 
     msg.rate = 1.05;
-    msg.onstart = () => { updateLottie('talking'); };
+    msg.onstart = () => { 
+        updateLottie('talking');
+        console.log("📢 น้องเริ่มพูด: isBusy =", window.isBusy);
+    };
     msg.onend = () => { 
         if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
-        window.isBusy = false; 
+        window.isBusy = false; // ✅ ปลดล็อคสถานะเมื่อพูดจบ
         updateLottie('idle'); 
         updateInteractionTime(); 
+        
+        console.log("👂 พูดจบแล้ว: คืนสถานะรอรับคำสั่ง");
+        // 🚀 ถ้าคนยังยืนอยู่หน้าจอ ให้เปิดไมค์ Standby รอรับคำเรียกชื่อซ้ำทันที
         if (personInFrameTime !== null) {
             setTimeout(startWakeWord, 600); 
         }
@@ -377,7 +375,7 @@ function speak(text) {
     window.speechSynthesis.speak(msg);
 }
 
-// ฟังก์ชันเสริมอื่นๆ
+// ส่วนฟังก์ชันเสริมอื่นๆ
 window.speechSynthesis.onvoiceschanged = () => { window.speechSynthesis.getVoices(); };
 function stopAllSpeech() { window.speechSynthesis.cancel(); if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout); window.isBusy = false; updateLottie('idle'); }
 function changeLanguage(lang) { window.currentLang = lang; isAtHome = true; window.hasGreeted = false; personInFrameTime = null; renderFAQButtons(); }
@@ -436,20 +434,12 @@ function updateLottie(state) {
     };
     player.load(assets[state]);
 }
-function displayResponse(text) { 
-    const el = document.getElementById('response-text');
-    if (el) el.innerHTML = text.replace(/\n/g, '<br>'); 
-}
+function displayResponse(text) { document.getElementById('response-text').innerHTML = text.replace(/\n/g, '<br>'); }
 async function initDatabase() {
     try {
         const res = await fetch(GAS_URL);
         const json = await res.json();
-        if (json.database) { 
-            window.localDatabase = json.database; 
-            renderFAQButtons(); 
-            initCamera(); 
-            displayResponse("สวัสดีครับ เรียกชื่อน้องนำทางเพื่อสอบถามได้เลยครับ"); 
-        }
+        if (json.database) { window.localDatabase = json.database; renderFAQButtons(); initCamera(); displayResponse("สวัสดีครับ เรียกชื่อน้องนำทางเพื่อสอบถามได้เลยครับ"); }
     } catch (e) { setTimeout(initDatabase, 5000); }
 }
 async function initCamera() {
