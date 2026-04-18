@@ -1,6 +1,6 @@
 /**
  * 🚀 สมองกลน้องนำทาง - Ultimate Hybrid Version (Deep Mic Reset Edition)
- * แก้ไข: ระบบกรอง Wake Word แม่นยำ และคุม Workflow ทักทาย -> ดักฟัง -> ปิดไมค์ขณะพูด
+ * แก้ไข: ป้องกันอาการไมค์ดีด (Restart Loop) และคุมสถานะการดักฟังให้เสถียร
  */
 
 window.localDatabase = null;
@@ -55,7 +55,7 @@ function playAudioLink(url, callback = null) {
         updateLottie('idle');
         updateInteractionTime();
         if (callback) callback();
-        else if (window.allowWakeWord && !isAtHome) setTimeout(startWakeWord, 500);
+        else if (window.allowWakeWord && !isAtHome) setTimeout(startWakeWord, 1000); // 🚩 เพิ่ม Delay
     };
 
     audio.onerror = () => {
@@ -86,19 +86,17 @@ function setupWakeWord() {
     wakeWordRecognition.lang = 'th-TH';
 
     wakeWordRecognition.onresult = (event) => {
-        // 🎯 ตรวจสอบสิทธิ์: ต้องอนุญาตให้ฟัง + ไม่ยุ่ง + ไมค์หลักไม่เปิด
-        const isMainMicListening = window.isListening || false; 
-        if (!window.allowWakeWord || window.isBusy || isMainMicListening) return;
+        const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
+        if (!window.allowWakeWord || window.isBusy || isListeningNow) return;
 
         const lastResultIndex = event.results.length - 1;
         const text = event.results[lastResultIndex][0].transcript.trim();
         
-        // 🎯 ตรวจสอบคำเรียกที่ถูกต้องเท่านั้น
         const isKeyword = text.includes("น้องนำทาง") || text.includes("สวัสดีน้องนำทาง");
         
         if (isKeyword) {
             console.log("✅ [Authorized] WakeWord Correct!");
-            stopWakeWord(); // หยุดฟังทันทีเพื่อตอบรับ
+            stopWakeWord(); 
             window.isBusy = true;
 
             const responses = window.currentLang === 'th' 
@@ -112,7 +110,7 @@ function setupWakeWord() {
                 window.isBusy = false; 
                 setTimeout(() => {
                     if (typeof toggleListening === "function") {
-                        toggleListening(); // เมื่อเรียกชื่อถูก ให้เปิดไมค์หลักรอรับคำถามทันที
+                        toggleListening(); 
                     }
                 }, 200);
             });
@@ -123,16 +121,21 @@ function setupWakeWord() {
 
     wakeWordRecognition.onend = () => {
         const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
-        // จะ Restart ใหม่ต้องได้รับอนุญาตและคนยังอยู่หน้าตู้
-        if (window.allowWakeWord && !window.isBusy && !isListeningNow && personInFrameTime !== null) {
-            try { wakeWordRecognition.start(); } catch(e) {}
-        }
+        // 🚩 ปรับปรุง: เพิ่ม Delay 1 วินาที และเช็คสถานะให้ละเอียดเพื่อกันไมค์ดีดวนลูป
+        setTimeout(() => {
+            if (window.allowWakeWord && isWakeWordActive && !window.isBusy && !isListeningNow && personInFrameTime !== null) {
+                try { 
+                    wakeWordRecognition.start(); 
+                    console.log("🔄 [System] Wake Word Restarted");
+                } catch(e) {}
+            }
+        }, 1000);
     };
 }
 
 async function handleMicButtonClick() {
     console.log("🖱️ [Manual] Force Unlocking Mic...");
-    window.allowWakeWord = true; // อนุมัติสิทธิ์เมื่อมีการกดเอง
+    window.allowWakeWord = true; 
     forceStopAllMic(); 
     window.speechSynthesis.cancel(); 
     if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
@@ -147,19 +150,22 @@ async function handleMicButtonClick() {
 
 function startWakeWord() {
     const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
-    // กฎเหล็ก: ต้องได้รับอนุญาต (หลังทักทาย) + ไม่ได้เปิดไมค์อื่นอยู่ + ไม่ยุ่ง
-    if (!window.allowWakeWord || isAtHome || isListeningNow || window.isMuted || window.isBusy) return;
+    // 🚩 ปรับปรุง: เช็คสิทธิ์และสถานะซ้ำก่อนเปิดไมค์
+    if (!window.allowWakeWord || isAtHome || isListeningNow || window.isMuted || window.isBusy) {
+        isWakeWordActive = false;
+        return;
+    }
     try {
         isWakeWordActive = true;
         wakeWordRecognition.start();
         console.log("🎤 [System] Wake Word Standby (ดักฟังชื่อ)...");
     } catch (e) {
-        setupWakeWord();
+        // หากทำงานอยู่แล้ว Chrome จะ Error (DOMException) ไม่ต้องทำอะไร
     }
 }
 
 function stopWakeWord() {
-    isWakeWordActive = false; 
+    isWakeWordActive = false; // 🚩 ต้องเซตตัวแปรก่อน abort เพื่อไม่ให้ onend สั่ง restart ทันที
     if (!wakeWordRecognition) return;
     try {
         wakeWordRecognition.abort(); 
@@ -203,7 +209,7 @@ function resetToHome() {
     forceUnmute(); 
     
     window.hasGreeted = false;
-    window.allowWakeWord = false; // ❌ ปิดสิทธิ์การดักฟังทั้งหมด     
+    window.allowWakeWord = false; 
     window.isBusy = false; 
     personInFrameTime = null;       
     isAtHome = true; 
@@ -257,7 +263,7 @@ async function detectPerson() {
             if (personInFrameTime !== null && (now - lastSeenTime > 5000)) {
                 personInFrameTime = null;   
                 window.hasGreeted = false;
-                window.allowWakeWord = false; // เมื่อคนจากไป ปิดระบบดักฟัง
+                window.allowWakeWord = false; 
                 stopWakeWord(); 
                 if (!isAtHome) restartIdleTimer();
             }
@@ -271,7 +277,7 @@ function greetUser() {
     forceUnmute();
     isAtHome = false; 
     window.hasGreeted = true; 
-    window.isBusy = true; // ล็อคว่ากำลังทักทาย
+    window.isBusy = true; 
 
     const hour = new Date().getHours();
     const isThai = window.currentLang === 'th';
@@ -294,7 +300,7 @@ function greetUser() {
     displayResponse(finalGreet);
     speak(finalGreet, () => {
         window.isBusy = false;
-        window.allowWakeWord = true; // ✅ อนุมัติสิทธิ์ดักฟังเสียงชื่อหลังจากทักทายเสร็จแล้ว
+        window.allowWakeWord = true; 
         startWakeWord();
     });
 }
@@ -416,7 +422,7 @@ async function getResponse(userQuery) {
 function speak(text, callback = null) {
     if (!text || window.isMuted) return;
     
-    stopWakeWord(); // 🛑 ปิดไมค์ดักฟังทันทีขณะพูด
+    stopWakeWord(); 
     window.speechSynthesis.cancel();
     window.isBusy = true;
 
@@ -450,9 +456,9 @@ function speak(text, callback = null) {
         if (callback) {
             callback();
         } else if (window.allowWakeWord && !isAtHome) {
-            // ✅ พูดจบแล้ว ถ้ายังได้รับอนุญาตและไม่หน้าโฮม ให้เปิดดักฟังต่อ
+            // ✅ พูดจบแล้ว เพิ่ม Delay เล็กน้อยก่อนเปิดดักฟังกลับมา
             const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
-            if (!isListeningNow) setTimeout(startWakeWord, 500); 
+            if (!isListeningNow) setTimeout(startWakeWord, 1000); 
         }
     };
     window.speechSynthesis.speak(msg);
