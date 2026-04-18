@@ -254,8 +254,20 @@
       if (typeof getResponse === "function") await getResponse(query);
     }
 
-    function toggleListening() { if (isListening) recognition.stop(); else { window.speechSynthesis.cancel(); recognition.start(); } }
-    function stopListening() { isListening = false; document.getElementById('micBtn').classList.remove('recording'); }
+    function toggleListening() { 
+  // ใช้ window.isListening เพื่อให้ตรงกับสถานะจริงที่ส่งมาจาก recognition
+  if (window.isListening) { 
+    recognition.stop(); 
+  } else { 
+    window.speechSynthesis.cancel(); 
+    recognition.start(); 
+  } 
+}
+
+    function stopListening() { 
+  window.isListening = false; // ปรับจากเดิมที่เป็น isListening = false
+  document.getElementById('micBtn').classList.remove('recording'); 
+}
 
     // --- [ ฟังก์ชันพิมพ์ใบนำทาง - แก้ไขให้เข้มและตัวหนาพิเศษ ] ---
     function printLicenseNote(type, note, items) {
