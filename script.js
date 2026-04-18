@@ -1,6 +1,6 @@
 /**
  * 🚀 สมองกลน้องนำทาง - Ultimate Hybrid Version (Wake Word + Main Mic Override)
- * แก้ไข: ปลดล็อคปุ่มไมค์ให้กดได้อิสระ และระบบแอบฟังจะกลับมาทำงานอัตโนมัติเมื่อคนยังอยู่
+ * แก้ไข: ใช้ระบบ Abort เพื่อตัดการถือครองไมค์ของ Wake Word ทำให้ปุ่มไมค์กดติด 100%
  */
 
 window.localDatabase = null;
@@ -37,7 +37,7 @@ function setupWakeWord() {
     wakeWordRecognition.lang = 'th-TH';
 
     wakeWordRecognition.onresult = (event) => {
-        // 🔒 ตรวจสอบสถานะไมค์หลัก (isListening) ถ้ามีอยู่ห้ามแทรก
+        // ตรวจสอบสถานะว่ามีการเปิดไมค์หลัก (isListening) อยู่หรือไม่
         const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
         if (window.isBusy || isListeningNow) return;
 
@@ -46,7 +46,7 @@ function setupWakeWord() {
         console.log("👂 WakeWord Detected:", text);
 
         if (text.includes("น้องนำทาง") || text.includes("สวัสดีน้องนำทาง")) {
-            stopWakeWord(); 
+            stopWakeWord(); // ตัดการทำงานไมค์ทันที
 
             const responses = window.currentLang === 'th' 
                 ? ["ครับผม", "ครับผม มีอะไรให้ช่วยไหมครับ", "สวัสดีครับ สอบถามข้อมูลได้เลยครับ"]
@@ -56,7 +56,8 @@ function setupWakeWord() {
             displayResponse(msg);
 
             speak(msg, () => {
-                // เมื่อตอบรับจบ ให้เปิดไมค์หลักรับคำถามทันที
+                // คืนสถานะ Busy ก่อนเปิดไมค์หลัก เพื่อให้ฟังก์ชันเปิดไมค์ทำงานได้
+                window.isBusy = false; 
                 if (typeof toggleListening === "function") {
                     console.log("🎤 [Auto] Triggering Main Mic...");
                     toggleListening(); 
@@ -67,19 +68,22 @@ function setupWakeWord() {
 
     wakeWordRecognition.onend = () => {
         const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
-        // ปลุกระบบแอบฟังกลับมาถ้า: คนยังอยู่ และ ไมค์หลักไม่ได้เปิดอยู่ และ ไม่ได้กำลังพูด
+        // จะเริ่มใหม่เฉพาะเมื่อไม่มีการใช้ไมค์หลัก และไม่ได้กำลังพูด
         if (isWakeWordActive && !window.isBusy && !isListeningNow && personInFrameTime !== null) {
             try { wakeWordRecognition.start(); } catch(e) {}
         }
     };
 }
 
-// 🚩 ฟังก์ชันสำหรับปุ่มไมค์ (ต้อง Override ระบบแอบฟัง)
+// 🚩 ฟังก์ชันสำหรับปุ่มไมค์ (ต้องใช้ร่วมกับปุ่มที่หน้า HTML)
 function handleMicButtonClick() {
-    console.log("🖱️ [Manual] Mic Button Clicked");
-    stopWakeWord(); // หยุดแอบฟังทันที
-    window.speechSynthesis.cancel(); // หยุดเสียงพูด
-    window.isBusy = false; // ปลดล็อคสถานะ
+    console.log("🖱️ [Manual] Force Unlocking Mic...");
+    isWakeWordActive = false; 
+    if (wakeWordRecognition) {
+        try { wakeWordRecognition.abort(); } catch(e) {} // ใช้ abort เพื่อตัดสิทธิ์การถือไมค์
+    }
+    window.speechSynthesis.cancel(); 
+    window.isBusy = false; 
     
     if (typeof toggleListening === "function") {
         toggleListening(); 
@@ -87,7 +91,8 @@ function handleMicButtonClick() {
 }
 
 function startWakeWord() {
-    if (isWakeWordActive || !wakeWordRecognition || window.isMuted || window.isBusy) return;
+    const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
+    if (isWakeWordActive || isListeningNow || window.isMuted || window.isBusy) return;
     try {
         wakeWordRecognition.start();
         isWakeWordActive = true;
@@ -98,9 +103,9 @@ function startWakeWord() {
 function stopWakeWord() {
     if (!wakeWordRecognition) return;
     try {
-        wakeWordRecognition.stop();
         isWakeWordActive = false;
-        console.log("🔇 [System] Stop Wake Word");
+        wakeWordRecognition.abort(); // ใช้ abort จะเคลียร์สถานะไมค์ได้เร็วกว่า stop
+        console.log("🔇 [System] Wake Word Aborted");
     } catch (e) {}
 }
 
@@ -187,7 +192,6 @@ async function detectPerson() {
 
             if ((now - personInFrameTime) >= 2000 && isAtHome && !window.isBusy && !window.hasGreeted) {
                 greetUser();
-                setTimeout(startWakeWord, 1000); // เริ่มแอบฟังหลังจากทักทาย
             }
             lastSeenTime = now; 
         } else {
@@ -235,7 +239,10 @@ function greetUser() {
 
     window.hasGreeted = true; 
     displayResponse(finalGreet);
-    speak(finalGreet);
+    speak(finalGreet, () => {
+        // เมื่อทักจบ ให้เริ่มระบบแอบฟัง
+        startWakeWord();
+    });
 }
 
 // --- 3. ระบบคัดกรองใบขับขี่ & 4. Search ---
@@ -338,12 +345,12 @@ async function getResponse(userQuery) {
     } catch (err) { window.isBusy = false; }
 }
 
-// --- 5. ระบบเสียง (Google Voice) + ปรับปรุงระบบ Callback ---
+// --- 5. ระบบเสียง (Google Voice) ---
 
 function speak(text, callback = null) {
     if (!text || window.isMuted) return;
     
-    stopWakeWord();
+    stopWakeWord(); // ตัดไมค์แอบฟังออกก่อนพูด
     window.speechSynthesis.cancel();
 
     const safetyTime = (text.length * 200) + 5000;
@@ -353,7 +360,6 @@ function speak(text, callback = null) {
         if (window.isBusy) { 
             window.isBusy = false; 
             updateLottie('idle'); 
-            restartIdleTimer(); 
             if (callback) callback();
         }
     }, safetyTime);
@@ -380,7 +386,8 @@ function speak(text, callback = null) {
         if (callback) {
             callback();
         } else if (personInFrameTime !== null) {
-            setTimeout(startWakeWord, 800); 
+            // หน่วงเวลาเล็กน้อยก่อนกลับไปแอบฟัง เพื่อให้เปิดโอกาสให้คนกดปุ่มได้
+            setTimeout(startWakeWord, 500); 
         }
     };
     window.speechSynthesis.speak(msg);
@@ -390,6 +397,7 @@ function speak(text, callback = null) {
 window.speechSynthesis.onvoiceschanged = () => { window.speechSynthesis.getVoices(); };
 function stopAllSpeech() { window.speechSynthesis.cancel(); if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout); window.isBusy = false; updateLottie('idle'); }
 function changeLanguage(lang) { window.currentLang = lang; isAtHome = true; window.hasGreeted = false; personInFrameTime = null; renderFAQButtons(); }
+
 function renderFAQButtons() {
     const container = document.getElementById('faq-container');
     if (!container || !window.localDatabase) return;
@@ -403,6 +411,7 @@ function renderFAQButtons() {
         }
     });
 }
+
 function renderOptionButtons(options) {
     const container = document.getElementById('faq-container');
     if (!container) return; container.innerHTML = "";
@@ -413,12 +422,14 @@ function renderOptionButtons(options) {
         container.appendChild(btn);
     });
 }
+
 function calculateSimilarity(s1, s2) {
     let longer = s1.length < s2.length ? s2 : s1;
     let shorter = s1.length < s2.length ? s1 : s2;
     if (longer.length === 0) return 1.0;
     return (longer.length - editDistance(longer, shorter)) / longer.length;
 }
+
 function editDistance(s1, s2) {
     let costs = [];
     for (let i = 0; i <= s1.length; i++) {
@@ -435,6 +446,7 @@ function editDistance(s1, s2) {
     }
     return costs[s2.length];
 }
+
 function updateLottie(state) {
     const player = document.getElementById('lottie-canvas');
     if (!player) return;
@@ -445,10 +457,12 @@ function updateLottie(state) {
     };
     player.load(assets[state]);
 }
+
 function displayResponse(text) { 
     const responseEl = document.getElementById('response-text');
     if (responseEl) responseEl.innerHTML = text.replace(/\n/g, '<br>'); 
 }
+
 async function initDatabase() {
     try {
         const res = await fetch(GAS_URL);
@@ -456,6 +470,7 @@ async function initDatabase() {
         if (json.database) { window.localDatabase = json.database; renderFAQButtons(); initCamera(); displayResponse("สวัสดีครับ เรียกชื่อน้องนำทางเพื่อสอบถามได้เลยครับ"); }
     } catch (e) { setTimeout(initDatabase, 5000); }
 }
+
 async function initCamera() {
     try {
         video = document.getElementById('video'); 
@@ -463,4 +478,5 @@ async function initCamera() {
         if (video) { video.srcObject = stream; video.onloadedmetadata = () => { video.play(); loadFaceModels(); }; }
     } catch (err) { console.error("❌ Camera Error"); }
 }
+
 initDatabase();
