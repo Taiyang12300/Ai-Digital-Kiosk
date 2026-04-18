@@ -119,16 +119,13 @@
 }
 
 @media print {
-  @page { 
-      size: 58mm auto; /* บังคับขนาดกระดาษที่ไดรเวอร์ */
-      margin: 0; 
-  }
-  body * { visibility: hidden !important; display: none !important; }
-  
+  body > *:not(#ticketLicenseWrapper) { display: none !important; }
+  #ticketLicenseWrapper { display: block !important; position: absolute; top: 0; left: 0; width: 57mm; }
   #ticketLicenseWrapper.printing, #ticketLicenseWrapper.printing * { 
       visibility: visible !important; 
       display: block !important; 
   }
+}
 
   .ticket { 
       position: absolute; 
@@ -234,13 +231,18 @@
     }
 
     if (SpeechRecognition) {
-      recognition = new SpeechRecognition();
-      recognition.lang = 'th-TH';
-      recognition.onstart = () => { isListening = true; document.getElementById('micBtn').classList.add('recording'); };
-      recognition.onresult = (e) => { processQuery(e.results[0][0].transcript); };
-      recognition.onend = () => { stopListening(); };
+    recognition = new SpeechRecognition();
+    recognition.lang = 'th-TH';
+    recognition.onstart = () => { 
+        window.isListening = true; // 🚩 ใช้ window.
+        document.getElementById('micBtn').classList.add('recording'); 
+    };
+    recognition.onresult = (e) => { processQuery(e.results[0][0].transcript); };
+    recognition.onend = () => { 
+        window.isListening = false; // 🚩 ใช้ window.
+        stopListening(); 
+      };
     }
-
     function handleManualInput() {
       const input = document.getElementById('userInput');
       if (input.value.trim()) { processQuery(input.value.trim()); input.value = ''; }
