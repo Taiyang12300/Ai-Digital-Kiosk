@@ -25,6 +25,7 @@ const DETECTION_INTERVAL = 200;
 
 let wakeWordRecognition;
 let isWakeWordActive = false;
+let isTransitioning = false;
 
 // --- 🚩 ฟังก์ชันกลางสำหรับจัดการสิทธิ์และการเล่นเสียง ---
 
@@ -97,26 +98,19 @@ function setupWakeWord() {
 
     // 🚩 จุดที่ต้องแก้: จัดการการรันซ้ำใน onend
     wakeWordRecognition.onend = () => {
-        // ถ้าเราตั้งใจปิดไมค์ (isWakeWordActive = false) ไม่ต้องรันใหม่
-        if (!isWakeWordActive) {
-            console.log("🎤 [System] WakeWord stopped.");
-            return;
-        }
+    // 🚩 ถ้ากำลังเปลี่ยนผ่านหน้าจอ (isTransitioning) หรือยุ่งอยู่ ห้ามเปิดไมค์เองเด็ดขาด
+    if (isTransitioning || window.isBusy || !isWakeWordActive) {
+        console.log("🎤 [System] WakeWord Loop blocked to prevent stutter.");
+        return;
+    }
 
-        // ถ้ายังต้อง Active อยู่ ให้รอสักพักก่อนเริ่มใหม่ (ป้องกันไมค์ตีกัน)
-        setTimeout(() => {
-            const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
-            // เช็คเงื่อนไขความปลอดภัยก่อนเริ่มใหม่
-            if (isWakeWordActive && window.allowWakeWord && !window.isBusy && !isListeningNow) {
-                try { 
-                    wakeWordRecognition.start(); 
-                } catch(e) {
-                    // ถ้าพยายามเปิดซ้อน จะไม่ Error จนไมค์ค้าง
-                    console.log("🎤 [System] WakeWord already running or busy.");
-                }
-            }
-        }, 500); // ลดเวลาลงเล็กน้อยเพื่อความลื่นไหล
-    };
+    setTimeout(() => {
+        const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
+        if (isWakeWordActive && window.allowWakeWord && !window.isBusy && !isListeningNow) {
+            try { wakeWordRecognition.start(); } catch(e) {}
+        }
+    }, 500);
+};
 
     // เพิ่ม OnError เพื่อป้องกันไมค์ค้างถ้าผู้ใช้ปฏิเสธสิทธิ์
     wakeWordRecognition.onerror = (event) => {
@@ -402,8 +396,10 @@ async function getResponse(userQuery) {
 // --- 5. ระบบเสียง (Google Voice) ---
 
 function speak(text, callback = null) {
+function speak(text, callback = null) {
     if (!text || window.isMuted) return;
     
+    isTransitioning = true; // 🚩 ล็อกจังหวะทันทีที่เริ่มพูด
     stopWakeWord(); 
     window.speechSynthesis.cancel();
     window.isBusy = true;
@@ -413,12 +409,12 @@ function speak(text, callback = null) {
     speechSafetyTimeout = setTimeout(() => { 
         if (window.isBusy) { 
             window.isBusy = false; 
+            isTransitioning = false; // ปลดล็อก
             updateLottie('idle'); 
             if (callback) callback(); 
         } 
     }, safetyTime);
 
-    // แก้คำทับศัพท์
     let cleanText = text.replace(/Queue/gi, "คิว").replace(/DLT/gi, "ดีแอลที").replace(/Smart/gi, "สมาร์ท");
     const msg = new SpeechSynthesisUtterance(cleanText.replace(/<[^>]*>?/gm, '').replace(/[*#-]/g, ""));
     const voices = window.speechSynthesis.getVoices();
@@ -438,28 +434,24 @@ function speak(text, callback = null) {
         updateLottie('idle'); 
         updateInteractionTime(); 
 
-        // 🚩 1. รัน Callback เพื่อจัดการ State ต่างๆ ให้เสร็จก่อน (เช่นเซต allowWakeWord = true)
         if (callback) callback();
 
-        // 🚩 2. ตัดสินใจเปิดไมค์ที่นี่ที่เดียว (ใช้ IF ปกติ ไม่ใช้ ELSE IF)
-        // ตรวจสอบสิทธิ์ล่าสุดหลังจากที่ Callback ทำงานเสร็จแล้ว
-        if (window.allowWakeWord && !isAtHome) {
-            const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
-            if (!isListeningNow && !isWakeWordActive) { 
-                // เพิ่ม Delay เล็กน้อยเพื่อให้ระบบเสียงคืนทรัพยากร Chrome ให้เรียบร้อยก่อนเปิดไมค์
-                setTimeout(() => {
+        // 🚩 แก้ไข: เพิ่ม Delay 1 วินาที และเช็คตัวล็อกก่อนเปิดไมค์
+        setTimeout(() => {
+            if (window.allowWakeWord && !isAtHome && !window.isBusy) {
+                const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
+                if (!isListeningNow) { 
+                    isTransitioning = false; // 🚩 ปลดล็อกก่อนเริ่ม
                     startWakeWord();
-                    console.log("🎤 [System] Wake Word Standby...");
-                }, 800); 
+                    console.log("🎤 [System] Mic safety delay finished. Standby...");
+                }
+            } else {
+                isTransitioning = false;
             }
-        }
+        }, 1000); // 💡 รอ 1 วินาทีให้ Chrome เคลียร์ Process เสียงให้จบ
     };
     window.speechSynthesis.speak(msg);
 }
-
-// 🚩 สำคัญมาก: ในฟังก์ชัน greetUser() ให้แก้บรรทัดสุดท้ายเป็นแบบนี้:
-// speak(finalGreet, () => { window.isBusy = false; window.allowWakeWord = true; }); 
-// (คือ "ลบ" startWakeWord(); ออกจากใน greetUser เพราะเราให้ speak จัดการที่เดียวแล้ว)
 
 function stopAllSpeech() { 
     window.speechSynthesis.cancel(); 
