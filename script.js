@@ -1,6 +1,6 @@
 /**
  * 🚀 สมองกลน้องนำทาง - Ultimate Hybrid Version (Wake Word + Face Link)
- * แก้ไข: ระบบ Auto-Mute ไมค์ขณะพูด เพื่อป้องกันเสียงแทรกตัดการทำงาน
+ * แก้ไข: ปรับปรุง Logic isBusy และ Sync หน้าจอให้เสถียร ป้องกันเสียงตัดและทำงานซ้อน
  */
 
 window.localDatabase = null;
@@ -38,7 +38,7 @@ function setupWakeWord() {
     wakeWordRecognition.lang = 'th-TH';
 
     wakeWordRecognition.onresult = (event) => {
-        // 🔒 ถ้ากำลังพูด (Busy) ให้ข้ามการประมวลผลเสียงปลุก
+        // 🔒 ถ้ากำลังยุ่ง ห้ามประมวลผลคำปลุกซ้ำ
         if (window.isBusy) return;
 
         const lastResultIndex = event.results.length - 1;
@@ -46,16 +46,21 @@ function setupWakeWord() {
         console.log("👂 WakeWord Detected:", text);
 
         if (text.includes("น้องนำทาง") || text.includes("สวัสดีน้องนำทาง")) {
-            stopWakeWord(); // ปิดการแอบฟังทันทีที่ได้รับคำปลุก
-            speak("ครับผม มีอะไรให้ช่วยไหมครับ");
+            stopWakeWord(); 
+            
+            // ✅ Sync ข้อความหน้าจอให้ตรงกับคำพูด
+            const wakeMsg = "ครับผม มีอะไรให้ช่วยไหมครับ";
+            displayResponse(wakeMsg);
+            speak(wakeMsg);
+
             setTimeout(() => {
+                // เรียกฟังก์ชันเปิดไมค์รับคำถามต่อ (หน่วงเวลาให้พูดจบก่อน)
                 if (typeof toggleListening === "function") toggleListening(); 
-            }, 1600);
+            }, 2000);
         }
     };
 
     wakeWordRecognition.onend = () => {
-        // รันใหม่เฉพาะตอนที่ควรจะ Active และไม่ได้กำลังพูดอยู่
         if (isWakeWordActive && !window.isBusy) {
             try { wakeWordRecognition.start(); } catch(e) {}
         }
@@ -159,9 +164,9 @@ async function detectPerson() {
             if (personInFrameTime === null) personInFrameTime = now;
             window.detectedGender = face.gender; 
 
+            // ✅ เพิ่มการเช็ค !window.isBusy เพื่อไม่ให้ทักทายแทรกขณะคุย
             if ((now - personInFrameTime) >= 2000 && isAtHome && !window.isBusy && !window.hasGreeted) {
                 greetUser();
-                // จะเริ่มแอบฟังหลังจากทักทายจบในฟังก์ชัน speak
             }
             lastSeenTime = now; 
         } else {
@@ -178,6 +183,7 @@ async function detectPerson() {
 }
 
 function greetUser() {
+    // 🚩 ล็อคป้องกันการทำงานซ้อน
     if (window.hasGreeted || window.isBusy) return;
     forceUnmute();
     isAtHome = false; 
@@ -213,7 +219,7 @@ function greetUser() {
     speak(finalGreet);
 }
 
-// --- 3. ระบบคัดกรองใบขับขี่ & 4. Search ---
+// --- 3. ระบบคัดกรองใบขับขี่ & 4. Search (ไม่มีการแก้ไข) ---
 
 function startLicenseCheck(type) {
     isAtHome = false;
@@ -308,11 +314,12 @@ async function getResponse(userQuery) {
     } catch (err) { window.isBusy = false; }
 }
 
-// --- 5. ระบบเสียง (Google Voice) + ปรับปรุงระบบป้องกันเสียงสะท้อน ---
+// --- 5. ระบบเสียง (Google Voice) + ปรับปรุงความเสถียร isBusy ---
 function speak(text) {
     if (!text || window.isMuted) return;
     
-    // 🚩 สั่งหยุดการแอบฟังทันทีที่เริ่มพูด เพื่อไม่ให้เสียงตัวเองเข้าไมค์
+    // 🚩 ปักป้าย "Busy" ทันทีที่รับคำสั่ง เพื่อบล็อกการทักทายจากดวงตา AI
+    window.isBusy = true; 
     stopWakeWord();
     window.speechSynthesis.cancel();
 
@@ -337,25 +344,24 @@ function speak(text) {
 
     msg.rate = 1.05;
     msg.onstart = () => { 
-        window.isBusy = true; 
         updateLottie('talking');
-        console.log("📢 [Speaker] น้องกำลังพูด: ปิดไมค์อัตโนมัติ");
+        console.log("📢 [Speaker] Start: isBusy =", window.isBusy);
     };
     msg.onend = () => { 
         if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
-        window.isBusy = false; 
+        window.isBusy = false; // ✅ คลายล็อคเมื่อพูดจบ
         updateLottie('idle'); 
         updateInteractionTime(); 
         
-        // 🚀 เมื่อพูดจบ: ถ้าคนยังอยู่ ให้กลับมา "แอบฟัง" ใหม่หลังจากเสียงในห้องเงียบลงเล็กน้อย
+        console.log("👂 [Speaker] End: Ready for next command");
         if (personInFrameTime !== null) {
-            console.log("👂 [Speaker] พูดจบแล้ว: เริ่มเปิดไมค์รอรับคำเรียก");
             setTimeout(startWakeWord, 800); 
         }
     };
     window.speechSynthesis.speak(msg);
 }
 
+// ส่วนฟังก์ชันเสริมอื่นๆ คงไว้ตามเดิมของพี่
 window.speechSynthesis.onvoiceschanged = () => { window.speechSynthesis.getVoices(); };
 function stopAllSpeech() { window.speechSynthesis.cancel(); if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout); window.isBusy = false; updateLottie('idle'); }
 function changeLanguage(lang) { window.currentLang = lang; isAtHome = true; window.hasGreeted = false; personInFrameTime = null; renderFAQButtons(); }
