@@ -65,38 +65,51 @@ function setupWakeWord() {
     if (wakeWordRecognition) { try { wakeWordRecognition.abort(); } catch(e) {} }
 
     wakeWordRecognition = new SpeechRecognition();
-    wakeWordRecognition.continuous = true;
+    // 🚩 ปรับเป็น true เพื่อให้ฟังต่อเนื่อง ไม่ปิดตัวเองเมื่อเจอเสียงแทรก
+    wakeWordRecognition.continuous = true; 
     wakeWordRecognition.interimResults = false;
     wakeWordRecognition.lang = 'th-TH';
 
     wakeWordRecognition.onresult = (event) => {
         const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
-        // 🚩 แก้ไข: เพิ่มการเช็ค isBusy เพื่อไม่ให้ทำงานแทรกขณะพูด
         if (!window.allowWakeWord || window.isBusy || isListeningNow) return;
-        
+
         const lastResultIndex = event.results.length - 1;
         const text = event.results[lastResultIndex][0].transcript.trim();
-        if (text.includes("น้องนำทาง") || text.includes("สวัสดีน้องนำทาง")) {
-            forceStopAllMic(); // หยุดดักฟังทันทีที่เจอ Keyword
+        
+        console.log("👂 Heard:", text); // ไว้ดูใน Console ว่าไมค์ได้ยินคำว่าอะไร
+
+        // 🚩 คัดกรองคำที่ดังเข้าไมค์: ต้องมีคำสำคัญถึงจะทำงาน
+        if (text.includes("น้องนำทาง") || text.includes("สวัสดีน้องนำทาง") || text.includes("นำทาง")) {
+            console.log("🎯 Keyword Matched!");
+            forceStopAllMic(); // เจอคำที่ถูกต้อง "ค่อยสั่งปิดไมค์" เพื่อสลับไปฟังคำถาม
             window.isBusy = true;
+            
             const responses = window.currentLang === 'th' ? ["ครับผม", "สวัสดีครับ มีอะไรให้น้องช่วยไหมครับ"] : ["Yes!", "Hello!"];
             const msg = responses[Math.floor(Math.random() * responses.length)];
+            
             displayResponse(msg);
             speak(msg, () => {
                 window.isBusy = false; 
                 setTimeout(() => { if (typeof toggleListening === "function") toggleListening(); }, 200);
             });
+        } else {
+            // ถ้าเสียงที่เข้าไมค์ไม่ใช่ Keyword ให้ปล่อยผ่านไปเฉยๆ ไม่ต้องสั่ง Restart ไมค์
+            console.log("🍃 Noise ignored.");
         }
     };
 
     wakeWordRecognition.onend = () => {
-        // 🚩 แก้ไข: หน่วงเวลาเล็กน้อยและเช็คเงื่อนไขก่อน Restart เพื่อไม่ให้ไมค์ "ดีด" ถี่เกินไป
+        // Restart เฉพาะตอนที่ไมค์หลุดจริงๆ (เช่น หมดเวลาของเบราว์เซอร์) 
+        // และต้องไม่อยู่ในขณะที่ "น้องกำลังพูด"
         setTimeout(() => {
-            const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
-            if (window.allowWakeWord && isWakeWordActive && !window.isBusy && !isListeningNow && personInFrameTime !== null) {
-                try { wakeWordRecognition.start(); } catch(e) {}
+            if (window.allowWakeWord && isWakeWordActive && !window.isBusy && personInFrameTime !== null) {
+                try { 
+                    wakeWordRecognition.start(); 
+                    console.log("🔄 [System] Mic re-synced.");
+                } catch(e) {}
             }
-        }, 800);
+        }, 1000);
     };
 }
 
