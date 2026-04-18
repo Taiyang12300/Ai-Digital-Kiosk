@@ -200,18 +200,37 @@ async function detectPerson() {
 
 function greetUser() {
     if (window.hasGreeted || window.isBusy) return;
-    forceUnmute(); isAtHome = false; window.hasGreeted = true; window.isBusy = true; 
+    forceUnmute(); 
+    isAtHome = false; 
+    window.hasGreeted = true; 
+    window.isBusy = true; 
+
     const hour = new Date().getHours();
     const isThai = window.currentLang === 'th';
     const gender = window.detectedGender || 'male';
-    let timeGreet = isThai ? (hour < 12 ? "สวัสดีตอนเช้าครับ" : (hour < 17 ? "สวัสดีตอนบ่ายครับ" : "สวัสดีตอนเย็นครับ")) : (hour < 12 ? "Good morning" : (hour < 17 ? "Good afternoon" : "Good evening"));
-    let personType = isThai ? (gender === 'male' ? "คุณผู้ชาย" : "คุณผู้หญิง") : (gender === 'male' ? "Sir" : "Madam");
+
+    let timeGreet = isThai 
+        ? (hour < 12 ? "สวัสดีตอนเช้าครับ" : (hour < 17 ? "สวัสดีตอนบ่ายครับ" : "สวัสดีตอนเย็นครับ")) 
+        : (hour < 12 ? "Good morning" : (hour < 17 ? "Good afternoon" : "Good evening"));
+    
+    let personType = isThai 
+        ? (gender === 'male' ? "คุณผู้ชาย" : "คุณผู้หญิง") 
+        : (gender === 'male' ? "Sir" : "Madam");
+
     const greetingsTh = [`${timeGreet}${personType} สอบถามผมได้นะครับ`, `สวัสดีครับ ผมน้องนำทาง ยินดีให้บริการครับ` ];
     const greetingsEn = [`Welcome! I'm Nong Nam Thang. Just call my name.`];
+
     const list = isThai ? greetingsTh : greetingsEn;
     const finalGreet = list[Math.floor(Math.random() * list.length)];
+
     displayResponse(finalGreet);
-    speak(finalGreet, () => { window.isBusy = false; window.allowWakeWord = true; startWakeWord(); });
+    
+    // 🚩 ปรับ Callback: แค่คืนค่า Busy และอนุญาตสิทธิ์ WakeWord
+    speak(finalGreet, () => { 
+        window.isBusy = false; 
+        window.allowWakeWord = true; 
+        console.log("✅ [System] Greeting finished, ready for WakeWord.");
+    });
 }
 
 // --- 🚩 3. ระบบคัดกรองใบขับขี่ ---
@@ -356,38 +375,71 @@ async function getResponse(userQuery) {
 
 function speak(text, callback = null) {
     if (!text || window.isMuted) return;
+    
     stopWakeWord(); 
     window.speechSynthesis.cancel();
     window.isBusy = true;
+    
     const safetyTime = (text.length * 200) + 5000;
     if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
-    speechSafetyTimeout = setTimeout(() => { if (window.isBusy) { window.isBusy = false; updateLottie('idle'); if (callback) callback(); } }, safetyTime);
+    speechSafetyTimeout = setTimeout(() => { 
+        if (window.isBusy) { 
+            window.isBusy = false; 
+            updateLottie('idle'); 
+            if (callback) callback(); 
+        } 
+    }, safetyTime);
 
     // แก้คำทับศัพท์
     let cleanText = text.replace(/Queue/gi, "คิว").replace(/DLT/gi, "ดีแอลที").replace(/Smart/gi, "สมาร์ท");
     const msg = new SpeechSynthesisUtterance(cleanText.replace(/<[^>]*>?/gm, '').replace(/[*#-]/g, ""));
     const voices = window.speechSynthesis.getVoices();
+    
     if (window.currentLang === 'th') {
         msg.lang = 'th-TH';
         const googleThai = voices.find(v => v.name.includes('Google') && v.lang.includes('th'));
         if (googleThai) msg.voice = googleThai;
     }
+    
     msg.rate = 1.05;
     msg.onstart = () => { updateLottie('talking'); };
+    
     msg.onend = () => { 
         if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
-        window.isBusy = false; updateLottie('idle'); updateInteractionTime(); 
+        window.isBusy = false; 
+        updateLottie('idle'); 
+        updateInteractionTime(); 
+
+        // 🚩 1. รัน Callback เพื่อจัดการ State ต่างๆ ให้เสร็จก่อน (เช่นเซต allowWakeWord = true)
         if (callback) callback();
-        else if (window.allowWakeWord && !isAtHome) {
+
+        // 🚩 2. ตัดสินใจเปิดไมค์ที่นี่ที่เดียว (ใช้ IF ปกติ ไม่ใช้ ELSE IF)
+        // ตรวจสอบสิทธิ์ล่าสุดหลังจากที่ Callback ทำงานเสร็จแล้ว
+        if (window.allowWakeWord && !isAtHome) {
             const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
-            if (!isListeningNow) setTimeout(startWakeWord, 1000); 
+            if (!isListeningNow && !isWakeWordActive) { 
+                // เพิ่ม Delay เล็กน้อยเพื่อให้ระบบเสียงคืนทรัพยากร Chrome ให้เรียบร้อยก่อนเปิดไมค์
+                setTimeout(() => {
+                    startWakeWord();
+                    console.log("🎤 [System] Wake Word Standby...");
+                }, 800); 
+            }
         }
     };
     window.speechSynthesis.speak(msg);
 }
 
-window.speechSynthesis.onvoiceschanged = () => { window.speechSynthesis.getVoices(); };
-function stopAllSpeech() { window.speechSynthesis.cancel(); if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout); window.isBusy = false; updateLottie('idle'); }
+// 🚩 สำคัญมาก: ในฟังก์ชัน greetUser() ให้แก้บรรทัดสุดท้ายเป็นแบบนี้:
+// speak(finalGreet, () => { window.isBusy = false; window.allowWakeWord = true; }); 
+// (คือ "ลบ" startWakeWord(); ออกจากใน greetUser เพราะเราให้ speak จัดการที่เดียวแล้ว)
+
+function stopAllSpeech() { 
+    window.speechSynthesis.cancel(); 
+    if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout); 
+    window.isBusy = false; 
+    updateLottie('idle'); 
+    console.log("🛑 [System] Speech and SafetyTimeout cleared.");
+}
 
 function renderFAQButtons() {
     const container = document.getElementById('faq-container');
