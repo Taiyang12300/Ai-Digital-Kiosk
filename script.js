@@ -536,4 +536,32 @@ async function initCamera() {
     } catch (err) { console.error("❌ Camera Error"); }
 }
 
+/**
+ * 🔒 ระบบป้องกันเสียงค้างเมื่อปิดแท็บ หรือสลับหน้าจอ (Visibility & Unload)
+ */
+
+// 1. เมื่อผู้ใช้สลับหน้าจอ (Switch Tab) หรือพับหน้าต่าง Browser ลง
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        console.log("🤫 [System] Page hidden: Stopping all speech and mic.");
+        stopAllSpeech();
+        forceStopAllMic(); // ปิดไมค์ดักฟังด้วยเพื่อความเป็นส่วนตัว
+    }
+});
+
+// 2. เมื่อผู้ใช้สั่ง Refresh หรือ ปิดแท็บ Browser (Close Tab)
+window.addEventListener('beforeunload', () => {
+    stopAllSpeech();
+    forceStopAllMic();
+});
+
+// 3. ฟังก์ชันพิเศษสำหรับหยุดทุกอย่าง (ใช้เรียกจากส่วนอื่นได้)
+function stopEverything() {
+    stopAllSpeech();
+    forceStopAllMic();
+    if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
+    window.isBusy = false;
+    updateLottie('idle');
+}
+
 initDatabase();
