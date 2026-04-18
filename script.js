@@ -69,28 +69,44 @@ function setupWakeWord() {
     wakeWordRecognition.interimResults = false;
     wakeWordRecognition.lang = 'th-TH';
 
-    wakeWordRecognition.onresult = (event) => {
+        wakeWordRecognition.onresult = (event) => {
         const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
         if (!window.allowWakeWord || window.isBusy || isListeningNow) return;
 
         const lastResultIndex = event.results.length - 1;
         const text = event.results[lastResultIndex][0].transcript.trim();
 
+        // ตรวจสอบ Keyword
         if (text.includes("น้องนำทาง") || text.includes("สวัสดีน้องนำทาง") || text.includes("นำทาง")) {
-            // 🚩 สั่งหยุดสถานะดักฟังทันที เพื่อป้องกัน onend ทำงานซ้อน
             isWakeWordActive = false; 
             window.isBusy = true;
             forceStopAllMic(); 
 
-            const responses = window.currentLang === 'th' ? ["ครับผม", "สวัสดีครับ มีอะไรให้น้องช่วยไหมครับ"] : ["Yes!", "Hello!"];
-            const msg = responses[Math.floor(Math.random() * responses.length)];
+            let msg = "";
+            if (window.currentLang === 'th') {
+                // 🚩 สุ่มคำตอบรับแบบผสม (เพื่อความหลากหลายสูงสุด)
+                const affirmations = ["ครับผม", "สวัสดีครับ", "น้องนำทางมาแล้วครับ", "ครับท่าน"];
+                const questions = ["มีอะไรให้น้องนำทางช่วยไหมครับ?", "ต้องการสอบถามข้อมูลด้านไหนดีครับ?", "บอกน้องนำทางได้เลยนะครับ", "ให้น้องนำทางช่วยอะไรดีครับ?"];
+                
+                const randomAff = affirmations[Math.floor(Math.random() * affirmations.length)];
+                const randomQue = questions[Math.floor(Math.random() * questions.length)];
+                
+                // สุ่มว่าจะตอบแค่คำรับ หรือตอบแบบรับ+ถามต่อ
+                const patterns = [
+                    `${randomAff}... ${randomQue}`,
+                    `${randomAff}ครับ... ${randomQue}`,
+                    `${randomAff}`
+                ];
+                msg = patterns[Math.floor(Math.random() * patterns.length)];
+            } else {
+                const responsesEn = ["Yes!", "How can I help you?", "Hello! I'm listening.", "Yes, Sir!"];
+                msg = responsesEn[Math.floor(Math.random() * responsesEn.length)];
+            }
             
             displayResponse(msg);
             
-            // พูดตอบรับ และส่งต่อให้ toggleListening (ตัวรับคำถามหลัก)
             speak(msg, () => {
                 window.isBusy = false; 
-                // หน่วงเวลาเล็กน้อยเพื่อให้เสียงพูดจบสนิทจริงๆ ก่อนเริ่มฟังคำถาม
                 setTimeout(() => { 
                     if (typeof toggleListening === "function") {
                         toggleListening(); 
@@ -227,31 +243,62 @@ function greetUser() {
     window.hasGreeted = true; 
     window.isBusy = true; 
 
-    const hour = new Date().getHours();
+    const now = new Date();
+    const hour = now.getHours();
     const isThai = window.currentLang === 'th';
     const gender = window.detectedGender || 'male';
 
-    let timeGreet = isThai 
-        ? (hour < 12 ? "สวัสดีตอนเช้าครับ" : (hour < 17 ? "สวัสดีตอนบ่ายครับ" : "สวัสดีตอนเย็นครับ")) 
-        : (hour < 12 ? "Good morning" : (hour < 17 ? "Good afternoon" : "Good evening"));
-    
-    let personType = isThai 
-        ? (gender === 'male' ? "คุณผู้ชาย" : "คุณผู้หญิง") 
-        : (gender === 'male' ? "Sir" : "Madam");
+    let finalGreet = "";
 
-    const greetingsTh = [`${timeGreet}${personType} สอบถามผมได้นะครับ`, `สวัสดีครับ ผมน้องนำทาง ยินดีให้บริการครับ` ];
-    const greetingsEn = [`Welcome! I'm Nong Nam Thang. Just call my name.`];
+    if (isThai) {
+        // 1. คำทักทายตามเวลา
+        let timeGreet = "";
+        let lunchAsk = "";
+        if (hour < 12) {
+            timeGreet = "สวัสดีตอนเช้าครับ";
+        } else if (hour === 12) {
+            timeGreet = "สวัสดีตอนเที่ยงครับ";
+            lunchAsk = "... ทานข้าวหรือยังครับ";
+        } else if (hour < 17) {
+            timeGreet = "สวัสดีตอนบ่ายครับ";
+        } else {
+            timeGreet = "สวัสดีตอนเย็นครับ";
+        }
 
-    const list = isThai ? greetingsTh : greetingsEn;
-    const finalGreet = list[Math.floor(Math.random() * list.length)];
+        // 2. คำเรียก (เน้นสุภาพตามที่กำหนด)
+        const pTypes = (gender === 'male') ? ["คุณผู้ชาย", "ท่าน"] : ["คุณผู้หญิง", "ท่าน"];
+        const pType = pTypes[Math.floor(Math.random() * pTypes.length)];
+
+        // 3. ประโยคปิดท้ายสั้นๆ
+        const ends = [
+            "มีอะไรให้น้องนำทางช่วยไหมครับ?",
+            "สอบถามข้อมูลกับน้องนำทางได้เลยนะครับ",
+            "น้องนำทางยินดีให้บริการครับ",
+            "วันนี้ให้น้องนำทางช่วยเรื่องไหนดีครับ?"
+        ];
+        const end = ends[Math.floor(Math.random() * ends.length)];
+
+        // 4. สุ่มรูปแบบประโยค
+        const patterns = [
+            `${timeGreet} ${pType}${lunchAsk}... ${end}`,
+            `สวัสดีครับ ${pType}${lunchAsk}... ${end}`
+        ];
+        finalGreet = patterns[Math.floor(Math.random() * patterns.length)];
+
+    } else {
+        // ภาษาอังกฤษแบบสั้นและสุภาพ
+        const greetsEn = ["Hello", "Welcome", "Good day"];
+        const pTypeEn = (gender === 'male') ? "Sir" : "Madam";
+        const endEn = ["How can I help you?", "Need any assistance?"];
+        finalGreet = `${greetsEn[Math.floor(Math.random() * greetsEn.length)]} ${pTypeEn}, ${endEn[Math.floor(Math.random() * endEn.length)]}`;
+    }
 
     displayResponse(finalGreet);
     
-    // 🚩 ปรับ Callback: หลังทักทายเสร็จ allowWakeWord จึงจะเป็น true และ speak จะเป็นคนเรียก startWakeWord เอง
     speak(finalGreet, () => { 
         window.isBusy = false; 
         window.allowWakeWord = true; 
-        console.log("✅ [System] Greeting finished.");
+        console.log("✅ [System] Greeting finished. น้องนำทาง Standby...");
     });
 }
 
