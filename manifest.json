@@ -1,0 +1,20 @@
+{
+  "name": "สมองกลน้องนำทาง AI",
+  "short_name": "น้องนำทาง",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#6c5ce7",
+  "icons": [
+    {
+      "src": "https://img2.pic.in.th/59407.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://img2.pic.in.th/59407.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
