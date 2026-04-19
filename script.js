@@ -30,7 +30,6 @@ let isWakeWordActive = false;
 // --- 🚩 ฟังก์ชันควบคุม Splash Screen (ปรับปรุงให้สมูท) ---
 function completeLoading() {
     const splash = document.getElementById('splash-screen');
-    const main = document.getElementById('mainUI') || document.querySelector('.main-container');
     const progBar = document.getElementById('splash-progress-bar');
     const statusTxt = document.getElementById('splash-status-text');
 
@@ -39,42 +38,25 @@ function completeLoading() {
     
     setTimeout(() => {
         if (splash) {
-            // 1. ค่อยๆ จาง Splash Screen ออก
+            splash.style.transition = 'opacity 0.8s ease';
             splash.style.opacity = '0';
-            splash.style.visibility = 'hidden';
-
-            // 2. ตั้งค่าหน้า Main ให้แสดงผลแบบ Flex (แต่ยัง opacity: 0)
-            if (main) {
-                main.style.display = 'flex';
-                
-                // 3. หน่วงเวลาเล็กน้อยเพื่อให้เบราว์เซอร์รับรู้การเปลี่ยน display แล้วค่อย Fade In
-                setTimeout(() => {
-                    main.style.opacity = '1';
-                    
-                    // บังคับสถานะเริ่มต้นให้อยู่หน้า Home
-                    isAtHome = true;
-                    window.isBusy = false;
-                    window.hasGreeted = false;
-                    window.allowWakeWord = false; 
-
-                    const homeMsg = (window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone.");
-                    displayResponse(homeMsg);
-
-                    renderFAQButtons(); 
-                    initCamera(); 
-                    
-                    // ล็อคหน้าจอไม่ให้รูดในหน้าแรก
-                    document.body.style.overflowY = 'hidden';
-                    console.log("🏠 [System] Home screen transition complete.");
-                }, 100);
-            }
-
-            // 4. หลังจากจางหายสนิท ค่อยเอาออกจาก DOM Flow
             setTimeout(() => {
                 splash.style.display = 'none';
-            }, 1000);
+                
+                isAtHome = true;
+                window.isBusy = false;
+                window.hasGreeted = false;
+                window.allowWakeWord = false; 
+
+                const homeMsg = (window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone.");
+                displayResponse(homeMsg);
+
+                renderFAQButtons(); 
+                initCamera();       
+                console.log("🏠 [System] Home screen ready.");
+            }, 800);
         }
-    }, 600);
+    }, 500);
 }
 
 // --- 🚩 ฟังก์ชันกลางสำหรับจัดการสิทธิ์และการเล่นเสียง ---
