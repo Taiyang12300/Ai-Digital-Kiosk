@@ -395,7 +395,7 @@ async function getResponse(userQuery) {
 function speak(text, callback = null, isGreeting = false) {
     if (!text || window.isMuted) return;
     
-    forceStopAllMic(); // หยุดการฟังขณะ AI พูด เพื่อไม่ให้ AI ฟังเสียงตัวเอง
+    forceStopAllMic(); // 🛑 หยุดไมค์ทุกตัวก่อนเริ่มพูด
     window.speechSynthesis.cancel();
     window.isBusy = true;
 
@@ -411,22 +411,21 @@ function speak(text, callback = null, isGreeting = false) {
 
         if (callback) callback();
 
-        // 🚩 แก้ไข: หลังจากพูดจบ ให้เลือกโหมดการฟัง
+        // 🚩 จัดการโหมดการฟังหลังพูดจบ
         if (window.allowWakeWord && !isAtHome) {
-            if (isGreeting) {
-                // ถ้าแค่ทักทาย ให้ "รอเรียกชื่อ" (Wake Word) อย่างเดียว
-                setTimeout(() => {
-                    if (!window.isBusy) startWakeWord(); 
-                }, 500);
-            } else {
-                // ถ้าเป็นการตอบคำถาม ให้ "เปิดไมค์รับคำถามต่อ" ทันที
-                setTimeout(() => {
-                    if (!window.isBusy && typeof toggleListening === "function") {
-                        // ตรวจสอบว่าไมค์ยังไม่เปิดอยู่ค่อยสั่งเปิด
-                        if (!window.isListening) toggleListening(); 
+            setTimeout(() => {
+                if (window.isBusy) return; // ถ้ามีการสั่งงานอื่นแทรก ไม่ต้องเปิดไมค์
+
+                if (isGreeting) {
+                    // กรณีทักทาย: ให้รอเรียกชื่อ "น้องนำทาง" (Wake Word)
+                    startWakeWord();
+                } else {
+                    // กรณีตอบคำถาม: เปิดไมค์ STT รับคำถามต่อเนื่องทันที
+                    if (typeof toggleListening === "function" && !window.isListening) {
+                        toggleListening();
                     }
-                }, 800); 
-            }
+                }
+            }, 800); 
         }
     };
     window.speechSynthesis.speak(msg);
