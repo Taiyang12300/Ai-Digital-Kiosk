@@ -462,12 +462,11 @@ async function getResponse(userQuery) {
     } catch (err) { window.isBusy = false; }
 }
 
-// --- 5. ระบบเสียง (แก้ไขจังหวะไมค์) ---
-
+// --- 5. ระบบเสียง ---
 function speak(text, callback = null) {
     if (!text || window.isMuted) return;
     
-    // 🚩 ก่อนพูดต้องสั่งหยุดไมค์ทุกชนิด และเคลียร์สถานะ Active
+    // 🚩 หยุดไมค์ทุกชนิดก่อนเริ่มพูด
     isWakeWordActive = false; 
     forceStopAllMic(); 
     
@@ -487,25 +486,33 @@ function speak(text, callback = null) {
 
         if (callback) callback();
 
-        // 🚩 หัวใจสำคัญ: เปิดไมค์เฉพาะเมื่อ "ไม่ยุ่ง" และ "ไม่ใช่หน้าโฮม"
-        // และต้องไม่อยู่ในระหว่างโหมดฟังคำถาม (toggleListening)
-        if (window.allowWakeWord && !isAtHome && !window.isBusy) {
-            const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
-            if (!isListeningNow) {
-                setTimeout(() => {
-                    // ตรวจสอบความปลอดภัยอีกครั้งก่อนรัน
-                    if (!window.isBusy && !isWakeWordActive) {
-                        isWakeWordActive = true;
-                        startWakeWord();
+        // 🚩 [ส่วนที่เพิ่มใหม่] หัวใจสำคัญ: เปิดไมค์รอคำถามทันที
+        // เฉพาะเมื่อ "ไม่อยู่หน้าโฮม" และ "ได้รับสิทธิ์ allowWakeWord"
+        if (window.allowWakeWord && !isAtHome) {
+            setTimeout(() => {
+                const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
+                
+                if (!window.isBusy && !isListeningNow) {
+                    console.log("🎤 [System] น้องตอบจบแล้ว... เปิดไมค์รอคำถาม");
+                    
+                    // เรียกฟังก์ชันเปิดไมค์รับคำถาม (STT) ทันที
+                    if (typeof toggleListening === "function") {
+                        toggleListening(); 
                     }
-                }, 1200); // หน่วงเวลา 1.2 วินาที กันเสียงสะท้อนจากลำโพง
-            }
+                    
+                    /**
+                     * 💡 หมายเหตุ: 
+                     * เมื่อไมค์ STT (toggleListening) หยุดทำงานเนื่องจากไม่มีคนพูด (Timeout) 
+                     * ระบบจะวิ่งไปที่ onend ของตัว Recognition นั้นๆ 
+                     * ซึ่งคุณควรมีฟังก์ชันเรียก startWakeWord() รอไว้ในส่วนนั้น 
+                     * เพื่อให้กลับมาดักฟัง "น้องนำทาง" ต่อโดยอัตโนมัติ
+                     */
+                }
+            }, 1000); // หน่วง 1 วินาทีกันเสียงสะท้อน
         }
     };
     window.speechSynthesis.speak(msg);
 }
-
-// --- 🚩 ฟังก์ชันอำนวยความสะดวก (คงเดิม) ---
 
 function stopAllSpeech() { 
     window.speechSynthesis.cancel(); 
