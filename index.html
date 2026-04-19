@@ -21,24 +21,22 @@
       display: flex; 
       justify-content: center; 
       min-height: 100vh;
-      /* 🚩 แก้ไข: เปิดให้เลื่อนหน้าจอได้ปกติ */
-      overflow-y: auto; 
+      overflow-y: auto; /* ✅ แก้ไข: อนุญาตให้เลื่อนหน้าจอแนวตั้งได้เมื่อเข้าหน้าโฮม */
+      overflow-x: hidden; 
     }
 
-    /* 🚩 แก้ไข: ตั้งค่าเริ่มต้นสำหรับการ Fade In และเปิดให้เนื้อหาเลื่อนได้ */
     .main-container { 
+      display: none; 
       opacity: 0; 
       width: 100%; 
       max-width: 600px; 
       padding: 20px; 
-      display: flex; 
       flex-direction: column; 
       align-items: center;
       transition: opacity 1s ease-in-out;
-      min-height: 100vh;
     }
     
-    /* --- UI Components --- */
+    /* --- UI Components (ส่วนที่ห้ามแก้ไข) --- */
     .top-controls { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
     .lang-container { display: flex; gap: 10px; }
     .btn-lang, .btn-mute { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px; border-radius: 25px; border: 2px solid #e0e0e0; background: white; color: #636e72; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
@@ -46,7 +44,7 @@
     .btn-lang.active { border-color: var(--primary); background: #f0edff; color: var(--primary); font-weight: bold; }
     .btn-mute.muted { background: var(--accent); color: white; border-color: var(--accent); }
 
-    .avatar-container { width: 180px; height: 180px; margin-bottom: 20px; border-radius: 50%; background: white; box-shadow: 0 5px 15px rgba(0,0,0,0.05); overflow: hidden; flex-shrink: 0; }
+    .avatar-container { width: 180px; height: 180px; margin-bottom: 20px; border-radius: 50%; background: white; box-shadow: 0 5px 15px rgba(0,0,0,0.05); overflow: hidden; }
     #lottie-canvas { width: 100%; height: 100%; }
 
     .display-box { background: white; border-radius: 20px; padding: 25px; box-shadow: 0 10px 20px rgba(0,0,0,0.05); width: 100%; box-sizing: border-box; text-align: left; min-height: 140px; font-size: 18px; margin-bottom: 20px; color: #2d3436; border-left: 6px solid var(--primary); line-height: 1.6; }
@@ -65,110 +63,44 @@
     .btn-mic.recording { background: var(--accent); animation: pulse 1.5s infinite; }
     @keyframes pulse { 0% { transform: scale(1); } 70% { transform: scale(1.1); } 100% { transform: scale(1); } }
 
-    /* --- [ใหม่] ระบบ Checklist --- */
+    /* Checklist & Ticket Printing (ห้ามแก้ไข) */
     .checklist-card { text-align: left; background: white; padding: 15px; border-radius: 12px; border: 1px solid #ddd; }
     .check-item { display: flex; align-items: center; margin-bottom: 12px; background: #f0f2f5; padding: 10px; border-radius: 8px; cursor: pointer; }
     .check-item input { width: 22px; height: 22px; cursor: pointer; accent-color: #28a745; }
     .check-item label { margin-left: 12px; font-size: 18px; cursor: pointer; color: #333; flex: 1; }
-
-    /* --- [ใหม่] ปุ่มปริ้นในหน้าจอ --- */
-    #btnPrintGuide { 
-        display: none !important; 
-        width: 100%; padding: 15px; background: #28a745; color: white; 
-        border: none; border-radius: 10px; font-weight: bold; 
-        font-size: 20px; cursor: pointer; margin-top: 15px; 
-    }
+    #btnPrintGuide { display: none !important; width: 100%; padding: 15px; background: #28a745; color: white; border: none; border-radius: 10px; font-weight: bold; font-size: 20px; cursor: pointer; margin-top: 15px; }
     #btnPrintGuide.show-btn { display: block !important; }
+    .ticket { background: white; color: #000 !important; width: 52mm; padding: 5px 2px 5px 8px; margin: 0 auto; font-family: 'Kanit', sans-serif; text-align: center; box-sizing: border-box; }
+    .ticket * { font-weight: 900 !important; color: #000 !important;}
+    .ticket .big { font-size: 24px; margin: 8px 0; line-height: 1.1; display: block; text-align: center;}
+    #printLicenseNote { background: transparent !important; color: #000 !important; border: 1px dashed #000; padding: 6px 4px; font-weight: 900 !important; font-size: 14px; margin: 5px 2mm; text-align: center !important; display: block; width: auto; box-sizing: border-box; word-wrap: break-word; line-height: 1.2; }
+    #printLicenseItems { margin: 10px 0 10px 5px; font-size: 12px; line-height: 1.4; display: block; text-align: left !important;}
+    @media print {
+      body > *:not(#ticketLicenseWrapper) { display: none !important; }
+      #ticketLicenseWrapper { display: block !important; position: absolute; top: 0; left: 0; width: 57mm; }
+      #ticketLicenseWrapper.printing, #ticketLicenseWrapper.printing * { visibility: visible !important; display: block !important; }
+      .ticket { position: absolute; top: 0; left: 0; width: 57mm; padding-left: 5mm; padding-right: 2mm; margin: 0; box-sizing: border-box;}
+    }
 
-    /* --- ระบบพิมพ์ (Ticket 57mm/58mm) ปรับปรุงกันตกขอบ --- */
-.ticket { 
-    background: white; 
-    color: #000 !important; 
-    width: 52mm; 
-    padding: 5px 2px 5px 8px; 
-    margin: 0 auto; 
-    font-family: 'Kanit', sans-serif; 
-    text-align: center;
-    box-sizing: border-box; 
-}
-
-.ticket * { font-weight: 900 !important; color: #000 !important;}
-
-.ticket .big { font-size: 24px; margin: 8px 0; line-height: 1.1; display: block; text-align: center;}
-
-#printLicenseNote {
-    background: transparent !important; color: #000 !important; border: 1px dashed #000; padding: 6px 4px;
-    font-weight: 900 !important; font-size: 14px; margin: 5px 2mm; text-align: center !important;
-    display: block; width: auto; box-sizing: border-box; word-wrap: break-word; line-height: 1.2;
-}
-
-#printLicenseItems { margin: 10px 0 10px 5px; font-size: 12px; line-height: 1.4; display: block; text-align: left !important;}
-
-@media print {
-  body > *:not(#ticketLicenseWrapper) { display: none !important; }
-  #ticketLicenseWrapper { display: block !important; position: absolute; top: 0; left: 0; width: 57mm; }
-  #ticketLicenseWrapper.printing, #ticketLicenseWrapper.printing * { visibility: visible !important; display: block !important; }
-  .ticket { position: absolute; top: 0; left: 0; width: 57mm; padding-left: 5mm; padding-right: 2mm; margin: 0; box-sizing: border-box;}
-}
-
-/* 🚩 ปรับปรุง Splash Screen UI: เพิ่ม Transition ให้สมูทตอนจางหาย */
-#splash-screen {
-    position: fixed;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    background-color: #000; 
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    z-index: 10000; 
-    transition: opacity 1s cubic-bezier(0.4, 0, 0.2, 1), visibility 1s;
-}
-
-.splash-logo {
-    width: 180px;
-    margin-bottom: 30px;
-    filter: drop-shadow(0 0 20px rgba(33, 150, 243, 0.6));
-}
-
-.splash-title {
-    font-family: 'Kanit', sans-serif;
-    color: white;
-    font-size: 28px;
-    font-weight: 800;
-    margin-bottom: 5px;
-}
-
-.splash-status {
-    font-family: 'Sarabun', sans-serif;
-    color: #a0a0a0;
-    font-size: 14px;
-    margin-bottom: 25px;
-}
-
-.progress-container {
-    width: 250px;
-    height: 6px;
-    background: #1a1a1a;
-    border-radius: 10px;
-    border: 1px solid #333;
-    overflow: hidden;
-}
-
-.progress-fill {
-    width: 0%;
-    height: 100%;
-    background: linear-gradient(90deg, #2196F3, #00BCD4, #2196F3);
-    background-size: 200% 100%;
-    box-shadow: 0 0 15px rgba(33, 150, 243, 0.8);
-    transition: width 0.4s ease;
-    animation: flow 2s linear infinite;
-}
-
-@keyframes flow {
-    0% { background-position: 200% 0; }
-    100% { background-position: 0 0; }
-}
+    /* --- Splash Screen UI --- */
+    #splash-screen {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        background-color: #000; 
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000; 
+        transition: opacity 1s cubic-bezier(0.4, 0, 0.2, 1), visibility 1s;
+    }
+    .splash-logo { width: 180px; margin-bottom: 30px; filter: drop-shadow(0 0 20px rgba(33, 150, 243, 0.6)); }
+    .splash-title { font-family: 'Kanit', sans-serif; color: white; font-size: 28px; font-weight: 800; margin-bottom: 5px; }
+    .splash-status { font-family: 'Sarabun', sans-serif; color: #a0a0a0; font-size: 14px; margin-bottom: 25px; }
+    .progress-container { width: 250px; height: 6px; background: #1a1a1a; border-radius: 10px; border: 1px solid #333; overflow: hidden; }
+    .progress-fill { width: 0%; height: 100%; background: linear-gradient(90deg, #2196F3, #00BCD4, #2196F3); background-size: 200% 100%; box-shadow: 0 0 15px rgba(33, 150, 243, 0.8); transition: width 0.4s ease; animation: flow 2s linear infinite; }
+    @keyframes flow { 0% { background-position: 200% 0; } 100% { background-position: 0 0; } }
     
   </style>
 </head>
@@ -176,10 +108,8 @@
 
   <div id="splash-screen">
     <img src="https://img2.pic.in.th/59407.png" class="splash-logo" alt="Logo">
-    
     <div class="splash-title">น้องนำทาง</div>
     <div id="splash-status-text" class="splash-status">กำลังเริ่มต้นระบบ... (Initializing Database...)</div>
-    
     <div class="progress-container">
         <div id="splash-progress-bar" class="progress-fill"></div>
     </div>
@@ -198,7 +128,7 @@
       <lottie-player id="lottie-canvas" src="https://lottie.host/568e8594-a319-4491-bf10-a0f5c012fc76/6S3urqybG5.json" background="transparent" speed="1" loop autoplay></lottie-player>
     </div>
 
-    <div class="display-box" id="response-text">(กำลังเตรียมระบบ AI...)</div>
+    <div class="display-box" id="response-text">สวัสดีครับ "น้องนำทาง" ยินดีให้บริการครับ มีอะไรให้ผมช่วยแนะนำไหมครับ?</div>
 
     <div class="faq-title" id="faq-title-text"><i class="fas fa-star"></i> คำถามที่พบบ่อย:</div>
     <div id="faq-container" class="faq-grid"></div>
@@ -240,28 +170,7 @@
   <script src="script.js?v=2.1"></script>
 
   <script>
-    // 🚩 เพิ่มฟังก์ชันสำหรับปิด Splash Screen และเปิด UI หลัก
-    function completeLoading() {
-      const splash = document.getElementById('splash-screen');
-      const mainUI = document.getElementById('mainUI');
-      
-      if (splash) {
-        splash.style.opacity = '0';
-        setTimeout(() => {
-          splash.style.visibility = 'hidden';
-          if (mainUI) {
-            mainUI.style.opacity = '1';
-          }
-        }, 1000); // รอให้ Fade Out จบก่อนซ่อน
-      }
-    }
-
-    // ตัวอย่างการเรียกใช้: เมื่อโหลด Script หรือ Data เสร็จ (จำลอง 3 วินาที)
-    window.addEventListener('load', () => {
-        // หากใน script.js มีการจัดการ Database ให้เรียกฟังก์ชันนี้หลังจาก Init เสร็จ
-        setTimeout(completeLoading, 3000); 
-    });
-
+    // --- Logic ส่วนอื่นๆ (ห้ามแก้ไข) ---
     let recognition, isListening = false;
     const SpeechRecognition = window.SpeechRecognition || window.webkitRecognition;
 
