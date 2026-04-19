@@ -26,6 +26,28 @@ const DETECTION_INTERVAL = 200;
 let wakeWordRecognition;
 let isWakeWordActive = false;
 
+// --- [ใหม่] ฟังก์ชันควบคุม Splash Screen ---
+function completeLoading() {
+    const splash = document.getElementById('splash-screen');
+    const progBar = document.getElementById('splash-progress-bar');
+    const statusTxt = document.getElementById('splash-status-text');
+
+    if (progBar) progBar.style.width = '100%';
+    if (statusTxt) statusTxt.innerText = 'ระบบพร้อมใช้งานแล้ว (Database Connected)';
+    
+    setTimeout(() => {
+        if (splash) {
+            splash.style.opacity = '0';
+            setTimeout(() => {
+                splash.style.display = 'none';
+                // เมื่อ Splash หายไป ค่อยเริ่มระบบทักทายและกล้อง
+                isAtHome = true;
+                initCamera(); 
+            }, 800);
+        }
+    }, 1000);
+}
+
 // --- 🚩 ฟังก์ชันกลางสำหรับจัดการสิทธิ์และการเล่นเสียง ---
 
 function forceStopAllMic() {
@@ -554,25 +576,42 @@ function displayResponse(text) {
 }
 
 async function initDatabase() {
+    const progBar = document.getElementById('splash-progress-bar');
+    if (progBar) progBar.style.width = '30%'; // ขยับหลอกตอนเริ่ม
+
     try {
         const res = await fetch(GAS_URL);
         const json = await res.json();
         if (json.database) { 
             window.localDatabase = json.database; 
+            if (progBar) progBar.style.width = '80%';
+            
             renderFAQButtons(); 
-            initCamera(); 
-            isAtHome = false; 
-            resetToHome(); 
+            // โหลดเสร็จแล้ว ปิดหน้า Welcome
+            completeLoading();
         }
-    } catch (e) { setTimeout(initDatabase, 5000); }
+    } catch (e) { 
+        console.error("Database Error, retrying...");
+        setTimeout(initDatabase, 5000); 
+    }
 }
 
 async function initCamera() {
     try {
         video = document.getElementById('video'); 
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 } });
-        if (video) { video.srcObject = stream; video.onloadedmetadata = () => { video.play(); loadFaceModels(); }; }
-    } catch (err) { console.error("❌ Camera Error"); }
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: "user", width: 640, height: 480 } 
+        });
+        if (video) { 
+            video.srcObject = stream; 
+            video.onloadedmetadata = () => { 
+                video.play(); 
+                loadFaceModels(); 
+            }; 
+        }
+    } catch (err) { 
+        console.error("❌ Camera Error"); 
+    }
 }
 
 document.addEventListener('visibilitychange', () => {
@@ -587,4 +626,6 @@ window.addEventListener('beforeunload', () => {
     forceStopAllMic();
 });
 
-initDatabase();
+document.addEventListener('DOMContentLoaded', () => {
+    initDatabase();
+});
