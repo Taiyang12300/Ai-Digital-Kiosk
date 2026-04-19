@@ -31,12 +31,12 @@
     .main-container { 
       width: 100%; 
       max-width: 600px; 
-      /* แก้ไข 3: เพิ่ม padding ล่างเพื่อไม่ให้เนื้อหาถูกปุ่มไมค์บัง */
-      padding: 20px 20px 180px 20px; 
+      padding: 20px; /* ปรับ padding กลับเป็นปกติ */
       display: flex; 
       flex-direction: column; 
       align-items: center; 
       box-sizing: border-box;
+      min-height: 100dvh; /* บังคับความสูงขั้นต่ำเท่าขนาดจอจริง */
     }
     
     /* --- UI Components (คงเดิม) --- */
@@ -63,21 +63,20 @@
 
     /* แก้ไข 4: ล็อกตำแหน่งไมค์ให้ลอยอยู่ด้านล่างหน้าจอเสมอ */
     .mic-section { 
-      position: fixed;
-      bottom: 0;
-      left: 50%;
-      transform: translateX(-50%);
+      position: -webkit-sticky; /* รองรับ Safari */
+      position: sticky;
+      bottom: 0; /* ล็อกไว้ที่ขอบล่าง */
+      margin-top: auto; /* ดันลงข้างล่างเมื่อเนื้อหาน้อย */
       width: 100%;
-      max-width: 600px;
-      padding: 20px 0 40px 0;
-      background: linear-gradient(to top, var(--bg) 80%, transparent);
+      padding: 20px 0 30px 0;
+      background: linear-gradient(to top, var(--bg) 80%, transparent); /* ไล่สีพื้นหลังให้ดูเนียนกับจอ */
       text-align: center; 
       z-index: 999;
     }
     .btn-mic { width: 90px; height: 90px; border-radius: 50%; border: none; background: var(--primary); color: white; font-size: 35px; cursor: pointer; display: flex; align-items: center; justify-content: center; margin: 0 auto; box-shadow: 0 10px 20px rgba(108,92,231,0.3); }
     .btn-mic.recording { background: var(--accent); animation: pulse 1.5s infinite; }
     @keyframes pulse { 0% { transform: scale(1); } 70% { transform: scale(1.1); } 100% { transform: scale(1); } }
-
+    
     /* --- [ส่วนอื่นๆ คงเดิม] --- */
     .checklist-card { text-align: left; background: white; padding: 15px; border-radius: 12px; border: 1px solid #ddd; }
     .check-item { display: flex; align-items: center; margin-bottom: 12px; background: #f0f2f5; padding: 10px; border-radius: 8px; cursor: pointer; }
