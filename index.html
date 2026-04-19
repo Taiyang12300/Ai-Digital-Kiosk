@@ -21,9 +21,20 @@
       display: flex; 
       justify-content: center; 
       min-height: 100vh;
+      overflow-x: hidden; /* กันการขยับแนวนอน */
     }
 
-    .main-container { width: 100%; max-width: 600px; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+    /* 🚩 ปรับปรุง: เตรียมพร้อมสำหรับการ Fade In */
+    .main-container { 
+      display: none; 
+      opacity: 0; 
+      width: 100%; 
+      max-width: 600px; 
+      padding: 20px; 
+      flex-direction: column; 
+      align-items: center;
+      transition: opacity 1s ease-in-out; /* ความนุ่มนวลในการปรากฏ */
+    }
     
     /* --- UI Components --- */
     .top-controls { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
@@ -71,91 +82,50 @@
 .ticket { 
     background: white; 
     color: #000 !important; 
-    /* ปรับเหลือ 52mm เพื่อให้มีช่องว่างขอบขวา และกัน Browser คำนวณพลาด */
     width: 52mm; 
-    padding: 5px 2px 5px 8px; /* เพิ่ม padding-left (8px) เพื่อดันเนื้อหาไปทางขวา */
+    padding: 5px 2px 5px 8px; 
     margin: 0 auto; 
     font-family: 'Kanit', sans-serif; 
     text-align: center;
-    box-sizing: border-box; /* สำคัญมาก: เพื่อให้ padding ไม่ไปเพิ่มความกว้าง 52mm */
+    box-sizing: border-box; 
 }
 
-/* บังคับทุกส่วนในตั๋วให้เข้มดำสนิท */
-.ticket * { 
-    font-weight: 900 !important; 
-    color: #000 !important;
-}
+.ticket * { font-weight: 900 !important; color: #000 !important;}
 
-.ticket .big { 
-    font-size: 24px; /* ลดขนาดลงนิดนึงกันล้นบรรทัด */
-    margin: 8px 0; 
-    line-height: 1.1;
-    display: block;
-    text-align: center;
-}
+.ticket .big { font-size: 24px; margin: 8px 0; line-height: 1.1; display: block; text-align: center;}
 
 #printLicenseNote {
-    background: transparent !important; 
-    color: #000 !important; 
-    border: 1px dashed #000; 
-    padding: 6px 4px;
-    font-weight: 900 !important; 
-    font-size: 14px; 
-    margin: 5px 2mm; /* เพิ่ม margin ซ้ายขวา 2mm เพื่อหลบขอบ */
-    text-align: center !important;
-    display: block;
-    width: auto; /* เปลี่ยนจาก 100% เป็น auto เพื่อให้เคารพ margin */
-    box-sizing: border-box;
-    word-wrap: break-word;
-    line-height: 1.2;
+    background: transparent !important; color: #000 !important; border: 1px dashed #000; padding: 6px 4px;
+    font-weight: 900 !important; font-size: 14px; margin: 5px 2mm; text-align: center !important;
+    display: block; width: auto; box-sizing: border-box; word-wrap: break-word; line-height: 1.2;
 }
 
-#printLicenseItems {
-    margin: 10px 0 10px 5px; /* ลด margin-left ลงนิดนึง */
-    font-size: 12px; 
-    line-height: 1.4;
-    display: block;
-    text-align: left !important;
-}
+#printLicenseItems { margin: 10px 0 10px 5px; font-size: 12px; line-height: 1.4; display: block; text-align: left !important;}
 
 @media print {
   body > *:not(#ticketLicenseWrapper) { display: none !important; }
   #ticketLicenseWrapper { display: block !important; position: absolute; top: 0; left: 0; width: 57mm; }
-  #ticketLicenseWrapper.printing, #ticketLicenseWrapper.printing * { 
-      visibility: visible !important; 
-      display: block !important; 
-  }
-
-  .ticket { 
-      position: absolute; 
-      top: 0; 
-      left: 0; 
-      width: 57mm; /* ขนาดกระดาษจริง */
-      padding-left: 5mm; /* 💡 จุดตาย: ดันเนื้อหาทั้งหมดออกจากขอบซ้าย 5 มม. */
-      padding-right: 2mm;
-      margin: 0; 
-      box-sizing: border-box;
-  }
+  #ticketLicenseWrapper.printing, #ticketLicenseWrapper.printing * { visibility: visible !important; display: block !important; }
+  .ticket { position: absolute; top: 0; left: 0; width: 57mm; padding-left: 5mm; padding-right: 2mm; margin: 0; box-sizing: border-box;}
 }
 
-    /* --- Splash Screen UI --- */
+/* 🚩 ปรับปรุง Splash Screen UI: เพิ่ม Transition ให้สมูทตอนจางหาย */
 #splash-screen {
     position: fixed;
     top: 0; left: 0;
     width: 100%; height: 100%;
-    background-color: #000; /* พื้นหลังสีดำสนิท */
+    background-color: #000; 
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    z-index: 10000; /* อยู่เหนือทุกอย่าง */
-    transition: opacity 0.8s ease;
+    z-index: 10000; 
+    transition: opacity 1s cubic-bezier(0.4, 0, 0.2, 1), visibility 1s;
 }
 
 .splash-logo {
     width: 180px;
     margin-bottom: 30px;
-    /* เอฟเฟกต์เรืองแสง (Glow) */
     filter: drop-shadow(0 0 20px rgba(33, 150, 243, 0.6));
 }
 
@@ -213,8 +183,7 @@
     </div>
   </div>
   
-  
-  <div class="main-container">
+  <div id="mainUI" class="main-container">
     <div class="top-controls">
       <button onclick="toggleMute()" id="muteBtn" class="btn-mute"><i id="muteIcon" class="fas fa-volume-up"></i></button>
       <div class="lang-container">
@@ -304,7 +273,6 @@
     if (SpeechRecognition) {
       recognition = new SpeechRecognition();
       recognition.lang = 'th-TH';
-      // 🚩 แก้ไข: ตั้งค่าให้ฟังต่อเนื่องและแสดงผลระหว่างพูด
       recognition.continuous = true; 
       recognition.interimResults = true; 
 
@@ -315,18 +283,13 @@
       };
 
       recognition.onresult = (e) => {
-          // 🚩 แก้ไข: ระบบ Reset Timer เมื่อยังมีเสียงพูดเข้ามา
           if (window.micTimer) clearTimeout(window.micTimer);
-
           let transcript = "";
           for (let i = e.resultIndex; i < e.results.length; ++i) {
               transcript += e.results[i][0].transcript;
           }
-
           if (transcript.trim() !== "") {
               document.getElementById('userInput').value = transcript;
-              
-              // 🚩 แก้ไข: หน่วงเวลา 2 วินาทีหลังจากหยุดพูด ก่อนจะประมวลผลคำตอบ
               window.micTimer = setTimeout(() => {
                   processQuery(transcript);
                   recognition.stop(); 
@@ -337,12 +300,11 @@
       recognition.onend = () => { 
           window.isListening = false;
           stopListening(); 
-          // 🚩 แก้ไข: เมื่อไมค์ปิด ให้กลับไป Stand-by Wake Word
           if (typeof startWakeWord === "function" && !window.isBusy) startWakeWord();
       };
 
       recognition.onerror = (e) => {
-          if (e.error === 'no-speech') return; // 🚩 แก้ไข: ถ้าเงียบไม่ต้องสั่งหยุด ให้ continuous ทำงานต่อ
+          if (e.error === 'no-speech') return; 
           console.error("Mic Error:", e.error);
           stopListening();
       };
@@ -361,11 +323,11 @@
     }
 
     function toggleListening() { 
-      if (window.isBusy) return; // 🚩 แก้ไข: ห้ามเปิดไมค์ถ้าหุ่นยนต์กำลังพูด
+      if (window.isBusy) return; 
       if (window.isListening) { 
         recognition.stop(); 
       } else { 
-        if (typeof forceStopAllMic === "function") forceStopAllMic(); // 🚩 แก้ไข: ล้างสถานะไมค์ตัวอื่นก่อนเริ่ม
+        if (typeof forceStopAllMic === "function") forceStopAllMic(); 
         window.speechSynthesis.cancel(); 
         recognition.start(); 
       } 
@@ -377,29 +339,22 @@
       document.getElementById('statusText').innerText = (window.currentLang === 'th') ? "แตะไมค์เพื่อเริ่มพูด" : "Tap mic to speak";
     }
 
-    // --- [ ฟังก์ชันพิมพ์ใบนำทาง - แก้ไขให้เข้มและตัวหนาพิเศษ ] ---
     function printLicenseNote(type, note, items) {
       const now = new Date();
       document.getElementById('printLicenseType').innerText = type;
       document.getElementById('printLicenseNote').innerText = note;
       document.getElementById('printLicenseTime').innerText = `เวลาพิมพ์: ${now.toLocaleString('th-TH')}`;
-      
       const docArray = items.includes('\\n') ? items.split('\\n') : items.split('\n');
-      
       const itemsHTML = docArray
         .filter(i => i.trim() !== "")
         .map(i => `<div style="text-align: left !important; font-weight: 900 !important; color: #000 !important; margin-bottom: 3px;">[ ✓ ] ${i.trim()}</div>`)
         .join('');
-        
       document.getElementById('printLicenseItems').innerHTML = itemsHTML;
-
       const audio = document.getElementById('queueSound');
       if (audio) { audio.currentTime = 0; audio.play().catch(e => {}); }
-
       const wrapper = document.getElementById('ticketLicenseWrapper');
       wrapper.style.display = 'block';
       wrapper.classList.add('printing');
-
       setTimeout(() => {
         window.print();
         setTimeout(() => {
