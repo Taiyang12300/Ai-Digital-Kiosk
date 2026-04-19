@@ -94,11 +94,14 @@ function playAudioLink(url, callback = null) {
 }
 
 // --- 1. ระบบจัดการสถานะ & Wake Word Setup ---
-
 function setupWakeWord() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
-    if (wakeWordRecognition) { try { wakeWordRecognition.abort(); } catch(e) {} }
+    
+    // ล้าง instance เก่าออกก่อนสร้างใหม่
+    if (wakeWordRecognition) { 
+        try { wakeWordRecognition.abort(); } catch(e) {} 
+    }
 
     wakeWordRecognition = new SpeechRecognition();
     wakeWordRecognition.continuous = true; 
@@ -107,6 +110,8 @@ function setupWakeWord() {
 
     wakeWordRecognition.onresult = (event) => {
         const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
+        
+        // 🛑 ถ้า AI ยุ่งอยู่ หรือเปิดไมค์ STT หลักอยู่ ห้ามประมวลผล Keyword
         if (!window.allowWakeWord || window.isBusy || isListeningNow) return;
 
         let transcript = "";
@@ -115,39 +120,56 @@ function setupWakeWord() {
         }
 
         if (transcript.includes("น้องนำทาง") || transcript.includes("นำทาง")) {
-    console.log("🎯 Keyword Matched!");
-    transcript = ""; // ล้างค่าทิ้งทันทีป้องกัน Loop
-    forceStopAllMic(); 
-            window.isBusy = true;
+            console.log("🎯 [WakeWord] Keyword Matched!");
+            
+            // 🛑 ขั้นตอน Deep Reset เพื่อหยุดการเด้งของไมค์
+            isWakeWordActive = false; // ปิด flag ก่อนสั่ง abort
+            forceStopAllMic();        // สั่งหยุดไมค์ทุกตัว
+            
+            window.isBusy = true;     // ล็อคสถานะ "ยุ่ง" ทันที
+            transcript = "";          // ล้างค่าตัวแปร
 
             let msg = "";
             if (window.currentLang === 'th') {
-                const affirmations = ["ครับผม", "สวัสดีครับ", "น้องนำทางมาแล้วครับ", "ครับท่าน"];
-                const questions = ["มีอะไรให้ช่วยไหมครับ?", "สอบถามข้อมูลได้เลยนะครับ", "ให้น้องนำทางช่วยเรื่องไหนดีครับ?"];
-                msg = `${affirmations[Math.floor(Math.random() * affirmations.length)]}... ${questions[Math.floor(Math.random() * questions.length)]}`;
+                const affirmations = ["ครับผม", "สวัสดีครับ", "น้องนำทางมาแล้วครับ"];
+                const questions = ["มีอะไรให้ช่วยไหมครับ?", "สอบถามข้อมูลได้เลยนะครับ"];
+                msg = `${affirmations[Math.floor(Math.random() * affirmations.length)]} ${questions[Math.floor(Math.random() * questions.length)]}`;
             } else {
                 msg = "Yes! How can I help you?";
             }
             
             displayResponse(msg);
-            // เมื่อเรียกชื่อ (isGreeting=false โดยปริยาย) -> พูดจบจะเปิดไมค์ STT ทันที
-            speak(msg); 
+            
+            // พูดคำทักทาย (ฟังก์ชัน speak จะไปจัดการเปิดไมค์ STT ต่อหลังพูดจบเอง)
+            setTimeout(() => {
+                speak(msg); 
+            }, 300); // หน่วงเวลาเล็กน้อยเพื่อให้ไมค์คืนทรัพยากรระบบสนิท
         }
     };
 
     wakeWordRecognition.onend = () => {
         const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
+        
+        // 🔄 จะ Restart ไมค์ดักฟังใหม่เฉพาะเมื่อเงื่อนไขครบถ้วนเท่านั้น
         if (window.allowWakeWord && isWakeWordActive && !window.isBusy && !isListeningNow && personInFrameTime !== null) {
             setTimeout(() => {
+                // เช็ค window.isBusy ซ้ำอีกรอบก่อน Start จริง
                 try { 
-                    if (!window.isBusy && isWakeWordActive) wakeWordRecognition.start(); 
-                } catch(e) { isWakeWordActive = false; }
-            }, 500);
+                    if (!window.isBusy && isWakeWordActive && !isListeningNow) {
+                        wakeWordRecognition.start(); 
+                    }
+                } catch(e) { 
+                    isWakeWordActive = false; 
+                }
+            }, 600); // เพิ่มเวลาหน่วงเป็น 600ms เพื่อป้องกันอาการ Mic Busy Error
+        } else {
+            console.log("🎤 [WakeWord] Stand-by stopped safely.");
         }
     };
 
     wakeWordRecognition.onerror = (event) => {
-        console.error("🎤 Mic Error:", event.error);
+        if (event.error === 'aborted') return; // ปกติถ้าเราสั่งหยุดเอง ไม่ถือเป็น Error
+        console.error("🎤 [WakeWord] Mic Error:", event.error);
         if (event.error === 'not-allowed') window.allowWakeWord = false;
         isWakeWordActive = false;
     };
@@ -395,39 +417,55 @@ async function getResponse(userQuery) {
 function speak(text, callback = null, isGreeting = false) {
     if (!text || window.isMuted) return;
     
-    forceStopAllMic(); // 🛑 หยุดไมค์ทุกตัวก่อนเริ่มพูด
+    // 🛑 1. ตัดวงจรการดักฟังทั้งหมดทันทีที่เริ่มพูด
+    forceStopAllMic(); 
     window.speechSynthesis.cancel();
-    window.isBusy = true;
+    window.isBusy = true; // ล็อคสถานะไม่ให้ไมค์อื่นเปิดแทรก
 
     const msg = new SpeechSynthesisUtterance(text.replace(/<[^>]*>?/gm, '').replace(/[*#-]/g, ""));
     msg.lang = 'th-TH';
     msg.rate = 1.05;
     
-    msg.onstart = () => { updateLottie('talking'); };
+    msg.onstart = () => { 
+        updateLottie('talking'); 
+    };
     
     msg.onend = () => { 
+        // 🛑 2. ปล่อยล็อคเมื่อพูดจบจริงๆ
         window.isBusy = false; 
         updateLottie('idle'); 
 
         if (callback) callback();
 
-        // 🚩 จัดการโหมดการฟังหลังพูดจบ
+        // 🛑 3. การเปิดไมค์คืนต้องเช็คความพร้อม (หน่วงเวลาเพื่อความเสถียร)
         if (window.allowWakeWord && !isAtHome) {
             setTimeout(() => {
-                if (window.isBusy) return; // ถ้ามีการสั่งงานอื่นแทรก ไม่ต้องเปิดไมค์
+                // เช็คซ้ำอีกรอบว่าไม่มีการสั่งพูดใหม่แทรกเข้ามา
+                if (window.isBusy) return;
 
                 if (isGreeting) {
-                    // กรณีทักทาย: ให้รอเรียกชื่อ "น้องนำทาง" (Wake Word)
-                    startWakeWord();
+                    // กรณีแค่ทักทาย: ให้รอฟัง Keyword "น้องนำทาง" เท่านั้น
+                    if (!isWakeWordActive) startWakeWord(); 
                 } else {
-                    // กรณีตอบคำถาม: เปิดไมค์ STT รับคำถามต่อเนื่องทันที
-                    if (typeof toggleListening === "function" && !window.isListening) {
-                        toggleListening();
+                    // กรณีตอบคำถาม: ให้เปิดไมค์ STT เพื่อรับคำถามต่อทันที
+                    const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
+                    if (!isListeningNow) {
+                        if (typeof toggleListening === "function") {
+                            console.log("🎤 [System] AI Finished Speaking -> Resuming STT...");
+                            toggleListening(); 
+                        }
                     }
                 }
-            }, 800); 
+            }, 1000); // หน่วงเวลา 1 วินาทีเพื่อให้ Hardware Mic เคลียร์ Buffer
         }
     };
+
+    msg.onerror = (e) => {
+        console.error("Speech Error:", e);
+        window.isBusy = false;
+        updateLottie('idle');
+    };
+
     window.speechSynthesis.speak(msg);
 }
 
