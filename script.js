@@ -394,8 +394,6 @@ async function getResponse(userQuery) {
 // --- 🚩 5. ระบบเสียง (หัวใจสำคัญของการแก้ปัญหาไมค์เด้ง) ---
 function speak(text, callback = null, isGreeting = false) {
     if (!text || window.isMuted) return;
-function speak(text, callback = null, isGreeting = false) {
-    if (!text || window.isMuted) return;
     
     forceStopAllMic(); // หยุดการฟังขณะ AI พูด เพื่อไม่ให้ AI ฟังเสียงตัวเอง
     window.speechSynthesis.cancel();
