@@ -25,7 +25,7 @@ const DETECTION_INTERVAL = 200;
 
 let wakeWordRecognition;
 let isWakeWordActive = false;
-let autoListenTimeout = null; // สำหรับจับเวลาปิดไมค์อัตโนมัติ
+
 // --- [ใหม่] ฟังก์ชันควบคุม Splash Screen ---
 function completeLoading() {
     const splash = document.getElementById('splash-screen');
@@ -394,7 +394,6 @@ function checkChecklist() {
 // --- 🚩 4. ระบบประมวลผลคำตอบ (คงเดิมตามที่คุณต้องการ) ---
 
 async function getResponse(userQuery) {
-    if (autoListenTimeout) clearTimeout(autoListenTimeout); // 🚩 ล้าง Timer ปิดไมค์
     if (!userQuery || !window.localDatabase) return;
     logQuestionToSheet(userQuery); 
     if (window.isBusy) stopAllSpeech();
@@ -471,6 +470,7 @@ async function getResponse(userQuery) {
 function speak(text, callback = null) {
     if (!text || window.isMuted) return;
     
+    // 🚩 ก่อนพูดต้องสั่งหยุดไมค์ทุกชนิด และเคลียร์สถานะ Active
     isWakeWordActive = false; 
     forceStopAllMic(); 
     
@@ -488,14 +488,20 @@ function speak(text, callback = null) {
         window.isBusy = false; 
         updateLottie('idle'); 
 
-        if (callback) {
-            callback();
-        } else {
-            // 🚩 🟢 [ใหม่] เมื่อพูดจบ ให้เปิดไมค์รอฟังทันที
-            if (!isAtHome) {
+        if (callback) callback();
+
+        // 🚩 หัวใจสำคัญ: เปิดไมค์เฉพาะเมื่อ "ไม่ยุ่ง" และ "ไม่ใช่หน้าโฮม"
+        // และต้องไม่อยู่ในระหว่างโหมดฟังคำถาม (toggleListening)
+        if (window.allowWakeWord && !isAtHome && !window.isBusy) {
+            const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
+            if (!isListeningNow) {
                 setTimeout(() => {
-                    startContinuousListening();
-                }, 1000); // หน่วง 1 วินาทีกันเสียงลำโพงตัวเอง
+                    // ตรวจสอบความปลอดภัยอีกครั้งก่อนรัน
+                    if (!window.isBusy && !isWakeWordActive) {
+                        isWakeWordActive = true;
+                        startWakeWord();
+                    }
+                }, 1200); // หน่วงเวลา 1.2 วินาที กันเสียงสะท้อนจากลำโพง
             }
         }
     };
@@ -635,29 +641,6 @@ window.addEventListener('beforeunload', () => {
     forceStopAllMic();
 });
 
-function startContinuousListening() {
-    if (window.isBusy || isAtHome) return;
-
-    console.log("🎤 [System] Auto-listening started...");
-    
-    // เรียกใช้ฟังก์ชันเปิดไมค์เดิมที่คุณมี (toggleListening)
-    if (typeof toggleListening === "function") {
-        const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
-        if (!isListeningNow) toggleListening(); 
-    }
-
-    // 🚩 ตั้งเวลาปิดไมค์ถ้าไม่มีคนพูดภายใน 7 วินาที
-    if (autoListenTimeout) clearTimeout(autoListenTimeout);
-    autoListenTimeout = setTimeout(() => {
-        const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
-        if (isListeningNow) {
-            console.log("⏳ [System] No input detected, closing mic.");
-            toggleListening(); // ปิดไมค์
-            if (window.allowWakeWord) startWakeWord(); // กลับไปรอเรียกชื่อ
-        }
-    }, 7000); 
-}
-    
 document.addEventListener('DOMContentLoaded', () => {
     initDatabase();
 });
