@@ -31,36 +31,21 @@ function completeLoading() {
     const splash = document.getElementById('splash-screen');
     const progBar = document.getElementById('splash-progress-bar');
     const statusTxt = document.getElementById('splash-status-text');
-    const responseEl = document.getElementById('response-text'); // ดึงหน้าจอแสดงผลหลัก
 
     if (progBar) progBar.style.width = '100%';
-    if (statusTxt) statusTxt.innerText = 'ระบบพร้อมใช้งาน';
+    if (statusTxt) statusTxt.innerText = 'ระบบพร้อมใช้งานแล้ว (Database Connected)';
     
-    // หน่วงเวลาสั้นๆ ให้แถบโหลดเต็ม 100% ก่อนจางหาย
     setTimeout(() => {
         if (splash) {
-            splash.style.opacity = '0'; // ค่อยๆ จางออก
-            
+            splash.style.opacity = '0';
             setTimeout(() => {
-                splash.style.display = 'none'; // ซ่อน Splash Screen
-                
-                // 🚩 ตั้งค่าเริ่มต้นหน้า Home ทันที
+                splash.style.display = 'none';
+                // เมื่อ Splash หายไป ค่อยเริ่มระบบทักทายและกล้อง
                 isAtHome = true;
-                window.isBusy = false;
-                window.hasGreeted = false; // รีเซ็ตสถานะการทักทาย
-
-                // 🚩 ล้างข้อความ "กำลังเตรียมระบบ" และใส่คำทักทายเริ่มต้น
-                if (responseEl) {
-                    responseEl.innerText = "สวัสดีครับ มีอะไรให้น้องนำทางช่วยไหมครับ?";
-                }
-
-                renderFAQButtons(); // แสดงปุ่มคำถามที่พบบ่อย
-                initCamera();       // เริ่มการตรวจจับใบหน้า
-                
-                console.log("🏠 [System] Home screen is ready.");
-            }, 500); // จางออกภายใน 0.5 วินาที
+                initCamera(); 
+            }, 800);
         }
-    }, 400); 
+    }, 1000);
 }
 
 // --- 🚩 ฟังก์ชันกลางสำหรับจัดการสิทธิ์และการเล่นเสียง ---
