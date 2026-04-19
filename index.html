@@ -1,4 +1,4 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="th">
 <head>
   <meta charset="UTF-8">
@@ -21,19 +21,21 @@
       display: flex; 
       justify-content: center; 
       min-height: 100vh;
-      overflow-x: hidden; /* กันการขยับแนวนอน */
+      /* 🚩 แก้ไข: เปิดให้เลื่อนหน้าจอได้ปกติ */
+      overflow-y: auto; 
     }
 
-    /* 🚩 ปรับปรุง: เตรียมพร้อมสำหรับการ Fade In */
+    /* 🚩 แก้ไข: ตั้งค่าเริ่มต้นสำหรับการ Fade In และเปิดให้เนื้อหาเลื่อนได้ */
     .main-container { 
-      display: none; 
       opacity: 0; 
       width: 100%; 
       max-width: 600px; 
       padding: 20px; 
+      display: flex; 
       flex-direction: column; 
       align-items: center;
-      transition: opacity 1s ease-in-out; /* ความนุ่มนวลในการปรากฏ */
+      transition: opacity 1s ease-in-out;
+      min-height: 100vh;
     }
     
     /* --- UI Components --- */
@@ -44,7 +46,7 @@
     .btn-lang.active { border-color: var(--primary); background: #f0edff; color: var(--primary); font-weight: bold; }
     .btn-mute.muted { background: var(--accent); color: white; border-color: var(--accent); }
 
-    .avatar-container { width: 180px; height: 180px; margin-bottom: 20px; border-radius: 50%; background: white; box-shadow: 0 5px 15px rgba(0,0,0,0.05); overflow: hidden; }
+    .avatar-container { width: 180px; height: 180px; margin-bottom: 20px; border-radius: 50%; background: white; box-shadow: 0 5px 15px rgba(0,0,0,0.05); overflow: hidden; flex-shrink: 0; }
     #lottie-canvas { width: 100%; height: 100%; }
 
     .display-box { background: white; border-radius: 20px; padding: 25px; box-shadow: 0 10px 20px rgba(0,0,0,0.05); width: 100%; box-sizing: border-box; text-align: left; min-height: 140px; font-size: 18px; margin-bottom: 20px; color: #2d3436; border-left: 6px solid var(--primary); line-height: 1.6; }
@@ -238,6 +240,28 @@
   <script src="script.js?v=2.1"></script>
 
   <script>
+    // 🚩 เพิ่มฟังก์ชันสำหรับปิด Splash Screen และเปิด UI หลัก
+    function completeLoading() {
+      const splash = document.getElementById('splash-screen');
+      const mainUI = document.getElementById('mainUI');
+      
+      if (splash) {
+        splash.style.opacity = '0';
+        setTimeout(() => {
+          splash.style.visibility = 'hidden';
+          if (mainUI) {
+            mainUI.style.opacity = '1';
+          }
+        }, 1000); // รอให้ Fade Out จบก่อนซ่อน
+      }
+    }
+
+    // ตัวอย่างการเรียกใช้: เมื่อโหลด Script หรือ Data เสร็จ (จำลอง 3 วินาที)
+    window.addEventListener('load', () => {
+        // หากใน script.js มีการจัดการ Database ให้เรียกฟังก์ชันนี้หลังจาก Init เสร็จ
+        setTimeout(completeLoading, 3000); 
+    });
+
     let recognition, isListening = false;
     const SpeechRecognition = window.SpeechRecognition || window.webkitRecognition;
 
