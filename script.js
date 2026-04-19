@@ -115,8 +115,9 @@ function setupWakeWord() {
         }
 
         if (transcript.includes("น้องนำทาง") || transcript.includes("นำทาง")) {
-            console.log("🎯 Keyword Matched!");
-            forceStopAllMic(); 
+    console.log("🎯 Keyword Matched!");
+    transcript = ""; // ล้างค่าทิ้งทันทีป้องกัน Loop
+    forceStopAllMic(); 
             window.isBusy = true;
 
             let msg = "";
@@ -391,11 +392,12 @@ async function getResponse(userQuery) {
 }
 
 // --- 🚩 5. ระบบเสียง (หัวใจสำคัญของการแก้ปัญหาไมค์เด้ง) ---
-
+function speak(text, callback = null, isGreeting = false) {
+    if (!text || window.isMuted) return;
 function speak(text, callback = null, isGreeting = false) {
     if (!text || window.isMuted) return;
     
-    forceStopAllMic(); 
+    forceStopAllMic(); // หยุดการฟังขณะ AI พูด เพื่อไม่ให้ AI ฟังเสียงตัวเอง
     window.speechSynthesis.cancel();
     window.isBusy = true;
 
@@ -406,26 +408,26 @@ function speak(text, callback = null, isGreeting = false) {
     msg.onstart = () => { updateLottie('talking'); };
     
     msg.onend = () => { 
-        if (speechSafetyTimeout) clearTimeout(speechSafetyTimeout);
         window.isBusy = false; 
         updateLottie('idle'); 
 
         if (callback) callback();
 
-        if (window.allowWakeWord && !isAtHome && !window.isBusy) {
+        // 🚩 แก้ไข: หลังจากพูดจบ ให้เลือกโหมดการฟัง
+        if (window.allowWakeWord && !isAtHome) {
             if (isGreeting) {
-                // กรณีทักทาย: กลับไปรอฟังชื่อ Keyword อย่างเดียว
+                // ถ้าแค่ทักทาย ให้ "รอเรียกชื่อ" (Wake Word) อย่างเดียว
                 setTimeout(() => {
-                    if (!window.isBusy && !isWakeWordActive) startWakeWord(); 
-                }, 1200);
+                    if (!window.isBusy) startWakeWord(); 
+                }, 500);
             } else {
-                // กรณีตอบคำถาม: เปิดไมค์ STT รับคำถามต่อทันที
+                // ถ้าเป็นการตอบคำถาม ให้ "เปิดไมค์รับคำถามต่อ" ทันที
                 setTimeout(() => {
-                    const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
-                    if (!window.isBusy && !isListeningNow) {
-                        if (typeof toggleListening === "function") toggleListening(); 
+                    if (!window.isBusy && typeof toggleListening === "function") {
+                        // ตรวจสอบว่าไมค์ยังไม่เปิดอยู่ค่อยสั่งเปิด
+                        if (!window.isListening) toggleListening(); 
                     }
-                }, 1000); 
+                }, 800); 
             }
         }
     };
