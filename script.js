@@ -290,25 +290,16 @@ function greetUser() {
     let finalGreet = "";
 
     if (isThai) {
-        // 1. คำทักทายตามเวลา
         let timeGreet = "";
         let lunchAsk = "";
-        if (hour < 12) {
-            timeGreet = "สวัสดีตอนเช้าครับ";
-        } else if (hour === 12) {
-            timeGreet = "สวัสดีตอนเที่ยงครับ";
-            lunchAsk = "... ทานข้าวหรือยังครับ";
-        } else if (hour < 17) {
-            timeGreet = "สวัสดีตอนบ่ายครับ";
-        } else {
-            timeGreet = "สวัสดีตอนเย็นครับ";
-        }
+        if (hour < 12) { timeGreet = "สวัสดีตอนเช้าครับ"; } 
+        else if (hour === 12) { timeGreet = "สวัสดีตอนเที่ยงครับ"; lunchAsk = "... ทานข้าวหรือยังครับ"; } 
+        else if (hour < 17) { timeGreet = "สวัสดีตอนบ่ายครับ"; } 
+        else { timeGreet = "สวัสดีตอนเย็นครับ"; }
 
-        // 2. คำเรียก (เน้นสุภาพตามที่กำหนด)
         const pTypes = (gender === 'male') ? ["คุณผู้ชาย", "ท่าน"] : ["คุณผู้หญิง", "ท่าน"];
         const pType = pTypes[Math.floor(Math.random() * pTypes.length)];
 
-        // 3. ประโยคปิดท้ายสั้นๆ
         const ends = [
             "มีอะไรให้น้องนำทางช่วยไหมครับ?",
             "สอบถามข้อมูลกับน้องนำทางได้เลยนะครับ",
@@ -317,15 +308,12 @@ function greetUser() {
         ];
         const end = ends[Math.floor(Math.random() * ends.length)];
 
-        // 4. สุ่มรูปแบบประโยค
         const patterns = [
             `${timeGreet} ${pType}${lunchAsk}... ${end}`,
             `สวัสดีครับ ${pType}${lunchAsk}... ${end}`
         ];
         finalGreet = patterns[Math.floor(Math.random() * patterns.length)];
-
     } else {
-        // ภาษาอังกฤษแบบสั้นและสุภาพ
         const greetsEn = ["Hello", "Welcome", "Good day"];
         const pTypeEn = (gender === 'male') ? "Sir" : "Madam";
         const endEn = ["How can I help you?", "Need any assistance?"];
@@ -334,11 +322,14 @@ function greetUser() {
 
     displayResponse(finalGreet);
     
+    // 🚩 แก้ไขตรงนี้: ส่ง true เข้าไปเป็น Parameter ที่ 3
     speak(finalGreet, () => { 
         window.isBusy = false; 
         window.allowWakeWord = true; 
-        console.log("✅ [System] Greeting finished. น้องนำทาง Standby...");
-    });
+        isWakeWordActive = true;
+        startWakeWord(); // เปิดระบบดักฟัง Keyword "น้องนำทาง"
+        console.log("✅ [System] ทักทายเสร็จ: เข้าโหมดดักฟัง Keyword เท่านั้น");
+    }, true); 
 }
 
 // --- 🚩 3. ระบบคัดกรองใบขับขี่ (คงเดิม) ---
@@ -463,10 +454,10 @@ async function getResponse(userQuery) {
 }
 
 // --- 5. ระบบเสียง ---
-function speak(text, callback = null) {
+function speak(text, callback = null, isGreeting = false) {
     if (!text || window.isMuted) return;
     
-    // 🚩 หยุดไมค์ทุกชนิดก่อนเริ่มพูด
+    // ก่อนพูดต้องสั่งหยุดไมค์ทุกชนิด และเคลียร์สถานะ Active
     isWakeWordActive = false; 
     forceStopAllMic(); 
     
@@ -486,29 +477,33 @@ function speak(text, callback = null) {
 
         if (callback) callback();
 
-        // 🚩 [ส่วนที่เพิ่มใหม่] หัวใจสำคัญ: เปิดไมค์รอคำถามทันที
-        // เฉพาะเมื่อ "ไม่อยู่หน้าโฮม" และ "ได้รับสิทธิ์ allowWakeWord"
-        if (window.allowWakeWord && !isAtHome) {
-            setTimeout(() => {
-                const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
-                
-                if (!window.isBusy && !isListeningNow) {
-                    console.log("🎤 [System] น้องตอบจบแล้ว... เปิดไมค์รอคำถาม");
-                    
-                    // เรียกฟังก์ชันเปิดไมค์รับคำถาม (STT) ทันที
-                    if (typeof toggleListening === "function") {
-                        toggleListening(); 
+        // 🚩 ตรรกะใหม่: จัดการเปิดไมค์หลังพูดจบ
+        if (window.allowWakeWord && !isAtHome && !window.isBusy) {
+            
+            if (isGreeting) {
+                // 1. ถ้าเป็นการทักทาย (isGreeting = true):
+                // ให้กลับไป Standby รอฟังแค่ Keyword "น้องนำทาง" (ไม่เปิดปุ่มไมค์ STT)
+                setTimeout(() => {
+                    if (!window.isBusy && !isWakeWordActive) {
+                        isWakeWordActive = true;
+                        startWakeWord(); 
+                        console.log("👂 [System] ทักทายจบ: รอฟังชื่อ 'น้องนำทาง'...");
                     }
-                    
-                    /**
-                     * 💡 หมายเหตุ: 
-                     * เมื่อไมค์ STT (toggleListening) หยุดทำงานเนื่องจากไม่มีคนพูด (Timeout) 
-                     * ระบบจะวิ่งไปที่ onend ของตัว Recognition นั้นๆ 
-                     * ซึ่งคุณควรมีฟังก์ชันเรียก startWakeWord() รอไว้ในส่วนนั้น 
-                     * เพื่อให้กลับมาดักฟัง "น้องนำทาง" ต่อโดยอัตโนมัติ
-                     */
-                }
-            }, 1000); // หน่วง 1 วินาทีกันเสียงสะท้อน
+                }, 1000);
+
+            } else {
+                // 2. ถ้าเป็นการตอบคำถาม หรือ ขานรับเสียงเรียก (isGreeting = false):
+                // ให้เปิดปุ่มไมค์ (toggleListening) ทันทีเพื่อให้คนถามต่อได้เลย
+                setTimeout(() => {
+                    const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
+                    if (!window.isBusy && !isListeningNow) {
+                        console.log("🎤 [System] ตอบจบแล้ว: เปิดปุ่มไมค์รอรับคำถาม...");
+                        if (typeof toggleListening === "function") {
+                            toggleListening(); 
+                        }
+                    }
+                }, 1000); 
+            }
         }
     };
     window.speechSynthesis.speak(msg);
