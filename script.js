@@ -110,7 +110,7 @@ function setupWakeWord() {
     wakeWordRecognition.onresult = (event) => {
         const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
         
-        // 🛑 ห้ามฟังชื่อ ถ้า AI กำลังพูด หรือเปิดไมค์ปุ่มกดถามคำถามอยู่
+        // 🛑 ห้ามประมวลผลถ้า AI กำลังพูด หรือเปิดไมค์ปุ่มกดอยู่
         if (!window.allowWakeWord || window.isBusy || isListeningNow) return;
 
         let transcript = "";
@@ -121,7 +121,7 @@ function setupWakeWord() {
         if (transcript.includes("น้องนำทาง") || transcript.includes("นำทาง")) {
             console.log("🎯 [WakeWord] Keyword Matched!");
             
-            // 🛑 ปิดไมค์ดักฟังทันที เพื่อป้องกันเสียงสะท้อนตอนตอบ
+            // 🛑 สำคัญ: ปิดโหมดดักฟังทันทีเพื่อเข้าสู่โหมดตอบโต้
             isWakeWordActive = false; 
             forceStopAllMic();        
             
@@ -139,24 +139,49 @@ function setupWakeWord() {
             
             displayResponse(msg);
             
-            // เมื่อพูดจบ ระบบจะไปเปิดปุ่มไมค์ STT ให้เองในฟังก์ชัน speak
+            // ส่งไปฟังก์ชันพูด (ซึ่งจะไปเปิดปุ่มไมค์ STT ต่อหลังพูดจบ)
             setTimeout(() => {
                 speak(msg); 
             }, 300); 
         }
     };
 
+    // 🚩 แก้ไขส่วนนี้: บังคับให้ไมค์ Restart ตลอดเวลาถ้าเงื่อนไขครบ
     wakeWordRecognition.onend = () => {
         const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
-        // Restart เฉพาะเมื่ออยู่ในโหมดดักฟัง และไม่มีใครใช้ไมค์ปุ่มกด
-        if (window.allowWakeWord && isWakeWordActive && !window.isBusy && !isListeningNow && personInFrameTime !== null) {
+        
+        // เงื่อนไขการ Restart: ไม่ได้อยู่หน้า Home + มีคนอยู่ + AI ไม่ได้พูด + ไม่ได้กดปุ่มไมค์
+        if (!isAtHome && personInFrameTime !== null && !window.isBusy && !isListeningNow) {
+            console.log("🔄 [WakeWord] Mic auto-stopped. Restarting...");
+            
+            // หน่วงเวลาเล็กน้อยก่อน Start ใหม่เพื่อป้องกัน Browser Block
             setTimeout(() => {
-                try { 
-                    if (!window.isBusy && isWakeWordActive && !isListeningNow) {
+                try {
+                    // เช็คซ้ำอีกรอบก่อนเริ่มจริง
+                    if (!window.isBusy && !isListeningNow) {
+                        isWakeWordActive = true; 
                         wakeWordRecognition.start(); 
                     }
-                } catch(e) { isWakeWordActive = false; }
-            }, 600);
+                } catch(e) { 
+                    console.log("⚠️ Mic start failed, will retry on next cycle.");
+                }
+            }, 800); 
+        } else {
+            console.log("🛑 [WakeWord] Stand-by stopped (Home/Busy/No Person).");
+            isWakeWordActive = false;
+        }
+    };
+
+    // 🚩 เพิ่ม Error Handler เพื่อไม่ให้ระบบค้างเวลาไมค์หลุด
+    wakeWordRecognition.onerror = (event) => {
+        console.warn("🎤 [WakeWord] Error:", event.error);
+        if (event.error === 'network' || event.error === 'no-speech') {
+            // Error พวกนี้ปกติ ให้ปล่อยไปเข้า onend เพื่อ Restart ใหม่
+            return;
+        }
+        if (event.error === 'not-allowed') {
+            window.allowWakeWord = false;
+            isWakeWordActive = false;
         }
     };
 }
