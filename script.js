@@ -33,16 +33,28 @@ function completeLoading() {
     const statusTxt = document.getElementById('splash-status-text');
 
     if (progBar) progBar.style.width = '100%';
-    if (statusTxt) statusTxt.innerText = 'ระบบพร้อมใช้งานแล้ว (Database Connected)';
+    if (statusTxt) statusTxt.innerText = 'ระบบพร้อมใช้งานแล้ว';
     
     setTimeout(() => {
         if (splash) {
             splash.style.opacity = '0';
             setTimeout(() => {
                 splash.style.display = 'none';
-                // เมื่อ Splash หายไป ค่อยเริ่มระบบทักทายและกล้อง
+                
+                // 🚩 เซ็ตสถานะพื้นฐาน
                 isAtHome = true;
-                initCamera(); 
+                window.isBusy = false;
+                window.hasGreeted = false;
+                window.allowWakeWord = false; // ปิดไว้ก่อนจนกว่าจะทักทายหรือเริ่มใช้งาน
+
+                // 🚩 ใช้ข้อความเดียวกับหน้าโฮมที่ตั้งไว้
+                const homeMsg = (window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone.");
+                displayResponse(homeMsg);
+
+                renderFAQButtons(); // แสดงปุ่มคำถาม
+                initCamera();       // เปิดกล้องเพื่อรอทักทาย
+                
+                console.log("🏠 [System] Home screen ready with default message.");
             }, 800);
         }
     }, 1000);
