@@ -664,10 +664,10 @@ function speak(text, callback = null, isGreeting = false) {
                                 window.allowWakeWord = true;
                                 startWakeWord(); 
                             }
-                        }, 7000); 
+                        }, 6000); 
                     }
                 }
-            }, 1000); 
+            }, 2000); 
         }
     };
 
