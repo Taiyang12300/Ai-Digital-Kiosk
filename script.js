@@ -82,17 +82,20 @@ function initSpeechRecognition() {
 }
 
 function toggleListening() { 
-    // 🚀 MASTER RESET: ขัดจังหวะทันทีเมื่อกดปุ่ม
+    // 🚀 MASTER RESET: ขัดจังหวะทุกอย่างทันที
     window.speechSynthesis.cancel(); 
     
-    // หยุดไฟล์เสียงอื่นๆ
+    // [FIX] หยุด Audio ทุกตัวที่กำลังเล่นผ่าน Link ด้วย
     const audios = document.querySelectorAll('audio');
-    audios.forEach(a => { a.pause(); a.currentTime = 0; });
+    audios.forEach(a => { 
+        a.pause(); 
+        a.currentTime = 0; 
+    });
 
     if (typeof forceStopAllMic === "function") forceStopAllMic(); 
     if (window.micTimer) clearTimeout(window.micTimer);
     
-    window.isBusy = false; // ปลดล็อคสถานะเพื่อให้ยอมฟังใหม่
+    window.isBusy = false; 
 
     if (window.isListening) { 
         if (window.recognition) window.recognition.stop(); 
@@ -164,8 +167,15 @@ function forceStopAllMic() {
 function playAudioLink(url, callback = null) {
     if (!url) return;
 
+    // 🛑 1. หยุดทุกอย่างก่อนเริ่มเล่นลิงค์เสียง
     stopAllSpeech(); 
     forceStopAllMic(); 
+    
+    // [FIX] เพิ่มการสั่งหยุด Recognition โดยตรงเพื่อกันไมค์ STT ค้างจังหวะโหลดไฟล์
+    if (window.recognition) {
+        try { window.recognition.stop(); } catch(e) {}
+    }
+    
     if (window.micTimer) clearTimeout(window.micTimer); 
     
     window.isBusy = true;
@@ -173,12 +183,15 @@ function playAudioLink(url, callback = null) {
 
     const audio = new Audio(url);
 
+    // 🛑 2. ขณะที่เสียงเริ่มเล่น: ย้ำสถานะ Busy และปิดไมค์ซ้ำป้องกัน Browser แอบเปิด
     audio.onplay = () => {
-        forceStopAllMic();
         window.isBusy = true;
+        forceStopAllMic();
+        console.log("🔊 [Audio] Link playing: All mics strictly closed.");
     };
 
     audio.onended = () => {
+        // 🛑 3. เมื่อเสียงจบ: รอ Cool-down ให้ห้องเงียบสนิทก่อนเริ่มดักฟังใหม่
         setTimeout(() => {
             window.isBusy = false;
             updateLottie('idle');
@@ -190,7 +203,7 @@ function playAudioLink(url, callback = null) {
                 window.allowWakeWord = true;
                 startWakeWord();
             }
-        }, 1000); 
+        }, 1200); // เพิ่มเป็น 1.2 วินาที เพื่อความชัวร์
     };
 
     audio.onerror = () => { 
@@ -198,7 +211,10 @@ function playAudioLink(url, callback = null) {
         updateLottie('idle'); 
     };
 
-    audio.play().catch(e => { window.isBusy = false; });
+    audio.play().catch(e => { 
+        console.warn("⚠️ Playback blocked or failed.");
+        window.isBusy = false; 
+    });
 }
 
 // --- 1. ระบบจัดการสถานะ & Wake Word Setup ---
