@@ -9,7 +9,6 @@
   <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
   <link rel="manifest" href="manifest.json">
-  
   <meta name="theme-color" content="#6c5ce7">
   
   <style>
@@ -17,7 +16,6 @@
       --primary: #6c5ce7; 
       --bg: #f9f9fb; 
       --accent: #ff7675; 
-      /* กำหนดค่ากลางสำหรับ Scale ตัวอักษรและระยะห่าง */
       --base-font: clamp(16px, 2vw, 20px);
     }
     
@@ -35,7 +33,6 @@
 
     .main-container { 
       width: 100%; 
-      /* ขยายความกว้างสูงสุดตามขนาดจอ Kiosk แต่ไม่เกิน 800px */
       max-width: clamp(350px, 90%, 800px); 
       padding: clamp(15px, 3vw, 30px); 
       display: flex; 
@@ -45,7 +42,6 @@
       min-height: 100dvh; 
     }
     
-    /* --- UI Components (Responsive Scaling) --- */
     .top-controls { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 2dvh; }
     .lang-container { display: flex; gap: 10px; }
     
@@ -59,7 +55,6 @@
     .btn-lang.active { border-color: var(--primary); background: #f0edff; color: var(--primary); font-weight: bold; }
     .btn-mute.muted { background: var(--accent); color: white; border-color: var(--accent); }
 
-    /* 🤖 ปรับขนาดหุ่นยนต์ตามความสูงจอ (dvh) เพื่อให้เหลือพื้นที่ด้านล่าง */
     .avatar-container { 
       width: clamp(130px, 22dvh, 220px); 
       height: clamp(130px, 22dvh, 220px); 
@@ -69,7 +64,6 @@
     }
     #lottie-canvas { width: 100%; height: 100%; }
 
-    /* 📝 กล่องข้อความปรับขนาด Font ตามความกว้างหน้าจอ */
     .display-box { 
       background: white; border-radius: 20px; 
       padding: clamp(18px, 3vw, 30px); 
@@ -105,14 +99,12 @@
     }
     .btn-send { width: 50px; height: 50px; border-radius: 50%; border: none; background: var(--primary); color: white; cursor: pointer; font-size: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 
-    /* 🎙️ แก้ไข 4: ระบบ Flexible Sticky (รองรับทุกขนาดจอ) */
     .mic-section { 
       position: -webkit-sticky; position: sticky;
       bottom: 0; 
-      margin-top: auto; /* ดันลงล่างถ้าเนื้อหาน้อย */
+      margin-top: auto; 
       width: 100%;
       padding: 15px 0 25px 0;
-      /* เพิ่ม Blur พื้นหลังให้อ่านง่ายเวลาเลื่อนทับเนื้อหา */
       background: rgba(249, 249, 251, 0.9);
       backdrop-filter: blur(10px);
       text-align: center; 
@@ -130,15 +122,6 @@
     .btn-mic.recording { background: var(--accent); animation: pulse 1.5s infinite; }
     @keyframes pulse { 0% { transform: scale(1); } 70% { transform: scale(1.1); } 100% { transform: scale(1); } }
 
-    /* --- [ส่วนอื่นๆ คงเดิม] --- */
-    .checklist-card { text-align: left; background: white; padding: 15px; border-radius: 12px; border: 1px solid #ddd; }
-    .check-item { display: flex; align-items: center; margin-bottom: 12px; background: #f0f2f5; padding: 10px; border-radius: 8px; cursor: pointer; }
-    .check-item input { width: 22px; height: 22px; cursor: pointer; accent-color: #28a745; }
-    .check-item label { margin-left: 12px; font-size: 18px; cursor: pointer; color: #333; flex: 1; }
-    #btnPrintGuide { display: none !important; width: 100%; padding: 15px; background: #28a745; color: white; border: none; border-radius: 10px; font-weight: bold; font-size: 20px; cursor: pointer; margin-top: 15px; }
-    #btnPrintGuide.show-btn { display: block !important; }
-    
-    /* Ticket Print Section */
     .ticket { background: white; color: #000 !important; width: 52mm; padding: 5px 2px 5px 8px; margin: 0 auto; font-family: 'Kanit', sans-serif; text-align: center; box-sizing: border-box; }
     .ticket * { font-weight: 900 !important; color: #000 !important; }
     .ticket .big { font-size: 24px; margin: 8px 0; line-height: 1.1; display: block; text-align: center; }
@@ -151,7 +134,6 @@
       .ticket { position: absolute; top: 0; left: 0; width: 57mm; padding-left: 5mm; margin: 0; } 
     }
 
-    /* Splash Screen */
     #splash-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #000; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 10000; transition: opacity 0.8s ease; }
     .splash-logo { width: clamp(120px, 20vw, 180px); margin-bottom: 30px; }
     .splash-title { font-family: 'Kanit', sans-serif; color: white; font-size: clamp(22px, 3vw, 32px); font-weight: 800; margin-bottom: 5px; }
@@ -159,21 +141,18 @@
     .progress-container { width: min(250px, 70%); height: 6px; background: #1a1a1a; border-radius: 10px; overflow: hidden; }
     .progress-fill { width: 0%; height: 100%; background: linear-gradient(90deg, #2196F3, #00BCD4, #2196F3); animation: flow 2s linear infinite; }
     @keyframes flow { 0% { background-position: 200% 0; } 100% { background-position: 0 0; } }
-</style>
+  </style>
 </head>
 <body>
 
   <div id="splash-screen">
     <img src="https://img2.pic.in.th/59424.png" class="splash-logo" alt="Logo">
-    
     <div class="splash-title">น้องนำทาง</div>
     <div id="splash-status-text" class="splash-status">กำลังเริ่มต้นระบบ... (Initializing Database...)</div>
-    
     <div class="progress-container">
         <div id="splash-progress-bar" class="progress-fill"></div>
     </div>
   </div>
-  
   
   <div class="main-container">
     <div class="top-controls">
@@ -224,24 +203,21 @@
   <audio id="queueSound" preload="auto">
     <source src="https://taiyang12300.github.io/sound/ยื่นใบนำทาง.mp3" type="audio/mpeg">
   </audio>
-
   <video id="video" width="640" height="480" autoplay muted playsinline style="display:none;"></video>
   
   <script src="script.js?v=2.1"></script>
 
   <script>
-  if ('service-worker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('service-worker.js')
-        .then(reg => console.log('Service Worker registered!'))
-        .catch(err => console.log('Registration failed: ', err));
-    });
-  }
-  </script>
-  <script>
-    let recognition, isListening = false;
-    const SpeechRecognition = window.SpeechRecognition || window.webkitRecognition;
+    // --- Service Worker ---
+    if ('service-worker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('service-worker.js')
+          .then(reg => console.log('Service Worker registered!'))
+          .catch(err => console.log('Registration failed: ', err));
+      });
+    }
 
+    // --- Core UI Logic ---
     function toggleMute() {
       window.isMuted = !window.isMuted;
       const muteBtn = document.getElementById('muteBtn');
@@ -267,55 +243,8 @@
       document.getElementById('userInput').placeholder = isTh ? "พิมพ์คำถามที่นี่..." : "Type your question here...";
       document.getElementById('statusText').innerText = isTh ? "แตะไมค์เพื่อเริ่มพูด" : "Tap mic to speak";
       document.getElementById('response-text').innerText = isTh ? "เปลี่ยนเป็นภาษาไทยแล้วครับ" : "Switched to English.";
-      if (recognition) recognition.lang = isTh ? 'th-TH' : 'en-US';
+      if (window.recognition) window.recognition.lang = isTh ? 'th-TH' : 'en-US';
       if (typeof renderFAQButtons === "function") renderFAQButtons();
-    }
-
-    if (SpeechRecognition) {
-      recognition = new SpeechRecognition();
-      recognition.lang = 'th-TH';
-      // 🚩 แก้ไข: ตั้งค่าให้ฟังต่อเนื่องและแสดงผลระหว่างพูด
-      recognition.continuous = true; 
-      recognition.interimResults = true; 
-
-      recognition.onstart = () => { 
-          window.isListening = true;
-          document.getElementById('micBtn').classList.add('recording'); 
-          document.getElementById('statusText').innerText = (window.currentLang === 'th') ? "กำลังฟัง..." : "Listening...";
-      };
-
-      recognition.onresult = (e) => {
-          // 🚩 แก้ไข: ระบบ Reset Timer เมื่อยังมีเสียงพูดเข้ามา
-          if (window.micTimer) clearTimeout(window.micTimer);
-
-          let transcript = "";
-          for (let i = e.resultIndex; i < e.results.length; ++i) {
-              transcript += e.results[i][0].transcript;
-          }
-
-          if (transcript.trim() !== "") {
-              document.getElementById('userInput').value = transcript;
-              
-              // 🚩 แก้ไข: หน่วงเวลา 2 วินาทีหลังจากหยุดพูด ก่อนจะประมวลผลคำตอบ
-              window.micTimer = setTimeout(() => {
-                  processQuery(transcript);
-                  recognition.stop(); 
-              }, 2000); 
-          }
-      };
-
-      recognition.onend = () => { 
-          window.isListening = false;
-          stopListening(); 
-          // 🚩 แก้ไข: เมื่อไมค์ปิด ให้กลับไป Stand-by Wake Word
-          if (typeof startWakeWord === "function" && !window.isBusy) startWakeWord();
-      };
-
-      recognition.onerror = (e) => {
-          if (e.error === 'no-speech') return; // 🚩 แก้ไข: ถ้าเงียบไม่ต้องสั่งหยุด ให้ continuous ทำงานต่อ
-          console.error("Mic Error:", e.error);
-          stopListening();
-      };
     }
 
     function handleManualInput() {
@@ -330,50 +259,25 @@
       if (typeof getResponse === "function") await getResponse(query);
     }
 
-    function toggleListening() { 
-      if (window.isBusy) return; // 🚩 แก้ไข: ห้ามเปิดไมค์ถ้าหุ่นยนต์กำลังพูด
-      if (window.isListening) { 
-        recognition.stop(); 
-      } else { 
-        if (typeof forceStopAllMic === "function") forceStopAllMic(); // 🚩 แก้ไข: ล้างสถานะไมค์ตัวอื่นก่อนเริ่ม
-        window.speechSynthesis.cancel(); 
-        recognition.start(); 
-      } 
-    }
-
-    function stopListening() { 
-      window.isListening = false;
-      document.getElementById('micBtn').classList.remove('recording'); 
-      document.getElementById('statusText').innerText = (window.currentLang === 'th') ? "แตะไมค์เพื่อเริ่มพูด" : "Tap mic to speak";
-    }
-
-    // --- [ ฟังก์ชันพิมพ์ใบนำทาง - แก้ไขให้เข้มและตัวหนาพิเศษ ] ---
+    // --- Printing System ---
     function printLicenseNote(type, note, items) {
       const now = new Date();
       document.getElementById('printLicenseType').innerText = type;
       document.getElementById('printLicenseNote').innerText = note;
       document.getElementById('printLicenseTime').innerText = `เวลาพิมพ์: ${now.toLocaleString('th-TH')}`;
-      
       const docArray = items.includes('\\n') ? items.split('\\n') : items.split('\n');
-      
       const itemsHTML = docArray
         .filter(i => i.trim() !== "")
         .map(i => `<div style="text-align: left !important; font-weight: 900 !important; color: #000 !important; margin-bottom: 3px;">[ ✓ ] ${i.trim()}</div>`)
         .join('');
-        
       document.getElementById('printLicenseItems').innerHTML = itemsHTML;
-
       const audio = document.getElementById('queueSound');
       if (audio) { audio.currentTime = 0; audio.play().catch(e => {}); }
-
       const wrapper = document.getElementById('ticketLicenseWrapper');
       wrapper.style.display = 'block';
-      wrapper.classList.add('printing');
-
       setTimeout(() => {
         window.print();
         setTimeout(() => {
-          wrapper.classList.remove('printing');
           wrapper.style.display = 'none';
           if(typeof renderFAQButtons === "function") renderFAQButtons(); 
         }, 500);
