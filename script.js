@@ -654,7 +654,7 @@ function speak(text, callback = null, isGreeting = false) {
                                 window.allowWakeWord = true;
                                 startWakeWord(); 
                             }
-                        }, 5000); 
+                        }, 6000); 
                     }
                 }
             }, 1000); 
