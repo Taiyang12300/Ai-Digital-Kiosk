@@ -289,34 +289,46 @@ function setupWakeWord() {
     wakeWordRecognition.lang = 'th-TH';
 
     wakeWordRecognition.onresult = (event) => {
-    wakeWordRecognition.onresult = (event) => {
-    // 🛡️ เพิ่มเงื่อนไข: ถ้าเสียง MP3 กำลังเล่นอยู่ ให้ข้ามการประมวลผล Wake Word ไปเลย
-    if (!window.allowWakeWord || window.isBusy || window.isListening || window.isAudioPlaying) return;
+        // 🛡️ เช็กสถานะล็อคเสียง
+        if (!window.allowWakeWord || window.isBusy || window.isListening || window.isAudioPlaying) return;
 
-    let transcript = "";
-    for (let i = event.resultIndex; i < event.results.length; ++i) {
-        transcript += event.results[i][0].transcript;
-    }
+        let transcript = "";
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+            transcript += event.results[i][0].transcript;
+        }
 
-    if (transcript.includes("น้องนำทาง") || transcript.includes("นำทาง")) {
-        // ... โค้ดส่วนที่เหลือเหมือนเดิม ...
-    }
-};
+        if (transcript.includes("น้องนำทาง") || transcript.includes("นำทาง")) {
+            isWakeWordActive = false; 
+            forceStopAllMic();        
+            window.isBusy = true;     
 
-wakeWordRecognition.onend = () => {
-    // 🛡️ ป้องกันการ Restart ไมค์อัตโนมัติถ้าเสียงยังเล่นอยู่
-    if (!isAtHome && personInFrameTime !== null && !window.isBusy && !window.isListening && !window.isAudioPlaying && isWakeWordActive) {
-        setTimeout(() => {
-            try {
-                if (!window.isBusy && !window.isListening && !isAtHome && !window.isAudioPlaying && isWakeWordActive) {
-                    wakeWordRecognition.start(); 
+            let msg = "";
+            if (window.currentLang === 'th') {
+                const affirmations = ["ครับผม", "สวัสดีครับ", "น้องนำทางมาแล้วครับ"];
+                const questions = ["มีอะไรให้ช่วยไหมครับ?", "สอบถามข้อมูลได้เลยนะครับ"];
+                msg = `${affirmations[Math.floor(Math.random() * affirmations.length)]} ${questions[Math.floor(Math.random() * questions.length)]}`;
+            } else {
+                msg = "Yes! How can I help you?";
+            }
+            
+            displayResponse(msg);
+            setTimeout(() => { speak(msg); }, 300); 
+        }
+    };
+
+    wakeWordRecognition.onend = () => {
+        // 🛡️ ปรับเงื่อนไขการ Restart ให้ยืดหยุ่นขึ้น
+        if (!isAtHome && !window.isBusy && !window.isListening && !window.isAudioPlaying && isWakeWordActive) {
+            setTimeout(() => {
+                // เช็กซ้ำอีกครั้งก่อนเริ่มจริง
+                if (!window.isBusy && !window.isListening && !window.isAudioPlaying && isWakeWordActive) {
+                    try { wakeWordRecognition.start(); } catch(e) {} 
                 }
-            } catch(e) {}
-        }, 1500); 
-    } else {
-        isWakeWordActive = false;
-    }
-};
+            }, 1000); 
+        } else {
+            isWakeWordActive = false;
+        }
+    };
 
     wakeWordRecognition.onerror = (event) => {
         if (event.error === 'not-allowed') {
@@ -327,22 +339,28 @@ wakeWordRecognition.onend = () => {
 }
 
 function startWakeWord() {
-    // 🛡️ เพิ่ม window.isAudioPlaying ในเงื่อนไขการห้ามทำงาน (Return ทันทีถ้าเสียงเล่นอยู่)
+    // 🛡️ เช็ก Master Lock
     if (!window.allowWakeWord || isAtHome || window.isListening || window.isMuted || window.isBusy || window.isAudioPlaying) {
         isWakeWordActive = false;
-        console.log("🚫 [WakeWord] Start blocked: System is busy or playing audio.");
         return;
     }
+    
     try { 
-        forceStopAllMic(); 
+        // สั่งหยุดตัวเก่าก่อนเพื่อความชัวร์
+        if (wakeWordRecognition) wakeWordRecognition.abort(); 
+        
         setTimeout(() => {
-            // เช็กซ้ำอีกครั้งก่อน Start จริงเพื่อความชัวร์
-            if (window.isAudioPlaying) return;
+            // เช็กสถานะเสียงอีกรอบก่อนรัน
+            if (window.isAudioPlaying || window.isBusy) return;
 
             isWakeWordActive = true; 
-            wakeWordRecognition.start(); 
-            console.log("👂 [WakeWord] Started...");
-        }, 300); // เพิ่มเวลาหน่วงเล็กน้อยเพื่อให้ Browser เคลียร์คิวเสียง
+            try {
+                wakeWordRecognition.start(); 
+                console.log("👂 [WakeWord] Started...");
+            } catch (e) {
+                console.warn("⚠️ WakeWord already running or pending.");
+            }
+        }, 500); // เพิ่มเวลาหน่วงเป็น 500ms เพื่อให้ Browser ปล่อยไมค์ตัวเก่าจริง ๆ
     } catch (e) {}
 }
 
