@@ -174,18 +174,42 @@ function completeLoading() {
 }
 
 // --- 🚩 ฟังก์ชันกลางสำหรับจัดการสิทธิ์และการเล่นเสียง ---
-
 function forceStopAllMic() {
+    // 1. หยุดสถานะการทำงานหลัก
     isWakeWordActive = false;
     window.isListening = false; 
 
+    // 2. [NEW] ล้าง Timer ทั้งหมดที่อาจสั่งเปิดไมค์อัตโนมัติ (ป้องกัน InvalidStateError)
+    if (window.micTimer) {
+        clearTimeout(window.micTimer);
+        window.micTimer = null;
+    }
+
+    // 3. หยุดการรับสัญญาณจากไมค์ทุกตัวทันที
     if (wakeWordRecognition) {
-        try { wakeWordRecognition.abort(); } catch(e) {}
+        try { 
+            wakeWordRecognition.abort(); // ใช้ abort เพื่อตัดการเชื่อมต่อทันที
+        } catch(e) { console.warn("WakeWord abort error:", e); }
     }
+    
     if (window.recognition) {
-        try { window.recognition.abort(); } catch(e) {}
+        try { 
+            window.recognition.abort(); // เคลียร์สถานะเพื่อให้ Browser ปล่อยทรัพยากรไมค์
+        } catch(e) { console.warn("Recognition abort error:", e); }
     }
-    console.log("🛑 [System] All Microphones Released.");
+
+    // 4. [NEW] รีเซ็ต UI ของปุ่มไมค์ (ถ้ามี)
+    const micBtn = document.getElementById('micBtn');
+    if (micBtn) {
+        micBtn.classList.remove('recording'); // ลบ Class ที่ทำให้ปุ่มกระพริบหรือเปลี่ยนสี
+    }
+
+    const statusText = document.getElementById('statusText');
+    if (statusText) {
+        statusText.innerText = (window.currentLang === 'th') ? "แตะไมค์เพื่อเริ่มพูด" : "Tap mic to speak";
+    }
+
+    console.log("🛑 [System] All Microphones Released & Timers Cleared.");
 }
 
 function playAudioLink(url, callback = null) {
@@ -359,22 +383,55 @@ function forceUnmute() {
 
 function resetToHome() {
     const now = Date.now();
+    
+    // ตรวจสอบว่าระบบยุ่งอยู่ หรือยังมีคนอยู่หน้าจอหรือไม่
     if (window.isBusy || personInFrameTime !== null || (now - lastSeenTime < IDLE_TIME_LIMIT)) {
         if (!isAtHome) restartIdleTimer(); 
         return;
     }
+    
     if (isAtHome) return; 
+
+    // --- 🛑 1. ล้างสถานะการทำงาน (Logic Reset) ---
     stopAllSpeech(); 
     forceStopAllMic(); 
     forceUnmute(); 
+    
     window.hasGreeted = false;
     window.allowWakeWord = false; 
     window.isBusy = false; 
+    window.isAudioPlaying = false; // [NEW] ล้างสถานะล็อคเสียง MP3
+    window.currentAudioLink = null; 
     personInFrameTime = null;       
     isAtHome = true; 
-    displayResponse(window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone.");
+
+    // --- 🧹 2. ล้างค่าหน้าจอและช่องพิมพ์ (UI Reset) ---
+    
+    // ล้างตัวหนังสือที่ค้างอยู่ในช่องกรอกคำถาม
+    const inputField = document.getElementById('userInput');
+    if (inputField) {
+        inputField.value = ""; 
+    }
+
+    // รีเซ็ตข้อความตอบกลับบนหน้าจอให้เป็นค่าเริ่มต้น
+    const homeMsg = (window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone.");
+    displayResponse(homeMsg);
+
+    // รีเซ็ตตัวการ์ตูน Lottie ให้กลับท่าปกติ
+    if (typeof updateLottie === "function") {
+        updateLottie('idle');
+    }
+
+    // แสดงปุ่มคำถามยอดฮิต (FAQ) ใหม่
     renderFAQButtons(); 
-    if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+
+    // --- 🕒 3. ล้าง Timer ---
+    if (idleTimer) { 
+        clearTimeout(idleTimer); 
+        idleTimer = null; 
+    }
+
+    console.log("🏠 [System] Home screen and UI have been fully reset.");
 }
 
 function restartIdleTimer() {
