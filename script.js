@@ -202,6 +202,60 @@ function stopWakeWord() {
     }
 }
 
+function initSpeechRecognition() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    window.recognition = new SpeechRecognition();
+    window.recognition.lang = window.currentLang === 'th' ? 'th-TH' : 'en-US';
+    window.recognition.continuous = true;
+    window.recognition.interimResults = true;
+
+    window.recognition.onstart = () => {
+        window.isListening = true;
+        const micBtn = document.getElementById('micBtn');
+        if (micBtn) micBtn.classList.add('recording');
+        displayResponse(window.currentLang === 'th' ? "กำลังฟัง... พูดได้เลยครับ" : "Listening...");
+    };
+
+    window.recognition.onresult = (e) => {
+        if (window.micTimer) clearTimeout(window.micTimer);
+        
+        let transcript = "";
+        for (let i = 0; i < e.results.length; ++i) {
+            transcript += e.results[i][0].transcript;
+        }
+
+        if (transcript.trim() !== "") {
+            const inputField = document.getElementById('userInput');
+            if (inputField) inputField.value = transcript;
+
+            // 🚀 ตั้งเวลาส่งอัตโนมัติเมื่อหยุดพูด 2.5 วินาที
+            window.micTimer = setTimeout(() => {
+                const finalQuery = inputField ? inputField.value.trim() : transcript.trim();
+                
+                if (finalQuery !== "") {
+                    console.log("🚀 [Auto-Submit] Sending & Clearing box...");
+                    
+                    try { window.recognition.stop(); } catch(err) {} 
+                    
+                    // ✅ ล้างข้อความในกล่องทันทีที่ส่ง
+                    if (inputField) inputField.value = ""; 
+
+                    // ส่งไปหาคำตอบ
+                    getResponse(finalQuery); 
+                }
+            }, 2500); 
+        }
+    };
+
+    window.recognition.onend = () => {
+        window.isListening = false;
+        const micBtn = document.getElementById('micBtn');
+        if (micBtn) micBtn.classList.remove('recording');
+    };
+}
+
 function updateInteractionTime() {
     lastSeenTime = Date.now();
     if (!isAtHome) restartIdleTimer();
