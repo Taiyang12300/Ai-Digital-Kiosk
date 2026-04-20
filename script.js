@@ -87,7 +87,7 @@ function toggleListening() {
     // 1. หยุดเสียงอ่าน (TTS)
     window.speechSynthesis.cancel(); 
     
-    // 2. [NEW] หยุดไฟล์เสียงจาก Link ที่กำลังเล่นอยู่ (ถ้ามี)
+    // 2. หยุดไฟล์เสียงจาก Link (MP3) ที่กำลังเล่นอยู่
     if (window.currentAudioLink) {
         window.currentAudioLink.pause();
         window.currentAudioLink.currentTime = 0;
@@ -100,14 +100,16 @@ function toggleListening() {
 
     // 4. เคลียร์ Timer และหยุดไมค์ทุกตัว (Wake Word / STT เดิม)
     if (window.micTimer) clearTimeout(window.micTimer);
-    forceStopAllMic(); // ใช้ฟังก์ชันเดิมที่มีอยู่เพื่อ abort recognition ทุกตัว
+    forceStopAllMic(); 
 
-    // 5. ปลดล็อกสถานะ Busy ทันทีเพื่อให้ระบบพร้อมรับคำสั่งใหม่
+    // 5. [FIX] ปลดล็อกสถานะทุกอย่างทันที
     window.isBusy = false; 
+    window.isAudioPlaying = false; // 📌 สำคัญมาก: ต้องล้างค่านี้เพื่อให้ระบบ Auto-mic กลับมาทำงานได้ปกติ
+    window.currentAudioLink = null; 
 
     // --- ส่วนของ Logic การจัดการสถานะไมค์ STT ---
     
-    // ถ้าสถานะเดิมกำลังฟังอยู่ ให้หยุด (Toggle Off)
+    // ถ้ามีการฟังอยู่ ให้หยุด (Toggle Off)
     if (window.isListening || (window.recognition && window.recognition.state === 'running')) { 
         try {
             if (window.recognition) window.recognition.stop(); 
@@ -125,7 +127,6 @@ function toggleListening() {
         }
     } catch (e) { 
         console.error("Mic Start Error (Attempting recovery):", e);
-        // หากเกิด InvalidState ให้ลอง abort แล้วล้างสถานะเพื่อให้กดครั้งต่อไปติด
         if (window.recognition) window.recognition.abort();
         window.isListening = false;
     } 
@@ -190,40 +191,45 @@ function forceStopAllMic() {
 function playAudioLink(url, callback = null) {
     if (!url) return;
 
-    // 🛑 หยุดระบบพูด (TTS) และไมค์ (STT) เดิมก่อน
+    // 🛑 1. ล้างสถานะเดิมให้เกลี้ยงก่อนเริ่ม
     stopAllSpeech(); 
     forceStopAllMic(); 
-    
-    // ล้าง Timer เดิม (ถ้ามี)
     if (window.micTimer) clearTimeout(window.micTimer); 
     
-    // ล็อคสถานะห้ามระบบอื่นแทรก
+    // 🔒 2. ตั้งสถานะ Lock หนาแน่น
     window.isBusy = true;
-    window.allowWakeWord = false; // ปิด Wake Word ระหว่างเล่นเสียงลิงค์
+    window.isAudioPlaying = true; // [NEW] ยามเฝ้าไฟล์เสียง
+    window.allowWakeWord = false; 
     updateLottie('talking');
 
-    // สร้าง Audio Object ใหม่
     const audio = new Audio(url);
+    window.currentAudioLink = audio; 
 
     audio.onplay = () => {
-        // ย้ำสถานะ Busy และสั่งปิดไมค์ซ้ำเผื่อกรณี Browser พยายาม auto-restart
         window.isBusy = true;
-        forceStopAllMic();
-        console.log("🔊 [Audio Link] Playing... Microphones Locked.");
+        window.isAudioPlaying = true;
+        // ปิดไมค์ซ้ำเผื่อมีอะไรพยายามแอบเปิด (เช่น Face Detection ที่หลุดรอดมา)
+        forceStopAllMic(); 
+        console.log("🔊 [Audio Link] Playing... All Mics strictly locked.");
     };
 
     audio.onended = () => {
-        // รอ Cool-down 1.2 วินาทีเพื่อให้เสียงเงียบสนิทก่อนรับคำสั่งใหม่
+        // 🔓 3. เมื่อเสียงจบ ปลดล็อกสถานะเสียง
+        window.isAudioPlaying = false; 
+        
         setTimeout(() => {
-            // ถ้าสถานะยังเป็น Busy (ไม่มีใครกดปุ่มไมค์ขัดจังหวะไปก่อน)
-            if (window.isBusy) {
+            // เช็กว่ายังอยู่ในสถานะที่ควรเปิดไมค์ต่อหรือไม่ 
+            // (ถ้าคนไม่กดปุ่มไมค์ขัดจังหวะไปก่อน และยังไม่อยู่หน้า Home)
+            if (window.isBusy && !window.isAudioPlaying) {
                 window.isBusy = false;
+                window.currentAudioLink = null;
                 updateLottie('idle');
                 updateInteractionTime();
                 
                 if (callback) {
                     callback();
                 } else if (!isAtHome) {
+                    // กลับไปสถานะปกติ: เปิด Wake Word หรือ Auto-Mic
                     window.allowWakeWord = true;
                     startWakeWord();
                 }
@@ -233,16 +239,16 @@ function playAudioLink(url, callback = null) {
 
     audio.onerror = () => { 
         window.isBusy = false; 
+        window.isAudioPlaying = false;
+        window.currentAudioLink = null;
         updateLottie('idle'); 
     };
 
     audio.play().catch(e => { 
         console.warn("⚠️ Audio Playback Blocked");
         window.isBusy = false; 
+        window.isAudioPlaying = false;
     });
-
-    // เก็บอ้างอิงไฟล์เสียงไว้ใน window เพื่อให้ปุ่มไมค์สั่งหยุดได้
-    window.currentAudioLink = audio;
 }
 
 // --- 1. ระบบจัดการสถานะ & Wake Word Setup ---
