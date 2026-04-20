@@ -215,45 +215,33 @@ function forceStopAllMic() {
 function playAudioLink(url, callback = null) {
     if (!url) return;
 
-    // 🛑 1. ล้างสถานะเดิมให้เกลี้ยงก่อนเริ่ม
     stopAllSpeech(); 
     forceStopAllMic(); 
-    if (window.micTimer) clearTimeout(window.micTimer); 
     
-    // 🔒 2. ตั้งสถานะ Lock หนาแน่น
     window.isBusy = true;
-    window.isAudioPlaying = true; // [NEW] ยามเฝ้าไฟล์เสียง
-    window.allowWakeWord = false; 
+    window.isAudioPlaying = true; // 🔒 ล็อคทันที
     updateLottie('talking');
 
     const audio = new Audio(url);
     window.currentAudioLink = audio; 
 
     audio.onplay = () => {
-        window.isBusy = true;
         window.isAudioPlaying = true;
-        // ปิดไมค์ซ้ำเผื่อมีอะไรพยายามแอบเปิด (เช่น Face Detection ที่หลุดรอดมา)
-        forceStopAllMic(); 
-        console.log("🔊 [Audio Link] Playing... All Mics strictly locked.");
+        forceStopAllMic(); // ย้ำว่าต้องปิดไมค์ให้สนิท
     };
 
     audio.onended = () => {
-        // 🔓 3. เมื่อเสียงจบ ปลดล็อกสถานะเสียง
-        window.isAudioPlaying = false; 
+        window.isAudioPlaying = false; // 🔓 ปลดล็อคเมื่อจบไฟล์เท่านั้น
         
         setTimeout(() => {
-            // เช็กว่ายังอยู่ในสถานะที่ควรเปิดไมค์ต่อหรือไม่ 
-            // (ถ้าคนไม่กดปุ่มไมค์ขัดจังหวะไปก่อน และยังไม่อยู่หน้า Home)
-            if (window.isBusy && !window.isAudioPlaying) {
+            // เช็กสถานะอีกครั้งเผื่อมีการกดขัดจังหวะด้วยมือไปก่อนหน้า
+            if (!window.isAudioPlaying) {
                 window.isBusy = false;
                 window.currentAudioLink = null;
                 updateLottie('idle');
-                updateInteractionTime();
                 
-                if (callback) {
-                    callback();
-                } else if (!isAtHome) {
-                    // กลับไปสถานะปกติ: เปิด Wake Word หรือ Auto-Mic
+                if (callback) callback();
+                else if (!isAtHome) {
                     window.allowWakeWord = true;
                     startWakeWord();
                 }
@@ -265,11 +253,9 @@ function playAudioLink(url, callback = null) {
         window.isBusy = false; 
         window.isAudioPlaying = false;
         window.currentAudioLink = null;
-        updateLottie('idle'); 
     };
 
     audio.play().catch(e => { 
-        console.warn("⚠️ Audio Playback Blocked");
         window.isBusy = false; 
         window.isAudioPlaying = false;
     });
@@ -632,23 +618,26 @@ function speak(text, callback = null, isGreeting = false) {
     msg.onstart = () => { updateLottie('talking'); };
     
     msg.onend = () => { 
-        window.isBusy = false; 
-        updateLottie('idle'); 
+    window.isBusy = false; 
+    updateLottie('idle'); 
 
-        if (callback) callback();
+    if (callback) callback();
 
-        if (!isAtHome) {
-            // หน่วงเวลา 2 วินาทีเพื่อให้ระบบเสียงนิ่งก่อนเปิดไมค์รับคำสั่งต่อ
-            setTimeout(() => {
-                if (window.isBusy) return;
+    if (!isAtHome) {
+        setTimeout(() => {
+            // 🛡️ เพิ่ม window.isAudioPlaying ในการเช็ก เพื่อกัน MP3 โดนตัด
+            if (window.isBusy || window.isAudioPlaying) {
+                console.log("⏳ [Prevent] Auto-Mic blocked: MP3 is still playing.");
+                return;
+            }
 
-                if (isGreeting) {
-                    window.allowWakeWord = true;
-                    startWakeWord(); 
-                } else {
-                    if (!window.isListening && typeof toggleListening === "function") {
-                        console.log("🎤 [Auto] เปิดปุ่มไมค์รอคำถามต่อ...");
-                        toggleListening(); 
+            if (isGreeting) {
+                window.allowWakeWord = true;
+                startWakeWord(); 
+            } else {
+                if (!window.isListening && typeof toggleListening === "function") {
+                    console.log("🎤 [Auto] Safe to open mic...");
+                    toggleListening();  
 
                         if (window.micTimer) clearTimeout(window.micTimer);
                         window.micTimer = setTimeout(() => {
@@ -657,7 +646,7 @@ function speak(text, callback = null, isGreeting = false) {
                                 window.allowWakeWord = true;
                                 startWakeWord(); 
                             }
-                        }, 6000); 
+                        }, 5000); 
                     }
                 }
             }, 2000); 
@@ -670,7 +659,12 @@ function speak(text, callback = null, isGreeting = false) {
 
 function stopAllSpeech() { 
     window.speechSynthesis.cancel(); 
+    if (window.currentAudioLink) {
+        window.currentAudioLink.pause();
+        window.currentAudioLink.currentTime = 0;
+    }
     window.isBusy = false; 
+    window.isAudioPlaying = false; // ล้างค่าเสมอ
     updateLottie('idle'); 
 }
 
