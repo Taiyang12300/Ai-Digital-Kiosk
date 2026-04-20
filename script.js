@@ -158,7 +158,7 @@ function setupWakeWord() {
                         console.log("🔄 [System] Mic stand-by.");
                     }
                 } catch(e) { isWakeWordActive = false; }
-            }, 500); // ลดเวลาลงเพื่อให้ไมค์กลับมาทำงานต่อเนื่องที่สุด
+            }, 1000); // ลดเวลาลงเพื่อให้ไมค์กลับมาทำงานต่อเนื่องที่สุด
         }
     };
 
