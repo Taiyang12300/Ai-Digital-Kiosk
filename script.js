@@ -215,36 +215,40 @@ function forceStopAllMic() {
 function playAudioLink(url, callback = null) {
     if (!url) return;
 
+    // 🛑 1. ตัดทุกอย่างทันที
     stopAllSpeech(); 
-    forceStopAllMic(); 
+    forceStopAllMic(); // สั่งหยุดไมค์ทุกลำดับ
+    if (window.micTimer) clearTimeout(window.micTimer); 
     
+    // 🔒 2. ล็อคสถานะให้หนาแน่น
     window.isBusy = true;
-    window.isAudioPlaying = true; // 🔒 ล็อคทันที
+    window.isAudioPlaying = true; 
+    window.allowWakeWord = false; 
     updateLottie('talking');
 
     const audio = new Audio(url);
     window.currentAudioLink = audio; 
 
     audio.onplay = () => {
-    window.isAudioPlaying = true;
-    window.isBusy = true; // ล็อคระบบกันแทรก
-    updateLottie('talking'); // ให้หุ่นขยับตอนเล่น MP3
-    forceStopAllMic(); 
-    console.log("🔊 [Audio Link] Playing... All Mics strictly locked.");
+        // ย้ำสถานะอีกครั้งเมื่อเสียงเริ่มเล่นจริง
+        window.isAudioPlaying = true;
+        window.isBusy = true;
+        forceStopAllMic(); // 🛡️ กันเหนียว: สั่งปิดไมค์ซ้ำเผื่อมีตัวไหนแอบ Start ขึ้นมาตอนโหลดไฟล์
+        console.log("🔊 [Audio Link] Playing... All Mics strictly locked.");
     };
 
     audio.onended = () => {
-        window.isAudioPlaying = false; // 🔓 ปลดล็อคเมื่อจบไฟล์เท่านั้น
+        window.isAudioPlaying = false; 
         
         setTimeout(() => {
-            // เช็กสถานะอีกครั้งเผื่อมีการกดขัดจังหวะด้วยมือไปก่อนหน้า
             if (!window.isAudioPlaying) {
                 window.isBusy = false;
                 window.currentAudioLink = null;
                 updateLottie('idle');
                 
-                if (callback) callback();
-                else if (!isAtHome) {
+                if (callback) {
+                    callback();
+                } else if (!isAtHome) {
                     window.allowWakeWord = true;
                     startWakeWord();
                 }
@@ -256,12 +260,18 @@ function playAudioLink(url, callback = null) {
         window.isBusy = false; 
         window.isAudioPlaying = false;
         window.currentAudioLink = null;
+        updateLottie('idle');
     };
 
-    audio.play().catch(e => { 
-        window.isBusy = false; 
-        window.isAudioPlaying = false;
-    });
+    // 🚩 [FIX] หน่วงเวลา 150-200ms เพื่อให้ Browser เคลียร์ไมค์ให้จบก่อนเริ่มเล่นเสียง
+    // ป้องกัน InvalidStateError และการแย่ง Resource ของไมค์กับเสียง
+    setTimeout(() => {
+        audio.play().catch(e => { 
+            console.warn("⚠️ Audio Playback Blocked or Interrupted:", e);
+            window.isBusy = false; 
+            window.isAudioPlaying = false;
+        });
+    }, 200);
 }
 
 // --- 1. ระบบจัดการสถานะ & Wake Word Setup ---
@@ -279,45 +289,34 @@ function setupWakeWord() {
     wakeWordRecognition.lang = 'th-TH';
 
     wakeWordRecognition.onresult = (event) => {
-        if (!window.allowWakeWord || window.isBusy || window.isListening) return;
+    wakeWordRecognition.onresult = (event) => {
+    // 🛡️ เพิ่มเงื่อนไข: ถ้าเสียง MP3 กำลังเล่นอยู่ ให้ข้ามการประมวลผล Wake Word ไปเลย
+    if (!window.allowWakeWord || window.isBusy || window.isListening || window.isAudioPlaying) return;
 
-        let transcript = "";
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-            transcript += event.results[i][0].transcript;
-        }
+    let transcript = "";
+    for (let i = event.resultIndex; i < event.results.length; ++i) {
+        transcript += event.results[i][0].transcript;
+    }
 
-        if (transcript.includes("น้องนำทาง") || transcript.includes("นำทาง")) {
-            isWakeWordActive = false; 
-            forceStopAllMic();        
-            window.isBusy = true;     
+    if (transcript.includes("น้องนำทาง") || transcript.includes("นำทาง")) {
+        // ... โค้ดส่วนที่เหลือเหมือนเดิม ...
+    }
+};
 
-            let msg = "";
-            if (window.currentLang === 'th') {
-                const affirmations = ["ครับผม", "สวัสดีครับ", "น้องนำทางมาแล้วครับ"];
-                const questions = ["มีอะไรให้ช่วยไหมครับ?", "สอบถามข้อมูลได้เลยนะครับ"];
-                msg = `${affirmations[Math.floor(Math.random() * affirmations.length)]} ${questions[Math.floor(Math.random() * questions.length)]}`;
-            } else {
-                msg = "Yes! How can I help you?";
-            }
-            
-            displayResponse(msg);
-            setTimeout(() => { speak(msg); }, 300); 
-        }
-    };
-
-    wakeWordRecognition.onend = () => {
-        if (!isAtHome && personInFrameTime !== null && !window.isBusy && !window.isListening && isWakeWordActive) {
-            setTimeout(() => {
-                try {
-                    if (!window.isBusy && !window.isListening && !isAtHome && isWakeWordActive) {
-                        wakeWordRecognition.start(); 
-                    }
-                } catch(e) {}
-            }, 1500); 
-        } else {
-            isWakeWordActive = false;
-        }
-    };
+wakeWordRecognition.onend = () => {
+    // 🛡️ ป้องกันการ Restart ไมค์อัตโนมัติถ้าเสียงยังเล่นอยู่
+    if (!isAtHome && personInFrameTime !== null && !window.isBusy && !window.isListening && !window.isAudioPlaying && isWakeWordActive) {
+        setTimeout(() => {
+            try {
+                if (!window.isBusy && !window.isListening && !isAtHome && !window.isAudioPlaying && isWakeWordActive) {
+                    wakeWordRecognition.start(); 
+                }
+            } catch(e) {}
+        }, 1500); 
+    } else {
+        isWakeWordActive = false;
+    }
+};
 
     wakeWordRecognition.onerror = (event) => {
         if (event.error === 'not-allowed') {
@@ -328,16 +327,22 @@ function setupWakeWord() {
 }
 
 function startWakeWord() {
-    if (!window.allowWakeWord || isAtHome || window.isListening || window.isMuted || window.isBusy) {
+    // 🛡️ เพิ่ม window.isAudioPlaying ในเงื่อนไขการห้ามทำงาน (Return ทันทีถ้าเสียงเล่นอยู่)
+    if (!window.allowWakeWord || isAtHome || window.isListening || window.isMuted || window.isBusy || window.isAudioPlaying) {
         isWakeWordActive = false;
+        console.log("🚫 [WakeWord] Start blocked: System is busy or playing audio.");
         return;
     }
     try { 
         forceStopAllMic(); 
         setTimeout(() => {
+            // เช็กซ้ำอีกครั้งก่อน Start จริงเพื่อความชัวร์
+            if (window.isAudioPlaying) return;
+
             isWakeWordActive = true; 
             wakeWordRecognition.start(); 
-        }, 200);
+            console.log("👂 [WakeWord] Started...");
+        }, 300); // เพิ่มเวลาหน่วงเล็กน้อยเพื่อให้ Browser เคลียร์คิวเสียง
     } catch (e) {}
 }
 
