@@ -29,6 +29,88 @@ let micHardLock = false; // 🔥 กัน restart ไมค์ซ้อน
 let manualMicOverride = false; // 🔥 ปุ่มไมค์ priority สูงสุด
 let isWakeWordActive = false;
 
+function toggleListening() { 
+    // 🔥 USER OVERRIDE MODE
+    manualMicOverride = true;
+    micHardLock = false;
+
+    // 🚀 MASTER RESET
+    window.speechSynthesis.cancel(); 
+    
+    if (window.currentAudioLink) {
+        window.currentAudioLink.pause();
+        window.currentAudioLink.currentTime = 0;
+        console.log("🛑 [Audio] Link Interrupted by User");
+    }
+
+    const audios = document.querySelectorAll('audio');
+    audios.forEach(a => { a.pause(); a.currentTime = 0; });
+
+    if (window.micTimer) clearTimeout(window.micTimer);
+
+    forceStopAllMic(); 
+
+    window.isBusy = false; 
+    window.isAudioPlaying = false; 
+    window.currentAudioLink = null; 
+
+    // --- TOGGLE LOGIC ---
+    
+    if (window.isListening || (window.recognition && window.recognition.state === 'running')) { 
+        try {
+            if (window.recognition) window.recognition.stop(); 
+        } catch (e) { console.warn("Stop Error:", e); }
+
+        window.isListening = false;
+        console.log("🎤 [Mic] User toggled OFF");
+
+        // 🔥 ปลด override หลังปิด
+        setTimeout(() => {
+            manualMicOverride = false;
+        }, 300);
+
+        return; 
+    } 
+
+    // --- START LISTENING ---
+    try {
+        if (window.recognition) {
+            setTimeout(() => {
+                try {
+                    window.recognition.start(); 
+                    console.log("🎤 [Mic] User toggled ON / Started listening...");
+                } catch (e) {}
+            }, 150);
+        }
+    } catch (e) { 
+        console.error("Mic Start Error:", e);
+        if (window.recognition) window.recognition.abort();
+        window.isListening = false;
+    } 
+
+    // 🔥 กันค้าง override (สำคัญ)
+    setTimeout(() => {
+        if (!window.isListening) {
+            manualMicOverride = false;
+        }
+    }, 10000);
+}
+
+function stopListening() { 
+    window.isListening = false;
+
+    // 🔥 ปลด override ด้วย
+    manualMicOverride = false;
+
+    const micBtn = document.getElementById('micBtn');
+    const statusText = document.getElementById('statusText');
+
+    if (micBtn) micBtn.classList.remove('recording'); 
+    if (statusText) statusText.innerText = (window.currentLang === 'th') 
+        ? "แตะไมค์เพื่อเริ่มพูด" 
+        : "Tap mic to speak";
+}
+
 // --- 🚩 ฟังก์ชันควบคุม Splash Screen (ปรับปรุงให้สมูท) ---
 function completeLoading() {
     const splash = document.getElementById('splash-screen');
