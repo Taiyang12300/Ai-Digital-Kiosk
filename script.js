@@ -226,8 +226,11 @@ function playAudioLink(url, callback = null) {
     window.currentAudioLink = audio; 
 
     audio.onplay = () => {
-        window.isAudioPlaying = true;
-        forceStopAllMic(); // ย้ำว่าต้องปิดไมค์ให้สนิท
+    window.isAudioPlaying = true;
+    window.isBusy = true; // ล็อคระบบกันแทรก
+    updateLottie('talking'); // ให้หุ่นขยับตอนเล่น MP3
+    forceStopAllMic(); 
+    console.log("🔊 [Audio Link] Playing... All Mics strictly locked.");
     };
 
     audio.onended = () => {
@@ -598,6 +601,11 @@ async function getResponse(userQuery) {
 
 async function processQuery(query) {
     window.speechSynthesis.cancel();
+    
+    // ล้างช่องพิมพ์ทันทีเมื่อเริ่มค้นหา
+    const inputField = document.getElementById('userInput');
+    if (inputField) inputField.value = ""; 
+
     const respBox = document.getElementById('response-text');
     if (respBox) respBox.innerText = (window.currentLang === 'th') ? "กำลังค้นหา..." : "Searching...";
     await getResponse(query);
@@ -649,7 +657,7 @@ function speak(text, callback = null, isGreeting = false) {
                         }, 5000); 
                     }
                 }
-            }, 2000); 
+            }, 1000); 
         }
     };
 
