@@ -82,34 +82,50 @@ function initSpeechRecognition() {
 }
 
 function toggleListening() { 
-    // 🚀 MASTER RESET: ขัดจังหวะทุกอย่าง
+    // 🚀 MASTER RESET: ขัดจังหวะทุกอย่างทันทีเมื่อกดปุ่ม
+    
+    // 1. หยุดเสียงอ่าน (TTS)
     window.speechSynthesis.cancel(); 
     
+    // 2. [NEW] หยุดไฟล์เสียงจาก Link ที่กำลังเล่นอยู่ (ถ้ามี)
+    if (window.currentAudioLink) {
+        window.currentAudioLink.pause();
+        window.currentAudioLink.currentTime = 0;
+        console.log("🛑 [Audio] Link Interrupted by User");
+    }
+
+    // 3. หยุดไฟล์เสียงอื่นๆ ทั้งหมดในหน้าเว็บ
     const audios = document.querySelectorAll('audio');
     audios.forEach(a => { a.pause(); a.currentTime = 0; });
 
+    // 4. เคลียร์ Timer และหยุดไมค์ทุกตัว (Wake Word / STT เดิม)
     if (window.micTimer) clearTimeout(window.micTimer);
+    forceStopAllMic(); // ใช้ฟังก์ชันเดิมที่มีอยู่เพื่อ abort recognition ทุกตัว
+
+    // 5. ปลดล็อกสถานะ Busy ทันทีเพื่อให้ระบบพร้อมรับคำสั่งใหม่
+    window.isBusy = false; 
+
+    // --- ส่วนของ Logic การจัดการสถานะไมค์ STT ---
     
-    // [FIX] ถ้ามีการฟังอยู่แล้ว ให้สั่ง stop และเคลียร์สถานะก่อน
+    // ถ้าสถานะเดิมกำลังฟังอยู่ ให้หยุด (Toggle Off)
     if (window.isListening || (window.recognition && window.recognition.state === 'running')) { 
         try {
             if (window.recognition) window.recognition.stop(); 
         } catch (e) { console.warn("Stop Error:", e); }
         window.isListening = false;
-        return; // ออกจากการทำงานเพื่อให้สถานะนิ่งก่อน
+        console.log("🎤 [Mic] User toggled OFF");
+        return; 
     } 
 
-    // [FIX] ก่อนจะ start ใหม่ ต้องมั่นใจว่าสถานะทุกอย่างพร้อม
-    window.isBusy = false; 
-
+    // เริ่มการฟังใหม่ (Toggle On)
     try {
         if (window.recognition) {
-            // ป้องกันการเรียก start ซ้อนด้วยการเช็กสถานะภายใน recognition เอง
             window.recognition.start(); 
+            console.log("🎤 [Mic] User toggled ON / Started listening...");
         }
     } catch (e) { 
         console.error("Mic Start Error (Attempting recovery):", e);
-        // หากเกิด InvalidState ให้ลอง abort แล้วสั่งใหม่ในครั้งหน้า
+        // หากเกิด InvalidState ให้ลอง abort แล้วล้างสถานะเพื่อให้กดครั้งต่อไปติด
         if (window.recognition) window.recognition.abort();
         window.isListening = false;
     } 
@@ -174,43 +190,45 @@ function forceStopAllMic() {
 function playAudioLink(url, callback = null) {
     if (!url) return;
 
-    // 🛑 1. หยุดทุกอย่างก่อนเริ่มเล่นลิงค์เสียง
+    // 🛑 หยุดระบบพูด (TTS) และไมค์ (STT) เดิมก่อน
     stopAllSpeech(); 
     forceStopAllMic(); 
     
-    // [FIX] เพิ่มการสั่งหยุด Recognition โดยตรงเพื่อกันไมค์ STT ค้างจังหวะโหลดไฟล์
-    if (window.recognition) {
-        try { window.recognition.stop(); } catch(e) {}
-    }
-    
+    // ล้าง Timer เดิม (ถ้ามี)
     if (window.micTimer) clearTimeout(window.micTimer); 
     
+    // ล็อคสถานะห้ามระบบอื่นแทรก
     window.isBusy = true;
+    window.allowWakeWord = false; // ปิด Wake Word ระหว่างเล่นเสียงลิงค์
     updateLottie('talking');
 
+    // สร้าง Audio Object ใหม่
     const audio = new Audio(url);
 
-    // 🛑 2. ขณะที่เสียงเริ่มเล่น: ย้ำสถานะ Busy และปิดไมค์ซ้ำป้องกัน Browser แอบเปิด
     audio.onplay = () => {
+        // ย้ำสถานะ Busy และสั่งปิดไมค์ซ้ำเผื่อกรณี Browser พยายาม auto-restart
         window.isBusy = true;
         forceStopAllMic();
-        console.log("🔊 [Audio] Link playing: All mics strictly closed.");
+        console.log("🔊 [Audio Link] Playing... Microphones Locked.");
     };
 
     audio.onended = () => {
-        // 🛑 3. เมื่อเสียงจบ: รอ Cool-down ให้ห้องเงียบสนิทก่อนเริ่มดักฟังใหม่
+        // รอ Cool-down 1.2 วินาทีเพื่อให้เสียงเงียบสนิทก่อนรับคำสั่งใหม่
         setTimeout(() => {
-            window.isBusy = false;
-            updateLottie('idle');
-            updateInteractionTime();
-            
-            if (callback) {
-                callback();
-            } else if (window.allowWakeWord && !isAtHome) {
-                window.allowWakeWord = true;
-                startWakeWord();
+            // ถ้าสถานะยังเป็น Busy (ไม่มีใครกดปุ่มไมค์ขัดจังหวะไปก่อน)
+            if (window.isBusy) {
+                window.isBusy = false;
+                updateLottie('idle');
+                updateInteractionTime();
+                
+                if (callback) {
+                    callback();
+                } else if (!isAtHome) {
+                    window.allowWakeWord = true;
+                    startWakeWord();
+                }
             }
-        }, 1200); // เพิ่มเป็น 1.2 วินาที เพื่อความชัวร์
+        }, 1200); 
     };
 
     audio.onerror = () => { 
@@ -219,9 +237,12 @@ function playAudioLink(url, callback = null) {
     };
 
     audio.play().catch(e => { 
-        console.warn("⚠️ Playback blocked or failed.");
+        console.warn("⚠️ Audio Playback Blocked");
         window.isBusy = false; 
     });
+
+    // เก็บอ้างอิงไฟล์เสียงไว้ใน window เพื่อให้ปุ่มไมค์สั่งหยุดได้
+    window.currentAudioLink = audio;
 }
 
 // --- 1. ระบบจัดการสถานะ & Wake Word Setup ---
