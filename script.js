@@ -463,7 +463,7 @@ function speak(text, callback = null, isGreeting = false) {
                                 window.allowWakeWord = true;
                                 startWakeWord(); 
                             }
-                        }, 15000); 
+                        }, 8000); 
                     }
                 }
             }, 2000); 
