@@ -10,6 +10,7 @@ window.isMuted = false;
 window.isBusy = false; 
 window.hasGreeted = false;
 window.allowWakeWord = false; 
+window.isListening = false;
 let isAtHome = true; 
 
 const GAS_URL = "https://script.google.com/macros/s/AKfycbz1bkIsQ588u-rpjY-8nMlya5_c0DsIabRvyPyCC_sPs5vyeJ_1wcOBaqKfg7cvlM3XJw/exec"; 
@@ -22,9 +23,10 @@ let isDetecting = true;
 let personInFrameTime = null; 
 let lastSeenTime = Date.now();
 let lastDetectionTime = 0;
+window.recognition = null; // 🔥 สำคัญ ต้องมี
+let wakeWordRecognition = null;
 const DETECTION_INTERVAL = 200; 
 
-let wakeWordRecognition;
 let manualMicOverride = false;
 let micHardLock = false;
 let lastFinalTranscript = "";
@@ -32,34 +34,63 @@ let isSubmitting = false;
 let micSessionId = 0;
 let isWakeWordActive = false;
 
-function toggleListening() { 
+function safeStartRecognition() {
+    if (!window.recognition) initSpeechRecognition();
+    if (!window.recognition) return;
+
+    if (window.isListening) return;
+
+    try {
+        window.recognition.start();
+    } catch (e) {
+        console.warn("Start fail:", e);
+    }
+}
+
+// ================= SAFE STOP =================
+function safeStopRecognition() {
+    if (!window.recognition) return;
+
+    try {
+        window.recognition.abort();
+    } catch (e) {}
+}
+
+// ================= SET MIC MODE =================
+function setMicState(mode) {
+    console.log("🎛️ MicMode:", mode);
+
+    safeStopRecognition();
+    stopWakeWord();
+
+    if (mode === "OFF") return;
+
+    if (mode === "STT") {
+        setTimeout(() => {
+            safeStartRecognition();
+        }, 200);
+    }
+
+    if (mode === "WAKE") {
+        if (!wakeWordRecognition) setupWakeWord();
+
+        setTimeout(() => {
+            try {
+                wakeWordRecognition.start();
+            } catch (e) {}
+        }, 300);
+    }
+}
+
+function toggleListening() {
     manualMicOverride = true;
-    micHardLock = false; 
-
-    window.speechSynthesis.cancel(); 
-    if (window.micTimer) clearTimeout(window.micTimer);
-
     if (!window.recognition) initSpeechRecognition();
 
-    // 🔥 กัน start ซ้ำ
-    if (window.isListening) { 
-        try { window.recognition.stop(); } catch (e) {}
-        window.isListening = false;
-        manualMicOverride = false; 
-        return; 
-    } 
-
-    forceStopAllMic();
-
-    setTimeout(() => {
-        if (window.isListening) return; // 🔥 กันซ้อน
-
-        try {
-            window.recognition.start(); 
-        } catch (e) { 
-            window.isListening = false;
-        }
-    }, 200); 
+    if (window.isListening) {
+        safeStopRecognition();
+    } else {
+        safeStartRecognition();
+    }
 }
 
 function stopListening() { 
@@ -165,86 +196,42 @@ function playAudioLink(url, callback = null) {
 function setupWakeWord() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
-    
-    if (wakeWordRecognition) { 
-        try { wakeWordRecognition.abort(); } catch(e) {} 
-    }
 
     wakeWordRecognition = new SpeechRecognition();
-    wakeWordRecognition.continuous = true; 
-    wakeWordRecognition.interimResults = true; 
+    wakeWordRecognition.continuous = true;
+    wakeWordRecognition.interimResults = true;
     wakeWordRecognition.lang = 'th-TH';
 
     wakeWordRecognition.onresult = (event) => {
-        const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
-        
-        // 🛑 ห้ามประมวลผลถ้า AI กำลังพูด หรือเปิดไมค์ปุ่มกดอยู่
-        if (!window.allowWakeWord || window.isBusy || isListeningNow) return;
-
-        let transcript = "";
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-            transcript += event.results[i][0].transcript;
+        let text = "";
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+            text += event.results[i][0].transcript;
         }
 
-        if (transcript.includes("น้องนำทาง") || transcript.includes("นำทาง")) {
-            console.log("🎯 [WakeWord] Keyword Matched!");
-            
-            // 🛑 สำคัญ: ปิดโหมดดักฟังทันทีเพื่อเข้าสู่โหมดตอบโต้
-            isWakeWordActive = false; 
-            forceStopAllMic();        
-            
-            window.isBusy = true;     
-            transcript = "";          
+        if (text.includes("น้องนำทาง")) {
+            console.log("🎯 WAKE WORD DETECTED");
 
-            let msg = "";
-            if (window.currentLang === 'th') {
-                const affirmations = ["ครับผม", "สวัสดีครับ", "น้องนำทางมาแล้วครับ"];
-                const questions = ["มีอะไรให้ช่วยไหมครับ?", "สอบถามข้อมูลได้เลยนะครับ"];
-                msg = `${affirmations[Math.floor(Math.random() * affirmations.length)]} ${questions[Math.floor(Math.random() * questions.length)]}`;
-            } else {
-                msg = "Yes! How can I help you?";
-            }
-            
-            displayResponse(msg);
-            
-            // ส่งไปฟังก์ชันพูด (ซึ่งจะไปเปิดปุ่มไมค์ STT ต่อหลังพูดจบ)
+            safeStopRecognition();
+
             setTimeout(() => {
-                speak(msg); 
-            }, 300); 
+                setMicState("STT");
+            }, 500);
         }
     };
 
-    // 🚩 แก้ไข: ระบบ Restart ไมค์แบบหน่วงเวลาเพื่อป้องกัน Browser Block
     wakeWordRecognition.onend = () => {
-    const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
+    if (!isWakeWordActive) return;
 
-    // 🔥 ถ้าผู้ใช้กดไมค์ → ห้าม restart
-    if (manualMicOverride) return;
-
-    if (micHardLock) {
-        console.log("⛔ [WakeWord] Restart BLOCKED (HardLock)");
-        return;
-    }
-
-    if (!isAtHome && personInFrameTime !== null && !window.isBusy && !isListeningNow && isWakeWordActive) {
-        setTimeout(() => {
-            try {
-                if (!micHardLock && !window.isBusy && !isListeningNow && !isAtHome && isWakeWordActive) {
-                    wakeWordRecognition.start(); 
-                }
-            } catch(e) {}
-        }, 1500); 
-    } else {
-        isWakeWordActive = false;
-    }
+    setTimeout(() => {
+        try {
+            wakeWordRecognition.start();
+        } catch (e) {}
+    }, 1000);
 };
 
+    // ✅ ต้องอยู่ใน function
     wakeWordRecognition.onerror = (event) => {
         console.warn("🎤 [WakeWord] Error:", event.error);
-        if (event.error === 'not-allowed') {
-            window.allowWakeWord = false;
-            isWakeWordActive = false;
-        }
     };
 }
 
@@ -283,93 +270,37 @@ function initSpeechRecognition() {
     if (window.recognition) return;
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+    if (!SpeechRecognition) {
+        console.error("❌ Browser ไม่รองรับ SpeechRecognition");
+        return;
+    }
 
     window.recognition = new SpeechRecognition();
-    window.recognition.lang = window.currentLang === 'th' ? 'th-TH' : 'en-US';
+    window.recognition.lang = 'th-TH';
     window.recognition.continuous = true;
     window.recognition.interimResults = true;
 
     window.recognition.onstart = () => {
         window.isListening = true;
-        micSessionId++; // 🔥 session ใหม่ทุกครั้ง
-        lastFinalTranscript = "";
-        isSubmitting = false;
-
-        const micBtn = document.getElementById('micBtn');
-        if (micBtn) micBtn.classList.add('recording');
-
-        displayResponse("กำลังฟัง... พูดได้เลยครับ");
-    };
-
-    window.recognition.onresult = (e) => {
-        if (window.micTimer) clearTimeout(window.micTimer);
-
-        let finalText = "";
-        let interimText = "";
-
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-            const txt = e.results[i][0].transcript;
-
-            if (e.results[i].isFinal) {
-                finalText += txt;
-            } else {
-                interimText += txt;
-            }
-        }
-
-        const inputField = document.getElementById('userInput');
-        if (!inputField) return;
-
-        // 🔥 กันข้อความซ้ำ
-        if (finalText && finalText === lastFinalTranscript) return;
-
-        // 🔥 update textbox แบบเสถียร
-        inputField.value = lastFinalTranscript + interimText;
-
-        // 🔥 ถ้า final มา → commit
-        if (finalText) {
-            lastFinalTranscript += finalText;
-            inputField.value = lastFinalTranscript;
-        }
-
-        // 🔥 AUTO SUBMIT (กันยิงซ้ำ)
-        window.micTimer = setTimeout(() => {
-            if (isSubmitting) return;
-
-            const finalQuery = inputField.value.trim();
-            if (!finalQuery) return;
-
-            isSubmitting = true;
-
-            console.log("🚀 SEND:", finalQuery);
-
-            try { window.recognition.stop(); } catch (e) {}
-
-            inputField.value = "";
-            lastFinalTranscript = "";
-
-            getResponse(finalQuery);
-        }, 1800);
+        console.log("🎤 Mic START");
     };
 
     window.recognition.onend = () => {
         window.isListening = false;
-
-        const micBtn = document.getElementById('micBtn');
-        if (micBtn) micBtn.classList.remove('recording');
-
-        if (window.micTimer) clearTimeout(window.micTimer);
-
-        // 🔥 reset state กันค้าง
-        setTimeout(() => {
-            isSubmitting = false;
-        }, 300);
+        console.log("🛑 Mic END");
     };
 
     window.recognition.onerror = (e) => {
         console.warn("Mic Error:", e.error);
         window.isListening = false;
+    };
+
+    window.recognition.onresult = (e) => {
+        let text = "";
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+            text += e.results[i][0].transcript;
+        }
+        console.log("🎯 RESULT:", text);
     };
 }
 
@@ -623,16 +554,14 @@ function speak(text, callback = null, isGreeting = false) {
                     const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
                     if (!isListeningNow && typeof toggleListening === "function" && !manualMicOverride) {
                         console.log("🎤 [System] เปิดปุ่มไมค์รอคำถาม...");
-                        toggleListening(); 
+                        setMicState("STT"); 
 
                         if (window.sttTimeout) clearTimeout(window.sttTimeout);
                         window.sttTimeout = setTimeout(() => {
                             const stillListening = typeof isListening !== 'undefined' ? isListening : false;
                             if (stillListening && !window.isBusy && !manualMicOverride) {
                                 console.log("⏰ 5s Timeout: กลับไปโหมดดักฟังชื่อ");
-                                forceStopAllMic(); 
-                                window.allowWakeWord = true;
-                                startWakeWord(); 
+                                setMicState("WAKE");
                             }
                         }, 6000); 
                     }
