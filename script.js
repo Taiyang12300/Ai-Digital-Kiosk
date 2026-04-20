@@ -30,6 +30,7 @@ let micHardLock = false;
 let manualMicOverride = false; 
 let isWakeWordActive = false;
 let lastFinalTranscript = ""; // เพิ่มตัวแปรสะสมข้อความเพื่อความแม่นยำในการล้างค่า
+let isSubmitting = false;
 
 function toggleListening() { 
     manualMicOverride = true;
@@ -174,9 +175,6 @@ function initSpeechRecognition() {
     window.recognition.lang = window.currentLang === 'th' ? 'th-TH' : 'en-US';
     window.recognition.continuous = true;
     window.recognition.interimResults = true;
-
-    // เพิ่มตัวล็อคสถานะการส่ง
-    let isSubmitting = false;
 
     window.recognition.onstart = () => {
         window.isListening = true;
