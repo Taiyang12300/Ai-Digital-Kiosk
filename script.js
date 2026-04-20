@@ -25,41 +25,38 @@ let lastDetectionTime = 0;
 const DETECTION_INTERVAL = 200; 
 
 let wakeWordRecognition;
-let micHardLock = false; // 🔥 กัน restart ไมค์ซ้อน
-let manualMicOverride = false; // 🔥 ปุ่มไมค์ priority สูงสุด
+let manualMicOverride = false;
+let micHardLock = false;
+let lastFinalTranscript = "";
+let isSubmitting = false;
+let micSessionId = 0;
 let isWakeWordActive = false;
 
 function toggleListening() { 
-    // 🔥 USER OVERRIDE - ปลดล็อคทุกอย่างเมื่อคนกดเอง
     manualMicOverride = true;
     micHardLock = false; 
 
-    // 🚀 MASTER RESET - หยุดเสียงทุกอย่าง
     window.speechSynthesis.cancel(); 
     if (window.micTimer) clearTimeout(window.micTimer);
-    
-    // ตรวจสอบว่ามีฟังก์ชัน init หรือยัง (ถ้ายังไม่มีให้เรียก)
+
     if (!window.recognition) initSpeechRecognition();
 
-    // เช็คสถานะปัจจุบัน
+    // 🔥 กัน start ซ้ำ
     if (window.isListening) { 
         try { window.recognition.stop(); } catch (e) {}
         window.isListening = false;
         manualMicOverride = false; 
-        console.log("🎤 [Mic] User toggled OFF");
         return; 
     } 
 
-    // --- เริ่มฟังเสียง ---
-    forceStopAllMic(); // เคลียร์ไมค์ตัวอื่น (WakeWord) ออกไปก่อน
-    
+    forceStopAllMic();
+
     setTimeout(() => {
+        if (window.isListening) return; // 🔥 กันซ้อน
+
         try {
-            micHardLock = false; // ย้ำอีกครั้งว่าห้ามล็อค
             window.recognition.start(); 
-            console.log("🎤 [Mic] User toggled ON");
         } catch (e) { 
-            console.error("Mic Start Error:", e);
             window.isListening = false;
         }
     }, 200); 
@@ -283,9 +280,7 @@ function stopWakeWord() {
 }
 
 function initSpeechRecognition() {
-    // 1. ✅ กันการสร้าง Object ซ้อน (ถ้ามีอยู่แล้วไม่ต้องสร้างใหม่)
-    // จุดนี้สำคัญมาก ถ้าไม่ใส่ ยิ่งกดปุ่มไมค์บ่อย ข้อความจะยิ่งพิมพ์ซ้ำตามจำนวนครั้งที่กด
-    if (window.recognition) return; 
+    if (window.recognition) return;
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
@@ -297,58 +292,84 @@ function initSpeechRecognition() {
 
     window.recognition.onstart = () => {
         window.isListening = true;
+        micSessionId++; // 🔥 session ใหม่ทุกครั้ง
+        lastFinalTranscript = "";
+        isSubmitting = false;
+
         const micBtn = document.getElementById('micBtn');
         if (micBtn) micBtn.classList.add('recording');
-        displayResponse(window.currentLang === 'th' ? "กำลังฟัง... พูดได้เลยครับ" : "Listening...");
+
+        displayResponse("กำลังฟัง... พูดได้เลยครับ");
     };
 
     window.recognition.onresult = (e) => {
         if (window.micTimer) clearTimeout(window.micTimer);
-        
-        let transcript = "";
-        // 2. ✅ ปรับปรุงการวน Loop (ใช้ e.resultIndex)
-        // เริ่มอ่านจาก index ล่าสุดที่ระบบส่งมา แทนการเริ่มที่ 0 ใหม่ทุกครั้ง
-        // วิธีนี้จะช่วยแก้ปัญหาข้อความ "ไหลซ้ำ" หรือพิมพ์ประโยคเดิมซ้อนๆ กันขณะพูด
-        for (let i = e.resultIndex; i < e.results.length; ++i) {
-            transcript += e.results[i][0].transcript;
-        }
 
-        if (transcript.trim() !== "") {
-            const inputField = document.getElementById('userInput');
-            
-            // แสดงผลในกล่องข้อความ (ใช้ += เพื่อต่อข้อความ หรือ = เพื่อทับ ตามความเหมาะสม)
-            if (inputField) {
-                // ถ้าพูดต่อเนื่องให้ต่อข้อความไปเรื่อยๆ
-                inputField.value = (e.results[e.resultIndex].isFinal) 
-                    ? inputField.value + transcript 
-                    : transcript; 
+        let finalText = "";
+        let interimText = "";
+
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+            const txt = e.results[i][0].transcript;
+
+            if (e.results[i].isFinal) {
+                finalText += txt;
+            } else {
+                interimText += txt;
             }
-
-            // 🚀 ตั้งเวลาส่งอัตโนมัติเมื่อหยุดพูด (แนะนำ 2000ms เพื่อความกระฉับกระเฉง)
-            window.micTimer = setTimeout(() => {
-                const finalQuery = inputField ? inputField.value.trim() : transcript.trim();
-                
-                if (finalQuery !== "") {
-                    console.log("🚀 [Auto-Submit] Sending & Clearing box...");
-                    
-                    try { window.recognition.stop(); } catch(err) {} 
-                    
-                    // ✅ ล้างข้อความในกล่องทันทีที่ส่ง
-                    if (inputField) inputField.value = ""; 
-
-                    // ส่งไปหาคำตอบ
-                    getResponse(finalQuery); 
-                }
-            }, 2000); 
         }
+
+        const inputField = document.getElementById('userInput');
+        if (!inputField) return;
+
+        // 🔥 กันข้อความซ้ำ
+        if (finalText && finalText === lastFinalTranscript) return;
+
+        // 🔥 update textbox แบบเสถียร
+        inputField.value = lastFinalTranscript + interimText;
+
+        // 🔥 ถ้า final มา → commit
+        if (finalText) {
+            lastFinalTranscript += finalText;
+            inputField.value = lastFinalTranscript;
+        }
+
+        // 🔥 AUTO SUBMIT (กันยิงซ้ำ)
+        window.micTimer = setTimeout(() => {
+            if (isSubmitting) return;
+
+            const finalQuery = inputField.value.trim();
+            if (!finalQuery) return;
+
+            isSubmitting = true;
+
+            console.log("🚀 SEND:", finalQuery);
+
+            try { window.recognition.stop(); } catch (e) {}
+
+            inputField.value = "";
+            lastFinalTranscript = "";
+
+            getResponse(finalQuery);
+        }, 1800);
     };
 
     window.recognition.onend = () => {
         window.isListening = false;
+
         const micBtn = document.getElementById('micBtn');
         if (micBtn) micBtn.classList.remove('recording');
-        // เคลียร์ Timer ทิ้งเมื่อไมค์จบการทำงาน
+
         if (window.micTimer) clearTimeout(window.micTimer);
+
+        // 🔥 reset state กันค้าง
+        setTimeout(() => {
+            isSubmitting = false;
+        }, 300);
+    };
+
+    window.recognition.onerror = (e) => {
+        console.warn("Mic Error:", e.error);
+        window.isListening = false;
     };
 }
 
