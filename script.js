@@ -146,6 +146,7 @@ function setupWakeWord() {
     wakeWordRecognition.lang = 'th-TH';
 
     wakeWordRecognition.onresult = (event) => {
+        // 🛑 ป้องกันการประมวลผลซ้อนถ้า AI กำลังยุ่งหรือฟังอยู่
         if (window.isBusy || window.isListening) return;
 
         let transcript = "";
@@ -155,24 +156,48 @@ function setupWakeWord() {
 
         if (transcript.includes("น้องนำทาง") || transcript.includes("สวัสดีน้องนำทาง")) {
             console.log("🎯 [WakeWord] Matched!");
+            
+            // 1. เคลียร์ไมค์ทุกตัวทันที
             forceStopAllMic();        
             window.isBusy = true;     
+            isWakeWordActive = false; // ปิดสถานะดักฟังชื่อชั่วคราว
 
             const affirmations = ["ครับผม", "สวัสดีครับ", "น้องนำทางมาแล้วครับ"];
             const msg = affirmations[Math.floor(Math.random() * affirmations.length)] + " มีอะไรให้ช่วยไหมครับ?";
             
             displayResponse(msg);
-            setTimeout(() => { speak(msg); }, 300); 
+
+            // 2. ขานตอบจบแล้วเปิดไมค์ STT ทันที
+            setTimeout(() => { 
+                speak(msg, () => {
+                    console.log("🎤 [System] ขานตอบจบ -> เปิดไมค์รับคำถามอัตโนมัติ");
+                    
+                    if (typeof toggleListening === "function") {
+                        toggleListening(); 
+
+                        // ⏱️ กันไมค์เปิดค้าง: ถ้าเปิดไมค์แล้วไม่มีใครพูดภายใน 6 วิ ให้ปิดและกลับไปรอเรียกชื่อ
+                        if (window.sttTimeout) clearTimeout(window.sttTimeout);
+                        window.sttTimeout = setTimeout(() => {
+                            if (window.isListening && !manualMicOverride) {
+                                console.log("⏰ STT Timeout -> กลับไปโหมดรอเรียกชื่อ");
+                                forceStopAllMic();
+                                startWakeWord();
+                            }
+                        }, 6000);
+                    }
+                }); 
+            }, 300); 
         }
     };
 
     wakeWordRecognition.onend = () => {
-        if (manualMicOverride || micHardLock) return;
-
-        if (!isAtHome && personInFrameTime !== null && !window.isBusy && !window.isListening && isWakeWordActive) {
+        if (manualMicOverride || micHardLock || window.isBusy || window.isListening) return;
+        
+        // Restart เฉพาะเมื่ออยู่ในโหมด Standby จริงๆ
+        if (!isAtHome && personInFrameTime !== null && isWakeWordActive) {
             setTimeout(() => {
-                try { if (isWakeWordActive && !window.isBusy) wakeWordRecognition.start(); } catch(e) {}
-            }, 1500); 
+                try { if (isWakeWordActive) wakeWordRecognition.start(); } catch(e) {}
+            }, 1000);
         }
     };
 }
@@ -304,26 +329,22 @@ function speak(text, callback = null) {
     msg.onend = () => { 
         window.isBusy = false; 
         updateLottie('idle'); 
-        if (callback) callback();
 
-        if (!isAtHome) {
-            // 🔥 หัวใจสำคัญ: หน่วงเวลา 2 วิเพื่อให้ Hardware เสียงเงียบสนิทก่อนเปิดไมค์
+        // ✅ ถ้ามีการส่ง Callback มา (เช่น สั่งให้เปิดไมค์ใน setupWakeWord)
+        if (callback) {
+            // หน่วงเวลาเล็กน้อยเพื่อให้เสียงลำโพงตัดสนิทก่อนเปิดไมค์
             setTimeout(() => {
-                if (window.isBusy || manualMicOverride) return;
-
-                // ถ้าไม่ได้อยู่ในโหมดทักทาย ให้เปิดไมค์รอรับคำถาม (STT) 6 วินาที
-                console.log("🎤 [System] Auto-Opening Mic for Question...");
-                toggleListening(); 
-
-                if (window.sttTimeout) clearTimeout(window.sttTimeout);
-                window.sttTimeout = setTimeout(() => {
-                    if (window.isListening && !window.isBusy && !manualMicOverride) {
-                        console.log("⏰ STT Timeout: Switching to WakeWord Mode");
-                        forceStopAllMic(); 
-                        startWakeWord(); 
-                    }
-                }, 6000); 
-            }, 2000); 
+                callback(); 
+            }, 1500); 
+        } 
+        else {
+            // 🔄 ถ้าไม่มี Callback (เช่น พูดจบประโยคคำตอบปกติ) ให้กลับไปโหมด Wake Word
+            if (!isAtHome && !manualMicOverride) {
+                setTimeout(() => {
+                    console.log("⏰ Returning to WakeWord Mode...");
+                    startWakeWord();
+                }, 2000);
+            }
         }
     };
     window.speechSynthesis.speak(msg);
