@@ -167,7 +167,7 @@ function startWakeWord() {
 function stopWakeWord() { isWakeWordActive = false; if (wakeWordRecognition) { try { wakeWordRecognition.abort(); } catch (e) {} } }
 
 function initSpeechRecognition() {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SpeechRecognition = window.isSpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
     window.recognition = new SpeechRecognition();
@@ -177,8 +177,10 @@ function initSpeechRecognition() {
 
     window.recognition.onstart = () => {
         window.isListening = true;
-        // ✅ รีเซ็ตค่าสะสมทุกครั้งที่เริ่มฟังใหม่ เพื่อป้องกันข้อความเก่าค้าง
-        lastFinalTranscript = ""; 
+        lastFinalTranscript = ""; // ล้างค่าสะสมในตัวแปร
+        const inputField = document.getElementById('userInput');
+        if (inputField) inputField.value = ""; // ล้างค่าในช่องพิมพ์ให้สะอาดก่อนเริ่ม
+        
         const micBtn = document.getElementById('micBtn');
         if (micBtn) micBtn.classList.add('recording');
         displayResponse(window.currentLang === 'th' ? "กำลังฟัง... พูดได้เลยครับ" : "Listening...");
@@ -188,43 +190,42 @@ function initSpeechRecognition() {
         if (window.micTimer) clearTimeout(window.micTimer);
         
         let interimTranscript = "";
-        let newFinalText = ""; // สร้างตัวแปรพักสำหรับรับค่า Final ในรอบนี้เท่านั้น
+        let newFinalText = "";
 
         for (let i = e.resultIndex; i < e.results.length; ++i) {
             if (e.results[i].isFinal) {
-                // ✅ เก็บคำที่ Final จริงๆ เพิ่มเข้าไปในตัวแปรสะสม
                 newFinalText += e.results[i][0].transcript;
             } else {
                 interimTranscript += e.results[i][0].transcript;
             }
         }
 
-        // อัปเดตตัวแปร Global
         lastFinalTranscript += newFinalText;
-
         const inputField = document.getElementById('userInput');
-        // ✅ แสดงผล: คำที่จบแล้ว + คำที่กำลังประมวลผล
-        const currentDisplay = lastFinalTranscript + interimTranscript;
+        
+        if (inputField) {
+            // ✅ แสดงผลในช่องพิมพ์: สิ่งที่ยืนยันแล้ว + สิ่งที่กำลังประมวลผล
+            inputField.value = lastFinalTranscript + interimTranscript;
 
-        if (currentDisplay.trim() !== "") {
-            if (inputField) inputField.value = currentDisplay;
-
-            // 🚀 ตั้งเวลาส่งอัตโนมัติเมื่อหยุดพูด 2.5 วินาที
+            // 🚀 ส่วนที่แก้ปัญหาซ้ำ: เมื่อหยุดพูด 2 วินาที
             window.micTimer = setTimeout(() => {
-                const finalQuery = currentDisplay.trim();
+                // ดึงค่า "ปัจจุบัน" จากหน้าจอมาใช้ตัวเดียวจบ ไม่ต้องบวกเพิ่ม
+                const finalQuery = inputField.value.trim();
                 
                 if (finalQuery !== "") {
-                    console.log("🚀 [Auto-Submit] Sending & Clearing box...");
+                    console.log("🚀 [Auto-Submit] Sending:", finalQuery);
                     
+                    // 1. สั่งหยุดการทำงานของไมค์ทันที
                     try { window.recognition.stop(); } catch(err) {} 
                     
-                    // ✅ ล้างค่าทุกอย่างทันที ป้องกันการเบิ้ลในรอบถัดไป
-                    if (inputField) inputField.value = ""; 
+                    // 2. ✅ ล้างค่าทุกอย่างทันที เพื่อไม่ให้มีอะไรไปต่อท้ายตอนไมค์ตัดจบ
+                    inputField.value = ""; 
                     lastFinalTranscript = ""; 
 
+                    // 3. ส่งข้อมูลไปประมวลผล
                     getResponse(finalQuery); 
                 }
-            }, 2500); 
+            }, 2000); // ปรับเวลาเป็น 2 วินาทีให้กระชับขึ้น
         }
     };
 
@@ -233,22 +234,6 @@ function initSpeechRecognition() {
         const micBtn = document.getElementById('micBtn');
         if (micBtn) micBtn.classList.remove('recording');
     };
-}
-
-function updateInteractionTime() {
-    lastSeenTime = Date.now();
-    if (!isAtHome) restartIdleTimer();
-}
-
-document.addEventListener('mousedown', updateInteractionTime);
-document.addEventListener('touchstart', updateInteractionTime);
-
-async function logQuestionToSheet(userQuery) {
-    if (!userQuery || !GAS_URL) return;
-    try {
-        const finalUrl = `${GAS_URL}?action=logOnly&query=${encodeURIComponent(userQuery)}`;
-        await fetch(finalUrl, { mode: 'no-cors' });
-    } catch (e) {}
 }
 
 function forceUnmute() {
