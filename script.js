@@ -26,6 +26,7 @@ const DETECTION_INTERVAL = 200;
 
 let wakeWordRecognition;
 let micHardLock = false; // 🔥 กัน restart ไมค์ซ้อน
+let manualMicOverride = false; // 🔥 ปุ่มไมค์ priority สูงสุด
 let isWakeWordActive = false;
 
 // --- 🚩 ฟังก์ชันควบคุม Splash Screen (ปรับปรุงให้สมูท) ---
@@ -61,9 +62,13 @@ function completeLoading() {
 }
 
 // --- 🚩 ฟังก์ชันกลางสำหรับจัดการสิทธิ์และการเล่นเสียง ---
-
 function forceStopAllMic() {
-    micHardLock = true; // 🔥 ล็อกทันที
+    // 🔥 ล็อกเฉพาะกรณี system control เท่านั้น
+    if (!manualMicOverride) {
+        micHardLock = true;
+    } else {
+        micHardLock = false; // ✅ ปุ่มกดต้อง override ได้เสมอ
+    }
 
     isWakeWordActive = false;
 
@@ -154,26 +159,23 @@ function setupWakeWord() {
     wakeWordRecognition.onend = () => {
     const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
 
-    // 🔥 กัน restart ถ้าโดน stop จากระบบ
+    // 🔥 ถ้าผู้ใช้กดไมค์ → ห้าม restart
+    if (manualMicOverride) return;
+
     if (micHardLock) {
         console.log("⛔ [WakeWord] Restart BLOCKED (HardLock)");
         return;
     }
 
     if (!isAtHome && personInFrameTime !== null && !window.isBusy && !isListeningNow && isWakeWordActive) {
-        console.log("🔄 [WakeWord] Mic auto-stopped. Restarting in 1.5s...");
-        
         setTimeout(() => {
             try {
                 if (!micHardLock && !window.isBusy && !isListeningNow && !isAtHome && isWakeWordActive) {
                     wakeWordRecognition.start(); 
                 }
-            } catch(e) { 
-                console.log("⚠️ Mic start failed.");
-            }
+            } catch(e) {}
         }, 1500); 
     } else {
-        console.log("🛑 [WakeWord] Stand-by stopped.");
         isWakeWordActive = false;
     }
 };
@@ -190,16 +192,19 @@ function setupWakeWord() {
 function startWakeWord() {
     const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
 
+    // 🔥 ถ้าผู้ใช้กดไมค์ → ห้ามแทรก
+    if (manualMicOverride) return;
+
     if (!window.allowWakeWord || isAtHome || isListeningNow || window.isMuted || window.isBusy) {
         isWakeWordActive = false;
         return;
     }
 
     try { 
-        forceStopAllMic(); 
+        forceStopAllMic();
 
         setTimeout(() => {
-            micHardLock = false; // 🔓 ปลด lock ก่อน start
+            micHardLock = false;
             isWakeWordActive = true; 
             wakeWordRecognition.start(); 
             console.log("🎤 [System] WakeWord Stand-by...");
@@ -517,14 +522,14 @@ function speak(text, callback = null, isGreeting = false) {
                     startWakeWord(); 
                 } else {
                     const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
-                    if (!isListeningNow && !isWakeWordActive && typeof toggleListening === "function") {
+                    if (!isListeningNow && typeof toggleListening === "function" && !manualMicOverride) {
                         console.log("🎤 [System] เปิดปุ่มไมค์รอคำถาม...");
                         toggleListening(); 
 
                         if (window.sttTimeout) clearTimeout(window.sttTimeout);
                         window.sttTimeout = setTimeout(() => {
                             const stillListening = typeof isListening !== 'undefined' ? isListening : false;
-                            if (stillListening && !window.isBusy) {
+                            if (stillListening && !window.isBusy && !manualMicOverride) {
                                 console.log("⏰ 5s Timeout: กลับไปโหมดดักฟังชื่อ");
                                 forceStopAllMic(); 
                                 window.allowWakeWord = true;
