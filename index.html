@@ -33,16 +33,17 @@
     }
 
     .main-container { 
-      width: 100%; 
-      /* ขยายความกว้างสูงสุดตามขนาดจอ Kiosk แต่ไม่เกิน 800px */
-      max-width: clamp(350px, 90%, 800px); 
-      padding: clamp(15px, 3vw, 30px); 
-      display: flex; 
-      flex-direction: column; 
-      align-items: center; 
-      box-sizing: border-box;
-      min-height: 100dvh; 
-    }
+  width: 100%; 
+  max-width: clamp(350px, 90%, 800px); 
+  padding: clamp(15px, 3vw, 30px); 
+  display: flex; 
+  flex-direction: column; 
+  align-items: center; 
+  box-sizing: border-box;
+  /* แก้ไขส่วนนี้ */
+  min-height: 100dvh; 
+  position: relative;
+}
     
     /* --- UI Components (Responsive Scaling) --- */
     .top-controls { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 2dvh; }
@@ -106,26 +107,34 @@
 
     /* 🎙️ แก้ไข 4: ระบบ Flexible Sticky (รองรับทุกขนาดจอ) */
     .mic-section { 
-      position: -webkit-sticky; position: sticky;
-      bottom: 0; 
-      margin-top: auto; /* ดันลงล่างถ้าเนื้อหาน้อย */
-      width: 100%;
-      padding: 15px 0 25px 0;
-      /* เพิ่ม Blur พื้นหลังให้อ่านง่ายเวลาเลื่อนทับเนื้อหา */
-      background: rgba(249, 249, 251, 0.9);
-      backdrop-filter: blur(10px);
-      text-align: center; 
-      z-index: 999;
-    }
-    
-    .btn-mic { 
-      width: clamp(80px, 12dvh, 110px); 
-      height: clamp(80px, 12dvh, 110px); 
-      border-radius: 50%; border: none; background: var(--primary); color: white; 
-      font-size: clamp(30px, 4vw, 45px); 
-      cursor: pointer; display: flex; align-items: center; justify-content: center; 
-      margin: 0 auto; box-shadow: 0 10px 20px rgba(108,92,231,0.3); 
-    }
+  /* ลบ position: fixed หรือ sticky ออกให้หมด */
+  width: 100%;
+  padding: 20px 0;
+  text-align: center; 
+  z-index: 999;
+  
+  /* เพิ่มส่วนนี้ */
+  margin-top: auto;   /* ถ้าเนื้อหาสั้น มันจะต่อท้ายทันที ถ้าเนื้อหายาวมันจะถูกดันลงล่างสุด */
+  flex-shrink: 0;     /* ป้องกันปุ่มโดนบีบแบน */
+  position: relative;
+  bottom: 0;
+}
+
+.btn-mic { 
+  width: clamp(90px, 12dvh, 110px); 
+  height: clamp(90px, 12dvh, 110px); 
+  border-radius: 50%; 
+  border: none; 
+  background: var(--primary); 
+  color: white; 
+  font-size: clamp(35px, 4vw, 45px); 
+  cursor: pointer; 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  margin: 0 auto; 
+  box-shadow: 0 10px 20px rgba(108,92,231,0.3); 
+}
     .btn-mic.recording { background: var(--accent); animation: pulse 1.5s infinite; }
     @keyframes pulse { 0% { transform: scale(1); } 70% { transform: scale(1.1); } 100% { transform: scale(1); } }
 
