@@ -77,20 +77,54 @@ function forceStopAllMic() {
 
 function playAudioLink(url, callback = null) {
     if (!url) return;
+
+    // 🛑 1. เตรียมระบบก่อนเล่น: หยุด TTS และล้าง Timeout ของไมค์ STT ที่อาจค้างอยู่
     stopAllSpeech(); 
     forceStopAllMic(); 
+    if (window.sttTimeout) clearTimeout(window.sttTimeout); 
+    
     window.isBusy = true;
     updateLottie('talking');
+
     const audio = new Audio(url);
-    audio.onended = () => {
-        window.isBusy = false;
-        updateLottie('idle');
-        updateInteractionTime();
-        if (callback) callback();
-        else if (window.allowWakeWord && !isAtHome) setTimeout(startWakeWord, 1500);
+
+    // 🛑 2. ขณะที่เสียงเริ่มเล่น (onplay): ย้ำสถานะปิดไมค์อีกครั้ง 
+    // กันกรณี Browser บางตัวเปิดไมค์อัตโนมัติ หรือจังหวะการทำงานเหลื่อมกัน
+    audio.onplay = () => {
+        forceStopAllMic();
+        window.isBusy = true;
+        console.log("🔊 [Audio] Playing link, Mics strictly closed.");
     };
-    audio.onerror = () => { window.isBusy = false; updateLottie('idle'); };
-    audio.play().catch(e => { window.isBusy = false; });
+
+    audio.onended = () => {
+        // 🛑 3. เมื่อเสียงจบ: รอ 1 วินาที (Cool-down) ให้เสียงในห้องเงียบสนิทก่อน
+        setTimeout(() => {
+            window.isBusy = false;
+            updateLottie('idle');
+            updateInteractionTime();
+            
+            if (callback) {
+                callback();
+            } else if (window.allowWakeWord && !isAtHome) {
+                // กลับไปโหมดดักฟังชื่อ "น้องนำทาง"
+                console.log("🎤 [Audio] Ended, Returning to WakeWord mode.");
+                window.allowWakeWord = true;
+                startWakeWord();
+            }
+        }, 1000); 
+    };
+
+    audio.onerror = () => { 
+        console.error("❌ [Audio] Link error.");
+        window.isBusy = false; 
+        updateLottie('idle'); 
+    };
+
+    // เริ่มเล่นไฟล์เสียง
+    audio.play().catch(e => { 
+        console.warn("⚠️ [Audio] Playback blocked by browser or URL failed.");
+        window.isBusy = false; 
+    });
 }
 
 // --- 1. ระบบจัดการสถานะ & Wake Word Setup ---
