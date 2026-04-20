@@ -1,6 +1,6 @@
 /**
- * 🤖 น้องนำทาง - THE ULTIMATE QUEUE & SEARCH VERSION
- * แก้ไข: ระบบคิวไม่ทับซ้อน, ข้อมูลกลับมาครบ, ระบบค้นหาแม่นยำ, ทักทายตามช่วงเวลา
+ * 🤖 น้องนำทาง - THE COMPLETE TASK QUEUE & LOGIC VERSION
+ * ระบบคิวงาน 100% | ข้อมูลครบ | ทักทายแม่นยำ | ป้องกันไมค์ตีกัน
  */
 
 // --- 1. ระบบจัดการคิว (Task Queue System) ---
@@ -8,6 +8,7 @@ let taskQueue = [];
 let isProcessingQueue = false;
 
 function enqueueTask(taskFn, taskName = "Unknown Task") {
+    console.log(`📌 เพิ่มเข้าคิว: ${taskName}`);
     taskQueue.push({ fn: taskFn, name: taskName });
     if (!isProcessingQueue) processNextTask();
 }
@@ -16,16 +17,18 @@ async function processNextTask() {
     if (taskQueue.length === 0) { isProcessingQueue = false; return; }
     isProcessingQueue = true;
     const currentTask = taskQueue.shift();
+    console.log(`🚀 กำลังทำ: ${currentTask.name}`);
     try { await currentTask.fn(); } catch (error) { console.error(`❌ Task Error:`, error); }
     processNextTask();
 }
 
-// --- 2. Constants & Global State ---
+// --- 2. Global State & Configuration ---
 window.localDatabase = null;
 window.currentLang = 'th'; 
 window.isBusy = false; 
 window.hasGreeted = false;
 window.allowWakeWord = false; 
+window.isListening = false;
 let isAtHome = true; 
 const GAS_URL = "https://script.google.com/macros/s/AKfycbz1bkIsQ588u-rpjY-8nMlya5_c0DsIabRvyPyCC_sPs5vyeJ_1wcOBaqKfg7cvlM3XJw/exec"; 
 
@@ -44,6 +47,7 @@ function speak(text, isGreeting = false) {
     enqueueTask(() => {
         return new Promise((resolve) => {
             if (!text || window.isMuted) return resolve();
+            
             forceStopAllMic(); 
             window.speechSynthesis.cancel();
             window.isBusy = true;
@@ -51,14 +55,21 @@ function speak(text, isGreeting = false) {
 
             const msg = new SpeechSynthesisUtterance(text.replace(/<[^>]*>?/gm, '').replace(/[*#-]/g, ""));
             msg.lang = 'th-TH';
-            msg.rate = 1.05;
+            msg.rate = 1.1; // ปรับความเร็วเล็กน้อยให้ดูเป็นธรรมชาติ
 
             msg.onend = () => {
                 window.isBusy = false;
                 updateLottie('idle');
-                if (isGreeting) { window.allowWakeWord = true; startWakeWord(); }
-                else if (!isAtHome && !manualMicOverride) { setTimeout(() => { toggleListening(true); }, 800); }
-                resolve();
+                console.log("📢 พูดจบแล้ว");
+                
+                if (isGreeting) { 
+                    window.allowWakeWord = true; 
+                    startWakeWord(); 
+                } else if (!isAtHome && !manualMicOverride) { 
+                    // พูดจบแล้วเปิดไมค์รับคำสั่งต่อทันที (STT)
+                    setTimeout(() => { toggleListening(true); }, 500); 
+                }
+                resolve(); // จบงานในคิว
             };
             msg.onerror = () => { window.isBusy = false; resolve(); };
             window.speechSynthesis.speak(msg);
@@ -66,13 +77,15 @@ function speak(text, isGreeting = false) {
     }, "Speaking Task");
 }
 
-// --- 4. ระบบจัดการไมค์ (STT & Wake Word) ---
+// --- 4. ระบบไมโครโฟน (STT & Wake Word) ---
 
 function forceStopAllMic() {
     if (recognition) try { recognition.abort(); } catch(e) {}
     if (wakeWordRecognition) try { wakeWordRecognition.abort(); } catch(e) {}
     if (window.micTimer) clearTimeout(window.micTimer);
     window.isListening = false;
+    const micBtn = document.getElementById('micBtn');
+    if (micBtn) micBtn.classList.remove('recording');
 }
 
 function toggleListening(auto = false) {
@@ -85,8 +98,7 @@ function toggleListening(auto = false) {
         try {
             document.getElementById('userInput').value = "";
             recognition.start();
-            window.isListening = true;
-        } catch (e) { console.error("Mic start failed", e); }
+        } catch (e) { window.isListening = false; }
     }, 300);
 }
 
@@ -94,11 +106,12 @@ function initSpeechRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
     recognition = new SpeechRecognition();
-    recognition.lang = window.currentLang === 'th' ? 'th-TH' : 'en-US';
+    recognition.lang = 'th-TH';
     recognition.continuous = true;
     recognition.interimResults = true;
 
     recognition.onstart = () => {
+        window.isListening = true;
         const micBtn = document.getElementById('micBtn');
         if (micBtn) micBtn.classList.add('recording');
         displayResponse("กำลังฟัง... พูดได้เลยครับ");
@@ -126,7 +139,43 @@ function initSpeechRecognition() {
     };
 }
 
-// --- 5. ระบบทักทายและตรวจจับ (Face API) ---
+// --- 5. ระบบ Wake Word (ดักฟังชื่อ) ---
+
+function setupWakeWord() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+    wakeWordRecognition = new SpeechRecognition();
+    wakeWordRecognition.lang = 'th-TH';
+    wakeWordRecognition.continuous = true;
+
+    wakeWordRecognition.onresult = (event) => {
+        if (window.isBusy || window.isListening) return;
+        let transcript = event.results[event.results.length - 1][0].transcript;
+        if (transcript.includes("น้องนำทาง") || transcript.includes("นำทาง")) {
+            console.log("🎯 Wake Word Detected!");
+            forceStopAllMic();
+            speak("ครับผม มีอะไรให้ช่วยไหมครับ?");
+        }
+    };
+    wakeWordRecognition.onend = () => {
+        if (!isAtHome && window.allowWakeWord && !window.isBusy && !window.isListening) {
+            try { wakeWordRecognition.start(); } catch(e) {}
+        }
+    };
+}
+
+function startWakeWord() {
+    if (!window.allowWakeWord || isAtHome || window.isBusy) return;
+    forceStopAllMic();
+    setTimeout(() => { 
+        try { 
+            if (!wakeWordRecognition) setupWakeWord();
+            wakeWordRecognition.start(); 
+        } catch(e) {} 
+    }, 500);
+}
+
+// --- 6. ระบบทักทายและ Face Detection ---
 
 function greetUser() {
     if (window.hasGreeted || window.isBusy) return;
@@ -139,7 +188,7 @@ function greetUser() {
     const finalGreet = `${timeGreet} น้องนำทางยินดีให้บริการ วันนี้รับบริการด้านไหนดีครับ?`;
     
     displayResponse(finalGreet);
-    speak(finalGreet, true); 
+    speak(finalGreet, true); // true = isGreeting mode
 }
 
 async function detectPerson() {
@@ -165,7 +214,7 @@ async function detectPerson() {
     requestAnimationFrame(detectPerson);
 }
 
-// --- 6. ระบบค้นหาข้อมูล (Legacy Search Logic - ดึงกลับมาครบ) ---
+// --- 7. ระบบวิเคราะห์และค้นหาคำตอบ (Legacy Logic) ---
 
 async function getResponse(userQuery) {
     if (!userQuery || !window.localDatabase) return;
@@ -175,29 +224,23 @@ async function getResponse(userQuery) {
     const query = userQuery.toLowerCase().trim().replace(/[?？!！]/g, "");
     let bestMatch = { answer: "", score: 0 };
 
-    for (const sheetName of Object.keys(window.localDatabase)) {
-        if (["Lottie_State", "Config", "FAQ"].includes(sheetName)) continue;
+    Object.keys(window.localDatabase).forEach(sheetName => {
+        if (["Lottie_State", "Config", "FAQ"].includes(sheetName)) return;
         window.localDatabase[sheetName].forEach(item => {
-            const rawKeys = item[0] ? item[0].toString().toLowerCase() : "";
-            if (!rawKeys) return;
+            if (!item || !item[0]) return;
             
-            // แยก Key ด้วย , หรือ \n เหมือนเวอร์ชันก่อน
+            const rawKeys = item[0].toString().toLowerCase();
             const keyList = rawKeys.split(/[,|\n]/).map(k => k.trim()).filter(k => k !== "");
             let ans = window.currentLang === 'th' ? (item[1] || "") : (item[2] || item[1]);
             
             for (const key of keyList) {
-                let score = 0;
-                if (query === key) score = 10.0; // ตรงตัวเป๊ะ
-                else {
-                    let simScore = calculateSimilarity(query, key);
-                    score = simScore * 5;
-                }
+                let score = (query === key) ? 10.0 : calculateSimilarity(query, key) * 5;
                 if (score > bestMatch.score) bestMatch = { answer: ans, score: score };
             }
         });
-    }
+    });
 
-    if (bestMatch.score >= 0.45 && bestMatch.answer !== "") {
+    if (bestMatch.score >= 0.40 && bestMatch.answer !== "") {
         displayResponse(bestMatch.answer);
         speak(bestMatch.answer);
     } else {
@@ -207,7 +250,7 @@ async function getResponse(userQuery) {
     }
 }
 
-// --- ฟังก์ชันเสริม (Similarity, UI, Initialization) ---
+// --- Helper Functions (Similarity & UI) ---
 
 function calculateSimilarity(s1, s2) {
     let longer = s1.length < s2.length ? s2 : s1, shorter = s1.length < s2.length ? s1 : s2;
@@ -241,7 +284,7 @@ function renderFAQButtons() {
         const btn = document.createElement('button');
         btn.className = 'faq-btn';
         btn.innerText = row[0];
-        btn.onclick = () => { getResponse(row[0]); };
+        btn.onclick = () => { forceStopAllMic(); getResponse(row[0]); };
         container.appendChild(btn);
     });
 }
@@ -270,6 +313,8 @@ function updateLottie(state) {
     player.load(assets[state]);
 }
 
+// --- Initialization ---
+
 async function initDatabase() {
     try {
         const res = await fetch(GAS_URL);
@@ -279,6 +324,7 @@ async function initDatabase() {
             document.getElementById('splash-screen').style.display = 'none';
             renderFAQButtons();
             initCamera();
+            setupWakeWord();
         }
     } catch (e) { setTimeout(initDatabase, 3000); }
 }
