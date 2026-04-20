@@ -58,11 +58,11 @@ function initSpeechRecognition() {
             const inputField = document.getElementById('userInput');
             if (inputField) inputField.value = transcript;
             
-            // หน่วงเวลา 1.8 วินาทีหลังจากหยุดพูด เพื่อประมวลผลคำตอบ
+            // หน่วงเวลา 2 วินาทีหลังจากหยุดพูด เพื่อประมวลผลคำตอบ
             window.micTimer = setTimeout(() => {
                 processQuery(transcript);
                 window.recognition.stop(); 
-            }, 1800); 
+            }, 2000); 
         }
     };
 
