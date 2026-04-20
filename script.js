@@ -25,6 +25,7 @@ let lastDetectionTime = 0;
 const DETECTION_INTERVAL = 200; 
 
 let wakeWordRecognition;
+let micHardLock = false; // 🔥 กัน restart ไมค์ซ้อน
 let isWakeWordActive = false;
 
 // --- 🚩 ฟังก์ชันควบคุม Splash Screen (ปรับปรุงให้สมูท) ---
@@ -62,8 +63,10 @@ function completeLoading() {
 // --- 🚩 ฟังก์ชันกลางสำหรับจัดการสิทธิ์และการเล่นเสียง ---
 
 function forceStopAllMic() {
+    micHardLock = true; // 🔥 ล็อกทันที
+
     isWakeWordActive = false;
-    // ปิดสถานะ Listening ของปุ่มไมค์ (ถ้ามีตัวแปรภายนอกให้เคลียร์ด้วย)
+
     if (typeof isListening !== 'undefined') isListening = false; 
 
     if (wakeWordRecognition) {
@@ -72,6 +75,7 @@ function forceStopAllMic() {
     if (window.recognition) {
         try { window.recognition.abort(); } catch(e) {}
     }
+
     console.log("🛑 [System] All Microphones Released.");
 }
 
@@ -148,27 +152,31 @@ function setupWakeWord() {
 
     // 🚩 แก้ไข: ระบบ Restart ไมค์แบบหน่วงเวลาเพื่อป้องกัน Browser Block
     wakeWordRecognition.onend = () => {
-        const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
+    const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
+
+    // 🔥 กัน restart ถ้าโดน stop จากระบบ
+    if (micHardLock) {
+        console.log("⛔ [WakeWord] Restart BLOCKED (HardLock)");
+        return;
+    }
+
+    if (!isAtHome && personInFrameTime !== null && !window.isBusy && !isListeningNow && isWakeWordActive) {
+        console.log("🔄 [WakeWord] Mic auto-stopped. Restarting in 1.5s...");
         
-        // เงื่อนไขการ Restart: ไม่ได้อยู่หน้า Home + มีคนอยู่ + AI ไม่ได้พูด + ไม่ได้กดปุ่มไมค์ + และต้องตั้งใจจะ Active อยู่
-        if (!isAtHome && personInFrameTime !== null && !window.isBusy && !isListeningNow && isWakeWordActive) {
-            console.log("🔄 [WakeWord] Mic auto-stopped. Restarting in 1.5s...");
-            
-            setTimeout(() => {
-                try {
-                    // เช็คซ้ำอีกรอบก่อนเริ่มจริง
-                    if (!window.isBusy && !isListeningNow && !isAtHome && isWakeWordActive) {
-                        wakeWordRecognition.start(); 
-                    }
-                } catch(e) { 
-                    console.log("⚠️ Mic start failed.");
+        setTimeout(() => {
+            try {
+                if (!micHardLock && !window.isBusy && !isListeningNow && !isAtHome && isWakeWordActive) {
+                    wakeWordRecognition.start(); 
                 }
-            }, 1500); 
-        } else {
-            console.log("🛑 [WakeWord] Stand-by stopped.");
-            isWakeWordActive = false;
-        }
-    };
+            } catch(e) { 
+                console.log("⚠️ Mic start failed.");
+            }
+        }, 1500); 
+    } else {
+        console.log("🛑 [WakeWord] Stand-by stopped.");
+        isWakeWordActive = false;
+    }
+};
 
     wakeWordRecognition.onerror = (event) => {
         console.warn("🎤 [WakeWord] Error:", event.error);
@@ -181,17 +189,22 @@ function setupWakeWord() {
 
 function startWakeWord() {
     const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
+
     if (!window.allowWakeWord || isAtHome || isListeningNow || window.isMuted || window.isBusy) {
         isWakeWordActive = false;
         return;
     }
+
     try { 
-        forceStopAllMic(); // Clear ทุกอย่างก่อนเริ่มใหม่
+        forceStopAllMic(); 
+
         setTimeout(() => {
+            micHardLock = false; // 🔓 ปลด lock ก่อน start
             isWakeWordActive = true; 
             wakeWordRecognition.start(); 
             console.log("🎤 [System] WakeWord Stand-by...");
         }, 200);
+
     } catch (e) {}
 }
 
@@ -504,7 +517,7 @@ function speak(text, callback = null, isGreeting = false) {
                     startWakeWord(); 
                 } else {
                     const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
-                    if (!isListeningNow && typeof toggleListening === "function") {
+                    if (!isListeningNow && !isWakeWordActive && typeof toggleListening === "function") {
                         console.log("🎤 [System] เปิดปุ่มไมค์รอคำถาม...");
                         toggleListening(); 
 
