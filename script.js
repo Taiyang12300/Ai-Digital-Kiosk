@@ -167,7 +167,7 @@ function startWakeWord() {
 function stopWakeWord() { isWakeWordActive = false; if (wakeWordRecognition) { try { wakeWordRecognition.abort(); } catch (e) {} } }
 
 function initSpeechRecognition() {
-    const SpeechRecognition = window.isSpeechRecognition || window.webkitSpeechRecognition;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
     window.recognition = new SpeechRecognition();
@@ -175,18 +175,22 @@ function initSpeechRecognition() {
     window.recognition.continuous = true;
     window.recognition.interimResults = true;
 
+    // เพิ่มตัวล็อคสถานะการส่ง
+    let isSubmitting = false;
+
     window.recognition.onstart = () => {
         window.isListening = true;
-        lastFinalTranscript = ""; // ล้างค่าสะสมในตัวแปร
-        const inputField = document.getElementById('userInput');
-        if (inputField) inputField.value = ""; // ล้างค่าในช่องพิมพ์ให้สะอาดก่อนเริ่ม
-        
+        isSubmitting = false; // รีเซ็ตสถานะส่ง
+        lastFinalTranscript = ""; 
         const micBtn = document.getElementById('micBtn');
         if (micBtn) micBtn.classList.add('recording');
         displayResponse(window.currentLang === 'th' ? "กำลังฟัง... พูดได้เลยครับ" : "Listening...");
     };
 
     window.recognition.onresult = (e) => {
+        // 🛑 ถ้ากำลังส่งข้อมูลอยู่ ให้หยุดประมวลผลทันที (กันข้อความเบิ้ลตอนไมค์ปิด)
+        if (isSubmitting) return;
+
         if (window.micTimer) clearTimeout(window.micTimer);
         
         let interimTranscript = "";
@@ -204,28 +208,30 @@ function initSpeechRecognition() {
         const inputField = document.getElementById('userInput');
         
         if (inputField) {
-            // ✅ แสดงผลในช่องพิมพ์: สิ่งที่ยืนยันแล้ว + สิ่งที่กำลังประมวลผล
+            // พิมพ์ลงช่องข้อความเฉพาะตอนที่กำลังพูด
             inputField.value = lastFinalTranscript + interimTranscript;
 
-            // 🚀 ส่วนที่แก้ปัญหาซ้ำ: เมื่อหยุดพูด 2 วินาที
+            // 🚀 ตั้งเวลาส่งอัตโนมัติ (ปรับเหลือ 2 วินาทีเพื่อให้ไวขึ้น)
             window.micTimer = setTimeout(() => {
-                // ดึงค่า "ปัจจุบัน" จากหน้าจอมาใช้ตัวเดียวจบ ไม่ต้องบวกเพิ่ม
                 const finalQuery = inputField.value.trim();
                 
-                if (finalQuery !== "") {
+                if (finalQuery !== "" && !isSubmitting) {
+                    isSubmitting = true; // ล็อคทันทีกันส่งซ้ำ
+                    
                     console.log("🚀 [Auto-Submit] Sending:", finalQuery);
                     
-                    // 1. สั่งหยุดการทำงานของไมค์ทันที
+                    // 1. สั่งหยุดไมค์ทันที
                     try { window.recognition.stop(); } catch(err) {} 
                     
-                    // 2. ✅ ล้างค่าทุกอย่างทันที เพื่อไม่ให้มีอะไรไปต่อท้ายตอนไมค์ตัดจบ
+                    // 2. ✅ ล้างค่าทุกอย่างทันที "ก่อน" เรียก getResponse
+                    // เพื่อให้ตอนไมค์ตัดจบ (onend) ไม่มีข้อความเหลือไปแปะซ้ำ
                     inputField.value = ""; 
                     lastFinalTranscript = ""; 
 
-                    // 3. ส่งข้อมูลไปประมวลผล
+                    // 3. ส่งข้อมูล
                     getResponse(finalQuery); 
                 }
-            }, 2000); // ปรับเวลาเป็น 2 วินาทีให้กระชับขึ้น
+            }, 2000); 
         }
     };
 
@@ -233,6 +239,13 @@ function initSpeechRecognition() {
         window.isListening = false;
         const micBtn = document.getElementById('micBtn');
         if (micBtn) micBtn.classList.remove('recording');
+        // ปลดล็อคสถานะเมื่อไมค์จบการทำงานสมบูรณ์
+        setTimeout(() => { isSubmitting = false; }, 500);
+    };
+
+    window.recognition.onerror = (e) => {
+        console.error("Mic Error:", e.error);
+        isSubmitting = false;
     };
 }
 
