@@ -116,10 +116,14 @@ function completeLoading() {
 function forceStopAllMic() {
     isWakeWordActive = false;
     
-    // ปลดสถานะการฟังของ Global Variable
-    if (typeof isListening !== 'undefined') isListening = false; 
+    // 1. ✅ ปลดสถานะการฟังทันที เพื่อให้ UI (ปุ่มไมค์) อัปเดตสถานะได้ไว
+    if (typeof isListening !== 'undefined') window.isListening = false; 
 
-    // หยุดการทำงานของไมค์ทุกตัวทันที
+    // 2. ✅ เคลียร์ Timer ทั้งหมดที่อาจจะกำลังนับถอยหลังสั่งส่งข้อความ หรือสั่งเปิดไมค์ซ้ำ
+    if (window.micTimer) clearTimeout(window.micTimer);
+    if (window.sttTimeout) clearTimeout(window.sttTimeout);
+
+    // 3. ✅ หยุดการทำงานของไมค์ (ใช้ abort เพื่อตัดการทำงานทันที ไม่ต้องรอประมวลผลคำสุดท้าย)
     if (wakeWordRecognition) {
         try { wakeWordRecognition.abort(); } catch(e) {}
     }
@@ -127,15 +131,19 @@ function forceStopAllMic() {
         try { window.recognition.abort(); } catch(e) {}
     }
 
-    // 🔥 แก้ไขจุดนี้: ถ้าไม่ได้กดมือ (Manual) และ AI กำลังยุ่ง (Busy) ให้ล็อกไว้
-    // แต่ถ้ากดมือมา ต้องปลดล็อกเสมอ
+    // 4. 🔥 ปรับ Logic การล็อกให้ยืดหยุ่น
     if (manualMicOverride) {
+        // ถ้าคนกดเอง ต้องปลดล็อกทุกกรณี
         micHardLock = false;
     } else if (window.isBusy) {
+        // ถ้า AI กำลังพูด/คิด (System Control) ให้ล็อกกันไมค์แทรก
         micHardLock = true;
+    } else {
+        // กรณีอื่นๆ (เช่น กลับหน้า Home) ให้ปลดล็อกเสมอ
+        micHardLock = false;
     }
 
-    console.log("🛑 [System] Mic Released (HardLock: " + micHardLock + ")");
+    console.log(`🛑 [System] Mic Released | HardLock: ${micHardLock} | Busy: ${window.isBusy}`);
 }
 
 function playAudioLink(url, callback = null) {
@@ -275,6 +283,10 @@ function stopWakeWord() {
 }
 
 function initSpeechRecognition() {
+    // 1. ✅ กันการสร้าง Object ซ้อน (ถ้ามีอยู่แล้วไม่ต้องสร้างใหม่)
+    // จุดนี้สำคัญมาก ถ้าไม่ใส่ ยิ่งกดปุ่มไมค์บ่อย ข้อความจะยิ่งพิมพ์ซ้ำตามจำนวนครั้งที่กด
+    if (window.recognition) return; 
+
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
@@ -290,36 +302,44 @@ function initSpeechRecognition() {
         displayResponse(window.currentLang === 'th' ? "กำลังฟัง... พูดได้เลยครับ" : "Listening...");
     };
 
-        window.recognition.onresult = (e) => {
+    window.recognition.onresult = (e) => {
         if (window.micTimer) clearTimeout(window.micTimer);
         
         let transcript = "";
-        for (let i = 0; i < e.results.length; ++i) {
+        // 2. ✅ ปรับปรุงการวน Loop (ใช้ e.resultIndex)
+        // เริ่มอ่านจาก index ล่าสุดที่ระบบส่งมา แทนการเริ่มที่ 0 ใหม่ทุกครั้ง
+        // วิธีนี้จะช่วยแก้ปัญหาข้อความ "ไหลซ้ำ" หรือพิมพ์ประโยคเดิมซ้อนๆ กันขณะพูด
+        for (let i = e.resultIndex; i < e.results.length; ++i) {
             transcript += e.results[i][0].transcript;
         }
 
         if (transcript.trim() !== "") {
             const inputField = document.getElementById('userInput');
-            if (inputField) inputField.value = transcript;
+            
+            // แสดงผลในกล่องข้อความ (ใช้ += เพื่อต่อข้อความ หรือ = เพื่อทับ ตามความเหมาะสม)
+            if (inputField) {
+                // ถ้าพูดต่อเนื่องให้ต่อข้อความไปเรื่อยๆ
+                inputField.value = (e.results[e.resultIndex].isFinal) 
+                    ? inputField.value + transcript 
+                    : transcript; 
+            }
 
-            // 🚀 ตั้งเวลาส่งอัตโนมัติเมื่อหยุดพูด 2.5 วินาที
+            // 🚀 ตั้งเวลาส่งอัตโนมัติเมื่อหยุดพูด (แนะนำ 2000ms เพื่อความกระฉับกระเฉง)
             window.micTimer = setTimeout(() => {
-                // ดึงค่าจากกล่องข้อความมาเก็บไว้ในตัวแปรก่อน
                 const finalQuery = inputField ? inputField.value.trim() : transcript.trim();
                 
                 if (finalQuery !== "") {
                     console.log("🚀 [Auto-Submit] Sending & Clearing box...");
                     
-                    // 1. หยุดไมค์
                     try { window.recognition.stop(); } catch(err) {} 
                     
-                    // 2. ✅ ล้างข้อความในกล่องทันที (จุดที่คุณต้องการ)
+                    // ✅ ล้างข้อความในกล่องทันทีที่ส่ง
                     if (inputField) inputField.value = ""; 
 
-                    // 3. ส่งไปหาคำตอบ
+                    // ส่งไปหาคำตอบ
                     getResponse(finalQuery); 
                 }
-            }, 2500); 
+            }, 2000); 
         }
     };
 
@@ -327,6 +347,8 @@ function initSpeechRecognition() {
         window.isListening = false;
         const micBtn = document.getElementById('micBtn');
         if (micBtn) micBtn.classList.remove('recording');
+        // เคลียร์ Timer ทิ้งเมื่อไมค์จบการทำงาน
+        if (window.micTimer) clearTimeout(window.micTimer);
     };
 }
 
