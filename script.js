@@ -1,6 +1,5 @@
 /**
- * 🚀 สมองกลน้องนำทาง - STATUS Control Version
- * ใช้ window.systemStatus เป็นตัวแปรเดียวในการคุมจังหวะการทำงาน
+ * 🚀 สมองกลน้องนำทาง - STATUS Control Version (Fixed & Refactored)
  */
 
 // --- 1. Constants & Global State ---
@@ -11,7 +10,7 @@ const STATUS = {
     SPEAKING: 'SPEAKING'
 };
 
-window.systemStatus = STATUS.IDLE; // ตัวแปรคุมสถานะหลัก
+window.systemStatus = STATUS.IDLE; // ตัวแปรคุมสถานะหลักเพียงตัวเดียว
 window.localDatabase = null;
 window.currentLang = 'th'; 
 window.isMuted = false; 
@@ -19,32 +18,88 @@ window.hasGreeted = false;
 window.allowWakeWord = false; 
 let isAtHome = true; 
 
+// 🔥 GAS_URL แบบแก้ไขแล้ว (ตรวจสอบแล้วว่าไม่มีวงเล็บเกิน)
 const GAS_URL = "https://script.google.com/macros/s/AKfycbz1bkIsQ588u-rpjY-8nMlya5_c0DsIabRvyPyCC_sPs5vyeJ_1wcOBaqKfg7cvlM3XJw/exec"; 
 
-// ฟังก์ชันสำหรับเปลี่ยนสถานะ (ใช้ Log เพื่อ Debug จังหวะทำงานได้ง่ายขึ้น)
+// ฟังก์ชันเปลี่ยนสถานะ (Single Source of Truth)
 function setStatus(newStatus) {
-    if (window.systemStatus === newStatus) return;
-    console.log(`%c🔄 [SYSTEM STATE]: ${newStatus}`, "color: #00ebff; font-weight: bold; background: #222;");
     window.systemStatus = newStatus;
+    console.log(`%c🔄 [SYSTEM STATE]: ${newStatus}`, "color: #00ebff; font-weight: bold; background: #222;");
 }
 
-let lastFinalTranscript = "";
+let idleTimer = null; 
+let video; 
+let isDetecting = true; 
+let personInFrameTime = null; 
+let lastSeenTime = Date.now();
+let lastDetectionTime = 0;
+const DETECTION_INTERVAL = 200; 
+
 let recognition;
 let wakeWordRecognition;
-let isWakeWordActive = false;
 let manualMicOverride = false;
+let lastFinalTranscript = "";
+let isSubmitting = false;
+let isWakeWordActive = false;
 
-// --- 2. Mic & Logic Control ---
+// --- 2. ระบบจัดการ Splash Screen & Initialization ---
+
+async function initDatabase() {
+    const progBar = document.getElementById('splash-progress-bar');
+    if (progBar) progBar.style.width = '30%'; 
+    try {
+        const res = await fetch(GAS_URL);
+        const json = await res.json();
+        if (json.database) { 
+            window.localDatabase = json.database; 
+            completeLoading(); 
+        }
+    } catch (e) { 
+        console.error("❌ Database Error, Retrying...");
+        setTimeout(initDatabase, 3000); 
+    }
+}
+
+function completeLoading() {
+    const splash = document.getElementById('splash-screen');
+    const progBar = document.getElementById('splash-progress-bar');
+    const statusTxt = document.getElementById('splash-status-text');
+
+    if (progBar) progBar.style.width = '100%';
+    if (statusTxt) statusTxt.innerText = 'ระบบพร้อมใช้งานแล้ว';
+    
+    setTimeout(() => {
+        if (splash) {
+            splash.style.transition = 'opacity 0.8s ease';
+            splash.style.opacity = '0';
+            setTimeout(() => {
+                splash.style.display = 'none';
+                isAtHome = true;
+                window.hasGreeted = false;
+                window.allowWakeWord = false; 
+                
+                setStatus(STATUS.IDLE); // เริ่มต้นที่สถานะว่าง
+
+                const homeMsg = (window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone.");
+                displayResponse(homeMsg);
+                renderFAQButtons(); 
+                initCamera();       
+            }, 800);
+        }
+    }, 500);
+}
+
+// --- 3. ระบบจัดการไมค์ (Refactored to STATUS) ---
 
 function forceStopAllMic() {
     isWakeWordActive = false;
     if (recognition) { try { recognition.abort(); } catch(e) {} }
     if (wakeWordRecognition) { try { wakeWordRecognition.abort(); } catch(e) {} }
     if (window.micTimer) clearTimeout(window.micTimer);
+    if (window.sttTimeout) clearTimeout(window.sttTimeout);
 }
 
 function toggleListening() { 
-    // ถ้ากำลังพูดอยู่ (SPEAKING) ให้หยุดพูดทันทีเพื่อรับคำสั่งใหม่
     if (window.systemStatus === STATUS.SPEAKING) {
         window.speechSynthesis.cancel();
         setStatus(STATUS.IDLE);
@@ -53,6 +108,7 @@ function toggleListening() {
     if (window.systemStatus === STATUS.LISTENING) { 
         forceStopAllMic();
         setStatus(STATUS.IDLE);
+        manualMicOverride = false;
         return; 
     } 
 
@@ -76,18 +132,19 @@ function initSpeechRecognition() {
     if (!SpeechRecognition) return;
 
     recognition = new SpeechRecognition();
-    recognition.lang = 'th-TH';
+    recognition.lang = window.currentLang === 'th' ? 'th-TH' : 'en-US';
     recognition.continuous = true;
     recognition.interimResults = true;
 
     recognition.onstart = () => {
         setStatus(STATUS.LISTENING);
-        document.getElementById('micBtn').classList.add('recording');
+        const micBtn = document.getElementById('micBtn');
+        if (micBtn) micBtn.classList.add('recording');
         displayResponse("กำลังฟัง... พูดได้เลยครับ");
     };
 
     recognition.onresult = (e) => {
-        // 🔒 กันไมค์รับค่าถ้าสถานะไม่ได้อยู่ที่ LISTENING
+        // 🔒 กันไมค์ทำงานแทรกในสถานะอื่น
         if (window.systemStatus !== STATUS.LISTENING) return;
 
         if (window.micTimer) clearTimeout(window.micTimer);
@@ -104,9 +161,7 @@ function initSpeechRecognition() {
         if (inputField) inputField.value = lastFinalTranscript + interimText;
 
         window.micTimer = setTimeout(() => {
-            // ป้องกันการส่งซ้ำซ้อน
             if (window.systemStatus !== STATUS.LISTENING) return;
-
             const finalQuery = (lastFinalTranscript + interimText).trim();
             if (finalQuery) {
                 setStatus(STATUS.THINKING); 
@@ -117,21 +172,19 @@ function initSpeechRecognition() {
     };
 
     recognition.onend = () => {
-        document.getElementById('micBtn').classList.remove('recording');
-        // ถ้าจบการฟังปกติ ให้กลับไป IDLE เพื่อรอสถานะถัดไป
+        const micBtn = document.getElementById('micBtn');
+        if (micBtn) micBtn.classList.remove('recording');
         if (window.systemStatus === STATUS.LISTENING) setStatus(STATUS.IDLE);
     };
 }
 
-// --- 3. Speech & Response ---
+// --- 4. ระบบเสียงและ AI Response ---
 
 function speak(text, callback = null, isGreeting = false) {
     if (!text || window.isMuted) return;
     
     forceStopAllMic(); 
     window.speechSynthesis.cancel();
-    
-    // ตั้งสถานะเป็น SPEAKING ทันทีเพื่อล็อกไมค์ไม่ให้แทรก
     setStatus(STATUS.SPEAKING); 
 
     const msg = new SpeechSynthesisUtterance(text.replace(/<[^>]*>?/gm, '').replace(/[*#-]/g, ""));
@@ -142,28 +195,36 @@ function speak(text, callback = null, isGreeting = false) {
     
     msg.onend = () => { 
         updateLottie('idle'); 
-        setStatus(STATUS.IDLE); // คืนค่าสถานะเป็นว่าง
+        setStatus(STATUS.IDLE);
 
         if (callback) callback();
 
         if (!isAtHome) {
             setTimeout(() => {
-                // เช็คสถานะอีกครั้งเผื่อมีการคลิกปุ่มอื่นระหว่าง Delay
                 if (window.systemStatus !== STATUS.IDLE) return;
 
                 if (isGreeting) {
                     window.allowWakeWord = true;
                     startWakeWord(); 
                 } else if (!manualMicOverride) {
-                    toggleListening(); // เปิดไมค์รอคำถามต่อ
+                    toggleListening(); // เปิดไมค์รับคำถามต่ออัตโนมัติ
+                    
+                    if (window.sttTimeout) clearTimeout(window.sttTimeout);
+                    window.sttTimeout = setTimeout(() => {
+                        if (window.systemStatus === STATUS.LISTENING && !manualMicOverride) {
+                            forceStopAllMic();
+                            setStatus(STATUS.IDLE);
+                            startWakeWord();
+                        }
+                    }, 6000);
                 }
-            }, 1000); 
+            }, 1500); 
         }
     };
     window.speechSynthesis.speak(msg);
 }
 
-// --- 4. Wake Word Logic (ดักฟังชื่อ) ---
+// --- 5. Wake Word & Face API (Legacy Logic) ---
 
 function setupWakeWord() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -174,9 +235,7 @@ function setupWakeWord() {
     wakeWordRecognition.lang = 'th-TH';
 
     wakeWordRecognition.onresult = (event) => {
-        // 🔒 ทำงานเฉพาะตอน IDLE เท่านั้น
         if (window.systemStatus !== STATUS.IDLE) return;
-
         let transcript = event.results[event.results.length - 1][0].transcript;
         if (transcript.includes("น้องนำทาง") || transcript.includes("นำทาง")) {
             forceStopAllMic();
@@ -185,7 +244,6 @@ function setupWakeWord() {
     };
 
     wakeWordRecognition.onend = () => {
-        // วน Loop เฉพาะตอนที่ยังว่างและอยู่ในโหมดดักฟัง
         if (window.systemStatus === STATUS.IDLE && !isAtHome && isWakeWordActive) {
             try { wakeWordRecognition.start(); } catch(e) {}
         }
@@ -201,13 +259,90 @@ function startWakeWord() {
     }, 300);
 }
 
-// --- ส่วนที่เหลือ (Database, UI, Face Detection) ใช้ฟังก์ชันเดิมทั้งหมด ---
+// --- ฟังก์ชันช่วยเหลืออื่นๆ (ใช้ของเดิมทั้งหมด) ---
 
 async function getResponse(userQuery) {
     if (!userQuery || !window.localDatabase) { setStatus(STATUS.IDLE); return; }
-    isAtHome = false; 
+    updateInteractionTime(); 
     updateLottie('thinking');
     
-    // ... Logic การค้นหาเดิมของคุณ ...
+    // ... Logic การค้นหาเดิมจาก LocalDatabase ของคุณ ...
     // เมื่อได้คำตอบแล้ว เรียก speak(answer);
 }
+
+// กล้องและการตรวจจับใบหน้า
+async function initCamera() {
+    try {
+        video = document.getElementById('video'); 
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 } });
+        if (video) { 
+            video.srcObject = stream; 
+            video.onloadedmetadata = () => { video.play(); loadFaceModels(); }; 
+        }
+    } catch (err) { console.error("❌ Camera Error"); }
+}
+
+async function loadFaceModels() {
+    const MODEL_URL = 'https://taiyang12300.github.io/model/';
+    try {
+        await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+        await faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL);
+        setupWakeWord(); 
+        requestAnimationFrame(detectPerson);
+    } catch (err) { console.error("❌ AI Model Load Failed"); }
+}
+
+async function detectPerson() {
+    if (!isDetecting || typeof faceapi === 'undefined' || !video) { requestAnimationFrame(detectPerson); return; }
+    const now = Date.now();
+    if (now - lastDetectionTime < DETECTION_INTERVAL) { requestAnimationFrame(detectPerson); return; }
+    lastDetectionTime = now;
+    try {
+        const predictions = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withAgeAndGender();
+        const face = predictions.find(f => {
+            const box = f.detection.box;
+            const centerX = box.x + (box.width / 2);
+            return f.detection.score > 0.55 && box.width > 90 && (centerX > 80 && centerX < 560);
+        });
+        if (face) {
+            if (personInFrameTime === null) personInFrameTime = now;
+            if ((now - personInFrameTime) >= 2000 && isAtHome && window.systemStatus === STATUS.IDLE && !window.hasGreeted) { greetUser(); }
+            lastSeenTime = now; 
+        } else if (personInFrameTime !== null && (now - lastSeenTime > 5000)) {
+            personInFrameTime = null; window.hasGreeted = false; window.allowWakeWord = false; forceStopAllMic(); 
+            if (!isAtHome) restartIdleTimer();
+        }
+    } catch (e) {}
+    requestAnimationFrame(detectPerson);
+}
+
+function greetUser() {
+    if (window.hasGreeted || window.systemStatus !== STATUS.IDLE) return;
+    isAtHome = false; 
+    window.hasGreeted = true; 
+    const finalGreet = "สวัสดีครับ น้องนำทางยินดีให้บริการ วันนี้รับบริการด้านไหนดีครับ?";
+    displayResponse(finalGreet);
+    speak(finalGreet, () => { window.allowWakeWord = true; }, true); 
+}
+
+function updateInteractionTime() {
+    lastSeenTime = Date.now();
+    if (!isAtHome) restartIdleTimer();
+}
+
+function restartIdleTimer() {
+    if (idleTimer) clearTimeout(idleTimer);
+    if (!isAtHome) idleTimer = setTimeout(resetToHome, 5000);
+}
+
+function resetToHome() {
+    if (window.systemStatus !== STATUS.IDLE || personInFrameTime !== null) return;
+    isAtHome = true;
+    window.hasGreeted = false;
+    window.allowWakeWord = false;
+    displayResponse(window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone.");
+    renderFAQButtons();
+}
+
+// เริ่มต้นระบบ
+document.addEventListener('DOMContentLoaded', initDatabase);
