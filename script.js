@@ -1,7 +1,7 @@
 /**
  * 🚀 สมองกลน้องนำทาง - Ultimate Hybrid Version (Legacy Search Logic & Deep Mic Reset)
  * แก้ไข: การเปิด-ปิดไมค์ให้สัมพันธ์กับสถานะการพูด (Speak = Stop / End = Start)
- * ปรับปรุง: เสถียรภาพการสลับโหมดไมค์ และระบบ Loading Screen ให้โหลดสมบูรณ์
+ * ปรับปรุง: เสถียรภาพการสลับโหมดไมค์ และระบบ Loading Screen
  */
 
 window.localDatabase = null;
@@ -10,7 +10,6 @@ window.isMuted = false;
 window.isBusy = false; 
 window.hasGreeted = false;
 window.allowWakeWord = false; 
-window.isListening = false;
 let isAtHome = true; 
 
 const GAS_URL = "https://script.google.com/macros/s/AKfycbz1bkIsQ588u-rpjY-8nMlya5_c0DsIabRvyPyCC_sPs5vyeJ_1wcOBaqKfg7cvlM3XJw/exec"; 
@@ -23,10 +22,9 @@ let isDetecting = true;
 let personInFrameTime = null; 
 let lastSeenTime = Date.now();
 let lastDetectionTime = 0;
-window.recognition = null; 
-let wakeWordRecognition = null;
 const DETECTION_INTERVAL = 200; 
 
+let wakeWordRecognition;
 let manualMicOverride = false;
 let micHardLock = false;
 let lastFinalTranscript = "";
@@ -34,65 +32,40 @@ let isSubmitting = false;
 let micSessionId = 0;
 let isWakeWordActive = false;
 
-// ================= 🎛️ MIC CONTROL SYSTEM =================
-
-function safeStartRecognition() {
-    if (!window.recognition) initSpeechRecognition();
-    if (!window.recognition || window.isListening) return;
-
-    try {
-        window.recognition.start();
-    } catch (e) {
-        console.warn("🎤 [Mic] Start fail:", e);
-    }
-}
-
-function safeStopRecognition() {
-    if (!window.recognition) return;
-    try {
-        window.recognition.abort(); 
-    } catch (e) {}
-}
-
-function setMicState(mode) {
-    console.log("🎛️ [System] MicMode Setting ->", mode);
-    
-    // หยุดการทำงานเดิมทั้งหมดก่อนเปลี่ยนโหมด
-    safeStopRecognition();
-    stopWakeWord();
-
-    if (mode === "OFF") return;
-
-    if (mode === "STT") {
-        setTimeout(() => {
-            safeStartRecognition();
-        }, 300);
-    }
-
-    if (mode === "WAKE") {
-        if (!wakeWordRecognition) setupWakeWord();
-        setTimeout(() => {
-            isWakeWordActive = true;
-            try {
-                wakeWordRecognition.start();
-            } catch (e) {}
-        }, 400);
-    }
-}
-
-function toggleListening() {
+function toggleListening() { 
     manualMicOverride = true;
+    micHardLock = false; 
+
+    window.speechSynthesis.cancel(); 
+    if (window.micTimer) clearTimeout(window.micTimer);
+
     if (!window.recognition) initSpeechRecognition();
 
-    if (window.isListening) {
-        safeStopRecognition();
-    } else {
-        safeStartRecognition();
-    }
+    // 🔥 กัน start ซ้ำ
+    if (window.isListening) { 
+        try { window.recognition.stop(); } catch (e) {}
+        window.isListening = false;
+        manualMicOverride = false; 
+        return; 
+    } 
+
+    forceStopAllMic();
+
+    setTimeout(() => {
+        if (window.isListening) return; // 🔥 กันซ้อน
+
+        try {
+            window.recognition.start(); 
+        } catch (e) { 
+            window.isListening = false;
+        }
+    }, 200); 
 }
 
 function stopListening() { 
     window.isListening = false;
+
+    // 🔥 ปลด override ด้วย
     manualMicOverride = false;
 
     const micBtn = document.getElementById('micBtn');
@@ -104,7 +77,7 @@ function stopListening() {
         : "Tap mic to speak";
 }
 
-// --- 🚩 ฟังก์ชันควบคุม Splash Screen ---
+// --- 🚩 ฟังก์ชันควบคุม Splash Screen (ปรับปรุงให้สมูท) ---
 function completeLoading() {
     const splash = document.getElementById('splash-screen');
     const progBar = document.getElementById('splash-progress-bar');
@@ -129,20 +102,25 @@ function completeLoading() {
                 displayResponse(homeMsg);
 
                 renderFAQButtons(); 
-                initCamera(); // เริ่มกล้องหลังจากโหลด UI เสร็จสิ้น
+                initCamera();       
                 console.log("🏠 [System] Home screen ready.");
             }, 800);
         }
     }, 500);
 }
 
+// --- 🚩 ฟังก์ชันกลางสำหรับจัดการสิทธิ์และการเล่นเสียง ---
 function forceStopAllMic() {
     isWakeWordActive = false;
-    window.isListening = false; 
+    
+    // 1. ✅ ปลดสถานะการฟังทันที เพื่อให้ UI (ปุ่มไมค์) อัปเดตสถานะได้ไว
+    if (typeof isListening !== 'undefined') window.isListening = false; 
 
+    // 2. ✅ เคลียร์ Timer ทั้งหมดที่อาจจะกำลังนับถอยหลังสั่งส่งข้อความ หรือสั่งเปิดไมค์ซ้ำ
     if (window.micTimer) clearTimeout(window.micTimer);
     if (window.sttTimeout) clearTimeout(window.sttTimeout);
 
+    // 3. ✅ หยุดการทำงานของไมค์ (ใช้ abort เพื่อตัดการทำงานทันที ไม่ต้องรอประมวลผลคำสุดท้าย)
     if (wakeWordRecognition) {
         try { wakeWordRecognition.abort(); } catch(e) {}
     }
@@ -150,14 +128,19 @@ function forceStopAllMic() {
         try { window.recognition.abort(); } catch(e) {}
     }
 
+    // 4. 🔥 ปรับ Logic การล็อกให้ยืดหยุ่น
     if (manualMicOverride) {
+        // ถ้าคนกดเอง ต้องปลดล็อกทุกกรณี
         micHardLock = false;
     } else if (window.isBusy) {
+        // ถ้า AI กำลังพูด/คิด (System Control) ให้ล็อกกันไมค์แทรก
         micHardLock = true;
     } else {
+        // กรณีอื่นๆ (เช่น กลับหน้า Home) ให้ปลดล็อกเสมอ
         micHardLock = false;
     }
-    console.log(`🛑 [System] Mic Force Stopped | HardLock: ${micHardLock}`);
+
+    console.log(`🛑 [System] Mic Released | HardLock: ${micHardLock} | Busy: ${window.isBusy}`);
 }
 
 function playAudioLink(url, callback = null) {
@@ -182,45 +165,111 @@ function playAudioLink(url, callback = null) {
 function setupWakeWord() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
+    
+    if (wakeWordRecognition) { 
+        try { wakeWordRecognition.abort(); } catch(e) {} 
+    }
 
     wakeWordRecognition = new SpeechRecognition();
-    wakeWordRecognition.continuous = true;
-    wakeWordRecognition.interimResults = true;
+    wakeWordRecognition.continuous = true; 
+    wakeWordRecognition.interimResults = true; 
     wakeWordRecognition.lang = 'th-TH';
 
     wakeWordRecognition.onresult = (event) => {
-        let text = "";
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-            text += event.results[i][0].transcript;
+        const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
+        
+        // 🛑 ห้ามประมวลผลถ้า AI กำลังพูด หรือเปิดไมค์ปุ่มกดอยู่
+        if (!window.allowWakeWord || window.isBusy || isListeningNow) return;
+
+        let transcript = "";
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+            transcript += event.results[i][0].transcript;
         }
 
-        if (text.includes("น้องนำทาง")) {
-            console.log("🎯 [System] Wake Word Detected!");
-            setMicState("OFF");
-            speak("ครับผม มีอะไรให้ช่วยไหมครับ", () => {
-                setMicState("STT");
-            });
+        if (transcript.includes("น้องนำทาง") || transcript.includes("นำทาง")) {
+            console.log("🎯 [WakeWord] Keyword Matched!");
+            
+            // 🛑 สำคัญ: ปิดโหมดดักฟังทันทีเพื่อเข้าสู่โหมดตอบโต้
+            isWakeWordActive = false; 
+            forceStopAllMic();        
+            
+            window.isBusy = true;     
+            transcript = "";          
+
+            let msg = "";
+            if (window.currentLang === 'th') {
+                const affirmations = ["ครับผม", "สวัสดีครับ", "น้องนำทางมาแล้วครับ"];
+                const questions = ["มีอะไรให้ช่วยไหมครับ?", "สอบถามข้อมูลได้เลยนะครับ"];
+                msg = `${affirmations[Math.floor(Math.random() * affirmations.length)]} ${questions[Math.floor(Math.random() * questions.length)]}`;
+            } else {
+                msg = "Yes! How can I help you?";
+            }
+            
+            displayResponse(msg);
+            
+            // ส่งไปฟังก์ชันพูด (ซึ่งจะไปเปิดปุ่มไมค์ STT ต่อหลังพูดจบ)
+            setTimeout(() => {
+                speak(msg); 
+            }, 300); 
         }
     };
 
+    // 🚩 แก้ไข: ระบบ Restart ไมค์แบบหน่วงเวลาเพื่อป้องกัน Browser Block
     wakeWordRecognition.onend = () => {
-        if (!isWakeWordActive) return;
+    const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
+
+    // 🔥 ถ้าผู้ใช้กดไมค์ → ห้าม restart
+    if (manualMicOverride) return;
+
+    if (micHardLock) {
+        console.log("⛔ [WakeWord] Restart BLOCKED (HardLock)");
+        return;
+    }
+
+    if (!isAtHome && personInFrameTime !== null && !window.isBusy && !isListeningNow && isWakeWordActive) {
         setTimeout(() => {
-            try { wakeWordRecognition.start(); } catch (e) {}
-        }, 1000);
-    };
+            try {
+                if (!micHardLock && !window.isBusy && !isListeningNow && !isAtHome && isWakeWordActive) {
+                    wakeWordRecognition.start(); 
+                }
+            } catch(e) {}
+        }, 1500); 
+    } else {
+        isWakeWordActive = false;
+    }
+};
 
     wakeWordRecognition.onerror = (event) => {
         console.warn("🎤 [WakeWord] Error:", event.error);
+        if (event.error === 'not-allowed') {
+            window.allowWakeWord = false;
+            isWakeWordActive = false;
+        }
     };
 }
 
 function startWakeWord() {
-    if (manualMicOverride || !window.allowWakeWord || isAtHome || window.isBusy) {
+    const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
+
+    // 🔥 ถ้าผู้ใช้กดไมค์ → ห้ามแทรก
+    if (manualMicOverride) return;
+
+    if (!window.allowWakeWord || isAtHome || isListeningNow || window.isMuted || window.isBusy) {
         isWakeWordActive = false;
         return;
     }
-    setMicState("WAKE");
+
+    try { 
+        forceStopAllMic();
+
+        setTimeout(() => {
+            micHardLock = false;
+            isWakeWordActive = true; 
+            wakeWordRecognition.start(); 
+            console.log("🎤 [System] WakeWord Stand-by...");
+        }, 200);
+
+    } catch (e) {}
 }
 
 function stopWakeWord() {
@@ -234,45 +283,93 @@ function initSpeechRecognition() {
     if (window.recognition) return;
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-        console.error("❌ Browser ไม่รองรับ SpeechRecognition");
-        return;
-    }
+    if (!SpeechRecognition) return;
 
     window.recognition = new SpeechRecognition();
-    window.recognition.lang = 'th-TH';
+    window.recognition.lang = window.currentLang === 'th' ? 'th-TH' : 'en-US';
     window.recognition.continuous = true;
     window.recognition.interimResults = true;
 
     window.recognition.onstart = () => {
         window.isListening = true;
-        document.getElementById('micBtn')?.classList.add('recording');
-        console.log("🎤 Mic START");
-    };
+        micSessionId++; // 🔥 session ใหม่ทุกครั้ง
+        lastFinalTranscript = "";
+        isSubmitting = false;
 
-    window.recognition.onend = () => {
-        window.isListening = false;
-        document.getElementById('micBtn')?.classList.remove('recording');
-        console.log("🛑 Mic END");
+        const micBtn = document.getElementById('micBtn');
+        if (micBtn) micBtn.classList.add('recording');
+
+        displayResponse("กำลังฟัง... พูดได้เลยครับ");
     };
 
     window.recognition.onresult = (e) => {
         if (window.micTimer) clearTimeout(window.micTimer);
-        let text = "";
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-            text += e.results[i][0].transcript;
-        }
-        
-        const inputField = document.getElementById('userInput');
-        if (inputField) inputField.value = text;
 
-        // Auto Submit เมื่อหยุดพูด 2 วินาที
-        window.micTimer = setTimeout(() => {
-            if (text.trim() !== "") {
-                getResponse(text);
-                safeStopRecognition();
+        let finalText = "";
+        let interimText = "";
+
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+            const txt = e.results[i][0].transcript;
+
+            if (e.results[i].isFinal) {
+                finalText += txt;
+            } else {
+                interimText += txt;
             }
-        }, 2000);
+        }
+
+        const inputField = document.getElementById('userInput');
+        if (!inputField) return;
+
+        // 🔥 กันข้อความซ้ำ
+        if (finalText && finalText === lastFinalTranscript) return;
+
+        // 🔥 update textbox แบบเสถียร
+        inputField.value = lastFinalTranscript + interimText;
+
+        // 🔥 ถ้า final มา → commit
+        if (finalText) {
+            lastFinalTranscript += finalText;
+            inputField.value = lastFinalTranscript;
+        }
+
+        // 🔥 AUTO SUBMIT (กันยิงซ้ำ)
+        window.micTimer = setTimeout(() => {
+            if (isSubmitting) return;
+
+            const finalQuery = inputField.value.trim();
+            if (!finalQuery) return;
+
+            isSubmitting = true;
+
+            console.log("🚀 SEND:", finalQuery);
+
+            try { window.recognition.stop(); } catch (e) {}
+
+            inputField.value = "";
+            lastFinalTranscript = "";
+
+            getResponse(finalQuery);
+        }, 1800);
+    };
+
+    window.recognition.onend = () => {
+        window.isListening = false;
+
+        const micBtn = document.getElementById('micBtn');
+        if (micBtn) micBtn.classList.remove('recording');
+
+        if (window.micTimer) clearTimeout(window.micTimer);
+
+        // 🔥 reset state กันค้าง
+        setTimeout(() => {
+            isSubmitting = false;
+        }, 300);
+    };
+
+    window.recognition.onerror = (e) => {
+        console.warn("Mic Error:", e.error);
+        window.isListening = false;
     };
 }
 
@@ -387,11 +484,10 @@ function greetUser() {
     speak(finalGreet, () => { 
         window.isBusy = false; 
         window.allowWakeWord = true; 
-        setMicState("WAKE"); // หลังทักทายให้ดักฟังชื่อ
     }, true); 
 }
 
-// --- 🚩 3. ระบบคัดกรองใบขับขี่ ---
+// --- 🚩 3. ระบบคัดกรองใบขับขี่ (คงเดิม) ---
 function startLicenseCheck(type) {
     forceStopAllMic(); isAtHome = false;
     const isThai = window.currentLang === 'th';
@@ -438,7 +534,7 @@ function checkChecklist() {
     else { printBtn.classList.remove('show-btn'); printBtn.style.setProperty('display', 'none', 'important'); }
 }
 
-// --- 🚩 4. ระบบประมวลผลคำตอบ ---
+// --- 🚩 4. ระบบประมวลผลคำตอบ (คงเดิม) ---
 
 async function getResponse(userQuery) {
     if (!userQuery || !window.localDatabase) return;
@@ -495,7 +591,7 @@ async function getResponse(userQuery) {
     } catch (err) { window.isBusy = false; }
 }
 
-// --- 🚩 5. ระบบเสียง ---
+// --- 🚩 5. ระบบเสียง (แก้ไขการหน่วงเวลาเพื่อความเสถียร) ---
 function speak(text, callback = null, isGreeting = false) {
     if (!text || window.isMuted) return;
     
@@ -516,6 +612,7 @@ function speak(text, callback = null, isGreeting = false) {
         if (callback) callback();
 
         if (!isAtHome) {
+            // เพิ่ม Delay เป็น 2 วินาทีเพื่อให้ Browser และ Hardware เสียงเงียบสนิทจริงๆ ก่อนเปิดไมค์
             setTimeout(() => {
                 if (window.isBusy) return;
 
@@ -524,18 +621,23 @@ function speak(text, callback = null, isGreeting = false) {
                     startWakeWord(); 
                 } else {
                     const isListeningNow = typeof isListening !== 'undefined' ? isListening : false;
-                    if (!isListeningNow && !manualMicOverride) {
-                        setMicState("STT"); 
+                    if (!isListeningNow && typeof toggleListening === "function" && !manualMicOverride) {
+                        console.log("🎤 [System] เปิดปุ่มไมค์รอคำถาม...");
+                        toggleListening(); 
 
                         if (window.sttTimeout) clearTimeout(window.sttTimeout);
                         window.sttTimeout = setTimeout(() => {
-                            if (window.isListening && !window.isBusy && !manualMicOverride) {
-                                setMicState("WAKE");
+                            const stillListening = typeof isListening !== 'undefined' ? isListening : false;
+                            if (stillListening && !window.isBusy && !manualMicOverride) {
+                                console.log("⏰ 5s Timeout: กลับไปโหมดดักฟังชื่อ");
+                                forceStopAllMic(); 
+                                window.allowWakeWord = true;
+                                startWakeWord(); 
                             }
-                        }, 7000); 
+                        }, 6000); 
                     }
                 }
-            }, 1500); 
+            }, 2000); 
         }
     };
 
@@ -639,18 +741,12 @@ async function initDatabase() {
 async function initCamera() {
     try {
         video = document.getElementById('video'); 
-        if (!video) return;
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 } });
-        video.srcObject = stream; 
-        video.onloadedmetadata = () => { 
-            video.play(); 
-            loadFaceModels(); 
-        }; 
-    } catch (err) { 
-        console.error("❌ Camera Error:", err);
-        // หากกล้องเสีย ให้โหลดโมเดลเพื่อใช้ WakeWord อย่างเดียว
-        setupWakeWord();
-    }
+        if (video) { 
+            video.srcObject = stream; 
+            video.onloadedmetadata = () => { video.play(); loadFaceModels(); }; 
+        }
+    } catch (err) { console.error("❌ Camera Error"); }
 }
 
 document.addEventListener('visibilitychange', () => {
