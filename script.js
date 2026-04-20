@@ -169,6 +169,7 @@ function stopWakeWord() { isWakeWordActive = false; if (wakeWordRecognition) { t
 function initSpeechRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
+
     window.recognition = new SpeechRecognition();
     window.recognition.lang = window.currentLang === 'th' ? 'th-TH' : 'en-US';
     window.recognition.continuous = true;
@@ -176,7 +177,8 @@ function initSpeechRecognition() {
 
     window.recognition.onstart = () => {
         window.isListening = true;
-        lastFinalTranscript = ""; // รีเซ็ตค่าสะสมเมื่อเริ่มฟังใหม่
+        // ✅ รีเซ็ตค่าสะสมทุกครั้งที่เริ่มฟังใหม่ เพื่อป้องกันข้อความเก่าค้าง
+        lastFinalTranscript = ""; 
         const micBtn = document.getElementById('micBtn');
         if (micBtn) micBtn.classList.add('recording');
         displayResponse(window.currentLang === 'th' ? "กำลังฟัง... พูดได้เลยครับ" : "Listening...");
@@ -186,27 +188,37 @@ function initSpeechRecognition() {
         if (window.micTimer) clearTimeout(window.micTimer);
         
         let interimTranscript = "";
+        let newFinalText = ""; // สร้างตัวแปรพักสำหรับรับค่า Final ในรอบนี้เท่านั้น
+
         for (let i = e.resultIndex; i < e.results.length; ++i) {
             if (e.results[i].isFinal) {
-                lastFinalTranscript += e.results[i][0].transcript;
+                // ✅ เก็บคำที่ Final จริงๆ เพิ่มเข้าไปในตัวแปรสะสม
+                newFinalText += e.results[i][0].transcript;
             } else {
                 interimTranscript += e.results[i][0].transcript;
             }
         }
 
+        // อัปเดตตัวแปร Global
+        lastFinalTranscript += newFinalText;
+
         const inputField = document.getElementById('userInput');
+        // ✅ แสดงผล: คำที่จบแล้ว + คำที่กำลังประมวลผล
         const currentDisplay = lastFinalTranscript + interimTranscript;
 
         if (currentDisplay.trim() !== "") {
             if (inputField) inputField.value = currentDisplay;
 
+            // 🚀 ตั้งเวลาส่งอัตโนมัติเมื่อหยุดพูด 2.5 วินาที
             window.micTimer = setTimeout(() => {
                 const finalQuery = currentDisplay.trim();
+                
                 if (finalQuery !== "") {
                     console.log("🚀 [Auto-Submit] Sending & Clearing box...");
+                    
                     try { window.recognition.stop(); } catch(err) {} 
                     
-                    // ✅ ล้างข้อความทันทีหลังจากดึงค่าไปใช้
+                    // ✅ ล้างค่าทุกอย่างทันที ป้องกันการเบิ้ลในรอบถัดไป
                     if (inputField) inputField.value = ""; 
                     lastFinalTranscript = ""; 
 
