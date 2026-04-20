@@ -215,25 +215,21 @@ function forceStopAllMic() {
 function playAudioLink(url, callback = null) {
     if (!url) return;
 
-    // 🛑 1. ตัดทุกอย่างทันที
     stopAllSpeech(); 
-    forceStopAllMic(); // สั่งหยุดไมค์ทุกลำดับ
-    if (window.micTimer) clearTimeout(window.micTimer); 
+    forceStopAllMic(); 
     
-    // 🔒 2. ล็อคสถานะให้หนาแน่น
     window.isBusy = true;
-    window.isAudioPlaying = true; 
-    window.allowWakeWord = false; 
+    window.isAudioPlaying = true; // 🔒 ล็อคทันที
     updateLottie('talking');
 
     const audio = new Audio(url);
     window.currentAudioLink = audio; 
 
     audio.onplay = () => {
-        // ย้ำสถานะอีกครั้งเมื่อเสียงเริ่มเล่นจริง
         window.isAudioPlaying = true;
-        window.isBusy = true;
-        forceStopAllMic(); // 🛡️ กันเหนียว: สั่งปิดไมค์ซ้ำเผื่อมีตัวไหนแอบ Start ขึ้นมาตอนโหลดไฟล์
+        window.isBusy = true; 
+        updateLottie('talking'); 
+        forceStopAllMic(); 
         console.log("🔊 [Audio Link] Playing... All Mics strictly locked.");
     };
 
@@ -246,9 +242,8 @@ function playAudioLink(url, callback = null) {
                 window.currentAudioLink = null;
                 updateLottie('idle');
                 
-                if (callback) {
-                    callback();
-                } else if (!isAtHome) {
+                if (callback) callback();
+                else if (!isAtHome) {
                     window.allowWakeWord = true;
                     startWakeWord();
                 }
@@ -260,21 +255,19 @@ function playAudioLink(url, callback = null) {
         window.isBusy = false; 
         window.isAudioPlaying = false;
         window.currentAudioLink = null;
-        updateLottie('idle');
     };
 
-    // 🚩 [FIX] หน่วงเวลา 150-200ms เพื่อให้ Browser เคลียร์ไมค์ให้จบก่อนเริ่มเล่นเสียง
-    // ป้องกัน InvalidStateError และการแย่ง Resource ของไมค์กับเสียง
+    // หน่วงเวลาเล็กน้อยเพื่อให้ระบบปล่อยไมค์ก่อนเริ่มเล่นเสียง
     setTimeout(() => {
         audio.play().catch(e => { 
-            console.warn("⚠️ Audio Playback Blocked or Interrupted:", e);
+            console.warn("Playback Error:", e);
             window.isBusy = false; 
             window.isAudioPlaying = false;
         });
-    }, 200);
+    }, 300);
 }
 
-// --- 1. ระบบจัดการสถานะ & Wake Word Setup ---
+// --- 1. ระบบจัดการสถานะ & Wake Word Setup [UPDATED] ---
 function setupWakeWord() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
@@ -289,7 +282,7 @@ function setupWakeWord() {
     wakeWordRecognition.lang = 'th-TH';
 
     wakeWordRecognition.onresult = (event) => {
-        // 🛡️ เช็กสถานะล็อคเสียง
+        // [FIX] เช็กทั้ง isBusy และ isAudioPlaying เพื่อกันเสียง MP3 ขัดจังหวะ
         if (!window.allowWakeWord || window.isBusy || window.isListening || window.isAudioPlaying) return;
 
         let transcript = "";
@@ -317,14 +310,15 @@ function setupWakeWord() {
     };
 
     wakeWordRecognition.onend = () => {
-        // 🛡️ ปรับเงื่อนไขการ Restart ให้ยืดหยุ่นขึ้น
-        if (!isAtHome && !window.isBusy && !window.isListening && !window.isAudioPlaying && isWakeWordActive) {
+        // [FIX] เพิ่มความรัดกุมในการ Restart
+        if (!isAtHome && personInFrameTime !== null && !window.isBusy && !window.isListening && !window.isAudioPlaying && isWakeWordActive) {
             setTimeout(() => {
-                // เช็กซ้ำอีกครั้งก่อนเริ่มจริง
-                if (!window.isBusy && !window.isListening && !window.isAudioPlaying && isWakeWordActive) {
-                    try { wakeWordRecognition.start(); } catch(e) {} 
-                }
-            }, 1000); 
+                try {
+                    if (!window.isBusy && !window.isListening && !isAtHome && !window.isAudioPlaying && isWakeWordActive) {
+                        wakeWordRecognition.start(); 
+                    }
+                } catch(e) {}
+            }, 1500); 
         } else {
             isWakeWordActive = false;
         }
@@ -339,28 +333,21 @@ function setupWakeWord() {
 }
 
 function startWakeWord() {
-    // 🛡️ เช็ก Master Lock
+    // [FIX] ห้ามเริ่มถ้าเล่นเสียงอยู่
     if (!window.allowWakeWord || isAtHome || window.isListening || window.isMuted || window.isBusy || window.isAudioPlaying) {
         isWakeWordActive = false;
         return;
     }
-    
     try { 
-        // สั่งหยุดตัวเก่าก่อนเพื่อความชัวร์
-        if (wakeWordRecognition) wakeWordRecognition.abort(); 
-        
+        forceStopAllMic(); 
         setTimeout(() => {
-            // เช็กสถานะเสียงอีกรอบก่อนรัน
+            // เช็กซ้ำอีกครั้งหลังหน่วงเวลา
             if (window.isAudioPlaying || window.isBusy) return;
-
             isWakeWordActive = true; 
             try {
                 wakeWordRecognition.start(); 
-                console.log("👂 [WakeWord] Started...");
-            } catch (e) {
-                console.warn("⚠️ WakeWord already running or pending.");
-            }
-        }, 500); // เพิ่มเวลาหน่วงเป็น 500ms เพื่อให้ Browser ปล่อยไมค์ตัวเก่าจริง ๆ
+            } catch(e) { console.warn("Mic start skip:", e.message); }
+        }, 500); // เพิ่มเวลาให้ Browser เคลียร์คิว
     } catch (e) {}
 }
 
@@ -634,7 +621,7 @@ async function processQuery(query) {
     await getResponse(query);
 }
 
-// --- 🚩 5. ระบบเสียง (แก้ไขให้ขัดจังหวะได้และเชื่อมต่อ STT) ---
+// --- 🚩 5. ระบบเสียง (แก้ไขให้ขัดจังหวะได้และเชื่อมต่อ STT) [UPDATED] ---
 function speak(text, callback = null, isGreeting = false) {
     if (!text || window.isMuted) return;
     
@@ -649,26 +636,26 @@ function speak(text, callback = null, isGreeting = false) {
     msg.onstart = () => { updateLottie('talking'); };
     
     msg.onend = () => { 
-    window.isBusy = false; 
-    updateLottie('idle'); 
+        window.isBusy = false; 
+        updateLottie('idle'); 
 
-    if (callback) callback();
+        if (callback) callback();
 
-    if (!isAtHome) {
-        setTimeout(() => {
-            // 🛡️ เพิ่ม window.isAudioPlaying ในการเช็ก เพื่อกัน MP3 โดนตัด
-            if (window.isBusy || window.isAudioPlaying) {
-                console.log("⏳ [Prevent] Auto-Mic blocked: MP3 is still playing.");
-                return;
-            }
+        if (!isAtHome) {
+            setTimeout(() => {
+                // [FIX] เช็กทั้ง isBusy และ isAudioPlaying เพื่อกัน MP3 โดนตัด
+                if (window.isBusy || window.isAudioPlaying) {
+                    console.log("⏳ [Prevent] Auto-Mic blocked: System busy.");
+                    return;
+                }
 
-            if (isGreeting) {
-                window.allowWakeWord = true;
-                startWakeWord(); 
-            } else {
-                if (!window.isListening && typeof toggleListening === "function") {
-                    console.log("🎤 [Auto] Safe to open mic...");
-                    toggleListening();  
+                if (isGreeting) {
+                    window.allowWakeWord = true;
+                    startWakeWord(); 
+                } else {
+                    if (!window.isListening && typeof toggleListening === "function") {
+                        console.log("🎤 [Auto] Safe to open mic...");
+                        toggleListening();  
 
                         if (window.micTimer) clearTimeout(window.micTimer);
                         window.micTimer = setTimeout(() => {
@@ -677,7 +664,7 @@ function speak(text, callback = null, isGreeting = false) {
                                 window.allowWakeWord = true;
                                 startWakeWord(); 
                             }
-                        }, 7000); 
+                        }, 5000); 
                     }
                 }
             }, 1000); 
