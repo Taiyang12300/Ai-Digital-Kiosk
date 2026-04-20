@@ -450,7 +450,7 @@ function speak(text, callback = null, isGreeting = false) {
                         }, 6000); 
                     }
                 }
-            }, 2000); 
+            }, 1500); 
         }
     };
     msg.onerror = () => { window.isBusy = false; updateLottie('idle'); };
