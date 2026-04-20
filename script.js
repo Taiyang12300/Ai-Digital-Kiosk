@@ -82,29 +82,36 @@ function initSpeechRecognition() {
 }
 
 function toggleListening() { 
-    // 🚀 MASTER RESET: ขัดจังหวะทุกอย่างทันที
+    // 🚀 MASTER RESET: ขัดจังหวะทุกอย่าง
     window.speechSynthesis.cancel(); 
     
-    // [FIX] หยุด Audio ทุกตัวที่กำลังเล่นผ่าน Link ด้วย
     const audios = document.querySelectorAll('audio');
-    audios.forEach(a => { 
-        a.pause(); 
-        a.currentTime = 0; 
-    });
+    audios.forEach(a => { a.pause(); a.currentTime = 0; });
 
-    if (typeof forceStopAllMic === "function") forceStopAllMic(); 
     if (window.micTimer) clearTimeout(window.micTimer);
     
+    // [FIX] ถ้ามีการฟังอยู่แล้ว ให้สั่ง stop และเคลียร์สถานะก่อน
+    if (window.isListening || (window.recognition && window.recognition.state === 'running')) { 
+        try {
+            if (window.recognition) window.recognition.stop(); 
+        } catch (e) { console.warn("Stop Error:", e); }
+        window.isListening = false;
+        return; // ออกจากการทำงานเพื่อให้สถานะนิ่งก่อน
+    } 
+
+    // [FIX] ก่อนจะ start ใหม่ ต้องมั่นใจว่าสถานะทุกอย่างพร้อม
     window.isBusy = false; 
 
-    if (window.isListening) { 
-        if (window.recognition) window.recognition.stop(); 
-    } else { 
-        try {
-            if (window.recognition) {
-                window.recognition.start(); 
-            }
-        } catch (e) { console.warn("Mic Start Error:", e); }
+    try {
+        if (window.recognition) {
+            // ป้องกันการเรียก start ซ้อนด้วยการเช็กสถานะภายใน recognition เอง
+            window.recognition.start(); 
+        }
+    } catch (e) { 
+        console.error("Mic Start Error (Attempting recovery):", e);
+        // หากเกิด InvalidState ให้ลอง abort แล้วสั่งใหม่ในครั้งหน้า
+        if (window.recognition) window.recognition.abort();
+        window.isListening = false;
     } 
 }
 
