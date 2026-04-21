@@ -48,23 +48,26 @@ function initSpeechRecognition() {
     };
 
     window.recognition.onresult = (e) => {
-        if (window.micTimer) clearTimeout(window.micTimer);
-        let transcript = "";
-        for (let i = e.resultIndex; i < e.results.length; ++i) {
-            transcript += e.results[i][0].transcript;
-        }
+    if (window.micTimer) clearTimeout(window.micTimer);
+    let transcript = "";
+    for (let i = e.resultIndex; i < e.results.length; ++i) {
+        transcript += e.results[i][0].transcript;
+    }
 
-        if (transcript.trim() !== "") {
-            const inputField = document.getElementById('userInput');
-            if (inputField) inputField.value = transcript;
+    if (transcript.trim() !== "") {
+        const inputField = document.getElementById('userInput');
+        if (inputField) inputField.value = transcript;
+        
+        // หน่วงเวลา 3 วินาทีหลังจากหยุดพูด
+        window.micTimer = setTimeout(() => {
+            // 🚀 แก้ไขลำดับตรงนี้ครับ
+            const finalQuery = transcript; // 1. ดึงข้อความมาเก็บไว้ในตัวแปรชั่วคราวก่อน
+            if (inputField) inputField.value = ''; // 2. ล้างช่อง input ทันทีให้ว่างเปล่า
             
-            // หน่วงเวลา 1.8 วินาทีหลังจากหยุดพูด เพื่อประมวลผลคำตอบ
-            window.micTimer = setTimeout(() => {
-                processQuery(transcript);
-                window.recognition.stop(); 
-                if (inputField) inputField.value = ''; 
-            }, 3000); 
-        }
+            processQuery(finalQuery); // 3. ค่อยส่งข้อความที่เก็บไว้ไปหาคำตอบ
+            window.recognition.stop(); 
+        }, 3000); // ระยะเวลาเปิดไมค์ที่คุณตั้งไว้ 3 วินาที
+      }
     };
 
     window.recognition.onend = () => { 
