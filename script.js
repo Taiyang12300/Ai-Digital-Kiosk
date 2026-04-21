@@ -1,6 +1,7 @@
 /**
  * 🚀 สมองกลน้องนำทาง - Ultimate Hybrid Version (Stable Mic & Original Search Logic)
  * แก้ไข: การประสานงานระหว่างไมค์ Wake Word และไมค์ STT ให้เสถียรที่สุด
+ * ป้องกัน: ปัญหาไมค์ขัดจังหวะ MP3 และการตีกันของระบบดักฟัง
  */
 
 window.localDatabase = null;
@@ -69,22 +70,41 @@ function forceStopAllMic() {
     console.log("🛑 [System] All Microphones Released.");
 }
 
+// แก้ไขฟังก์ชันเล่น MP3 เพื่อป้องกันไมค์ขัดจังหวะ
 function playAudioLink(url, callback = null) {
     if (!url) return;
     stopAllSpeech(); 
     forceStopAllMic(); 
-    window.isBusy = true;
+    window.isBusy = true; // ล็อกสถานะ Busy ทันที
     updateLottie('talking');
+    
     const audio = new Audio(url);
+    
+    audio.onplay = () => {
+        isWakeWordActive = false; // ปิดการทำงาน Wake Word ระหว่างเล่นเสียง
+    };
+
     audio.onended = () => {
-        window.isBusy = false;
+        window.isBusy = false; 
         updateLottie('idle');
         updateInteractionTime();
-        if (callback) callback();
-        else if (window.allowWakeWord && !isAtHome) setTimeout(startWakeWord, 1000);
+        if (callback) {
+            callback();
+        } else if (window.allowWakeWord && !isAtHome && !manualMicOverride) {
+            // หน่วงเวลาเล็กน้อยก่อนเปิดไมค์ใหม่ เพื่อกันเสียงสะท้อน
+            setTimeout(startWakeWord, 1500); 
+        }
     };
-    audio.onerror = () => { window.isBusy = false; updateLottie('idle'); };
-    audio.play().catch(e => { window.isBusy = false; });
+    
+    audio.onerror = () => { 
+        window.isBusy = false; 
+        updateLottie('idle'); 
+    };
+    
+    audio.play().catch(e => { 
+        window.isBusy = false; 
+        console.error("Audio play failed:", e);
+    });
 }
 
 // --- 1. ระบบจัดการสถานะ & Wake Word Setup ---
@@ -101,6 +121,7 @@ function setupWakeWord() {
 
     wakeWordRecognition.onresult = (event) => {
         const isListeningNow = typeof window.isListening !== 'undefined' ? window.isListening : false;
+        // ตรวจสอบล็อกอย่างเข้มงวด
         if (!window.allowWakeWord || window.isBusy || isListeningNow || manualMicOverride) return;
 
         let transcript = "";
@@ -127,17 +148,20 @@ function setupWakeWord() {
                 window.isBusy = false; 
                 setTimeout(() => { 
                     if (typeof toggleListening === "function") toggleListening(); 
-                }, 300);
+                }, 500);
             });
         }
     };
 
     wakeWordRecognition.onend = () => {
         const isListeningNow = typeof window.isListening !== 'undefined' ? window.isListening : false;
+        // ป้องกันการ Restart ไมค์ถ้าติดเงื่อนไข Busy หรือเล่นเสียงอยู่
         if (window.allowWakeWord && isWakeWordActive && !window.isBusy && !isListeningNow && !manualMicOverride) {
             setTimeout(() => {
-                try { if (!window.isBusy) wakeWordRecognition.start(); } catch(e) {}
-            }, 800);
+                if(!window.isBusy && !manualMicOverride) {
+                    try { wakeWordRecognition.start(); } catch(e) {}
+                }
+            }, 1000);
         }
     };
 }
@@ -158,6 +182,50 @@ function stopWakeWord() {
     isWakeWordActive = false; 
     if (wakeWordRecognition) try { wakeWordRecognition.abort(); } catch (e) {}
 }
+
+// --- 🆕 เพิ่มฟังก์ชันปุ่มไมค์ (STT) เพื่อไม่ให้ตีกับ Wake Word ---
+
+function initSpeechRecognition() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    window.recognition = new SpeechRecognition();
+    window.recognition.lang = 'th-TH';
+    window.recognition.interimResults = false;
+
+    window.recognition.onstart = () => {
+        window.isListening = true;
+        updateLottie('talking');
+    };
+
+    window.recognition.onresult = (event) => {
+        const text = event.results[0][0].transcript;
+        displayResponse(text);
+        getResponse(text);
+    };
+
+    window.recognition.onend = () => {
+        window.isListening = false;
+        manualMicOverride = false; 
+        updateLottie('idle');
+    };
+}
+
+function toggleListening() {
+    stopAllSpeech();
+    manualMicOverride = true; // บล็อก Wake Word ชั่วคราว
+    forceStopAllMic(); 
+
+    if (!window.recognition) initSpeechRecognition();
+
+    if (window.isListening) {
+        try { window.recognition.stop(); } catch(e) {}
+    } else {
+        try { window.recognition.start(); } catch(e) {}
+    }
+}
+
+// --- 🚩 ฟังก์ชันพื้นฐานอื่นๆ ---
 
 function updateInteractionTime() {
     lastSeenTime = Date.now();
@@ -396,6 +464,7 @@ function speak(text, callback = null) {
         window.isBusy = false; 
         updateLottie('idle'); 
         if (callback) callback();
+        // ถ้าไม่ติดล็อก Manual และอนุญาต Wake Word ให้เริ่มใหม่หลังพูดจบ
         if (window.allowWakeWord && !isAtHome && !manualMicOverride) {
             setTimeout(startWakeWord, 1200);
         }
