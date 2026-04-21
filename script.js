@@ -514,7 +514,13 @@ async function processQuery(query) {
     window.speechSynthesis.cancel();
     const respBox = document.getElementById('response-text');
     if (respBox) respBox.innerText = (window.currentLang === 'th') ? "กำลังค้นหา..." : "Searching...";
+    
+    // ประมวลผลหาคำตอบ
     await getResponse(query);
+
+    // 🚀 เพิ่มบรรทัดนี้เพื่อล้างข้อความในช่อง Input
+    const inputField = document.getElementById('userInput');
+    if (inputField) inputField.value = '';
 }
 
 // --- 🚩 5. ระบบเสียง (แก้ไขให้ขัดจังหวะได้และเชื่อมต่อ STT) ---
