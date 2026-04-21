@@ -1,314 +1,438 @@
-<!DOCTYPE html>
-<html lang="th">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
-  <title>AI Digital Kiosk - DLT (Local Brain)</title>
-  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;500&family=Kanit:wght@300;500;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-  <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
-  <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#6c5ce7">
-  
-  <style>
-    :root { 
-      --primary: #6c5ce7; 
-      --bg: #f9f9fb; 
-      --accent: #ff7675; 
-      /* กำหนดค่ากลางสำหรับ Scale ตัวอักษรและระยะห่าง */
-      --base-font: clamp(16px, 2vw, 20px);
-    }
-    
-    body { 
-      font-family: 'Sarabun', sans-serif; 
-      background: var(--bg); 
-      margin: 0; 
-      padding: 0; 
-      display: flex; 
-      justify-content: center; 
-      min-height: 100dvh;
-      touch-action: pan-y;
-      -webkit-text-size-adjust: none;
-    }
+/**
+ * 🚀 สมองกลน้องนำทาง - Ultimate Hybrid Version (Stable Full Release)
+ * เชื่อมต่อกับ HTML: รองรับการแสดงผลปุ่มปริ้นผ่าน class 'show-btn'
+ */
 
-    .main-container { 
-  width: 100%; 
-  max-width: clamp(350px, 90%, 800px); 
-  padding: clamp(15px, 3vw, 30px); 
-  display: flex; 
-  flex-direction: column; 
-  align-items: center; 
-  box-sizing: border-box;
-  /* แก้ไขส่วนนี้ */
-  min-height: 100dvh; 
-  position: relative;
-}
-    
-    /* --- UI Components (Responsive Scaling) --- */
-    .top-controls { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 2dvh; }
-    .lang-container { display: flex; gap: 10px; }
-    
-    .btn-lang, .btn-mute { 
-      display: flex; align-items: center; justify-content: center; gap: 8px; 
-      padding: clamp(8px, 1.5vw, 14px) clamp(12px, 2vw, 20px); 
-      border-radius: 25px; border: 2px solid #e0e0e0; background: white; color: #636e72; 
-      cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-      font-size: clamp(14px, 1.5vw, 18px);
-    }
-    .btn-lang.active { border-color: var(--primary); background: #f0edff; color: var(--primary); font-weight: bold; }
-    .btn-mute.muted { background: var(--accent); color: white; border-color: var(--accent); }
+window.localDatabase = null;
+window.currentLang = 'th'; 
+window.isMuted = false; 
+window.isBusy = false; 
+window.hasGreeted = false;
+window.allowWakeWord = false; 
+window.isListening = false; 
+window.recognition = null;  
 
-    /* 🤖 ปรับขนาดหุ่นยนต์ตามความสูงจอ (dvh) เพื่อให้เหลือพื้นที่ด้านล่าง */
-    .avatar-container { 
-      width: clamp(130px, 22dvh, 220px); 
-      height: clamp(130px, 22dvh, 220px); 
-      margin-bottom: 2dvh; 
-      border-radius: 50%; background: white; box-shadow: 0 5px 15px rgba(0,0,0,0.05); 
-      overflow: hidden; flex-shrink: 0; 
-    }
-    #lottie-canvas { width: 100%; height: 100%; }
+let isAtHome = true; 
+const GAS_URL = "https://script.google.com/macros/s/AKfycbz1bkIsQ588u-rpjY-8nMlya5_c0DsIabRvyPyCC_sPs5vyeJ_1wcOBaqKfg7cvlM3XJw/exec"; 
 
-    /* 📝 กล่องข้อความปรับขนาด Font ตามความกว้างหน้าจอ */
-    .display-box { 
-      background: white; border-radius: 20px; 
-      padding: clamp(18px, 3vw, 30px); 
-      box-shadow: 0 10px 20px rgba(0,0,0,0.05); 
-      width: 100%; box-sizing: border-box; text-align: left; 
-      min-height: 120px; 
-      font-size: clamp(17px, 2.2vw, 24px); 
-      margin-bottom: 20px; color: #2d3436; 
-      border-left: clamp(4px, 1vw, 8px) solid var(--primary); 
-      line-height: 1.6; 
-    }
-    
-    .faq-title { width: 100%; margin: 10px 0; font-weight: 500; color: #636e72; font-size: clamp(14px, 1.5vw, 18px); display: flex; align-items: center; gap: 8px; }
-    .faq-grid { 
-      display: grid; 
-      grid-template-columns: repeat(auto-fit, minmax(clamp(130px, 20vw, 180px), 1fr)); 
-      gap: 12px; width: 100%; margin-bottom: 20px; 
-    }
-    
-    .faq-btn { 
-      padding: 12px; background: white; color: var(--primary); border: 2px solid #e0e0ff; border-radius: 15px; 
-      font-size: clamp(13px, 1.4vw, 17px); 
-      cursor: pointer; transition: all 0.2s; font-weight: 500; 
-      min-height: clamp(50px, 8dvh, 70px); 
-      display: flex; align-items: center; justify-content: center; text-align: center; 
-    }
-    .faq-btn:active { transform: scale(0.95); background: var(--primary); color: white; }
+let idleTimer = null; 
+const IDLE_TIME_LIMIT = 5000; 
+let video; 
+let isDetecting = true; 
+let personInFrameTime = null; 
+let lastSeenTime = Date.now();
+let lastDetectionTime = 0;
+const DETECTION_INTERVAL = 200; 
 
-    .input-section { width: 100%; display: flex; gap: 10px; margin-bottom: 20px; }
-    #userInput { 
-      flex: 1; padding: 15px 20px; border-radius: 30px; border: 2px solid #ddd; outline: none; 
-      font-size: clamp(15px, 1.5vw, 18px); font-family: 'Sarabun'; 
-    }
-    .btn-send { width: 50px; height: 50px; border-radius: 50%; border: none; background: var(--primary); color: white; cursor: pointer; font-size: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+let wakeWordRecognition;
+let isWakeWordActive = false;
 
-    /* 🎙️ แก้ไข 4: ระบบ Flexible Sticky (รองรับทุกขนาดจอ) */
-    .mic-section { 
-  /* ลบ position: fixed หรือ sticky ออกให้หมด */
-  width: 100%;
-  padding: 20px 0;
-  text-align: center; 
-  z-index: 999;
-  
-  /* เพิ่มส่วนนี้ */
-  margin-top: auto;   /* ถ้าเนื้อหาสั้น มันจะต่อท้ายทันที ถ้าเนื้อหายาวมันจะถูกดันลงล่างสุด */
-  flex-shrink: 0;     /* ป้องกันปุ่มโดนบีบแบน */
-  position: relative;
-  bottom: 0;
-}
+// --- 🚩 ระบบไมโครโฟน STT ---
 
-.btn-mic { 
-  width: clamp(90px, 12dvh, 110px); 
-  height: clamp(90px, 12dvh, 110px); 
-  border-radius: 50%; 
-  border: none; 
-  background: var(--primary); 
-  color: white; 
-  font-size: clamp(35px, 4vw, 45px); 
-  cursor: pointer; 
-  display: flex; 
-  align-items: center; 
-  justify-content: center; 
-  margin: 0 auto; 
-  box-shadow: 0 10px 20px rgba(108,92,231,0.3); 
-}
-    .btn-mic.recording { background: var(--accent); animation: pulse 1.5s infinite; }
-    @keyframes pulse { 0% { transform: scale(1); } 70% { transform: scale(1.1); } 100% { transform: scale(1); } }
+function initSpeechRecognition() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
 
-    /* --- [ส่วนอื่นๆ คงเดิม] --- */
-    .checklist-card { text-align: left; background: white; padding: 15px; border-radius: 12px; border: 1px solid #ddd; }
-    .check-item { display: flex; align-items: center; margin-bottom: 12px; background: #f0f2f5; padding: 10px; border-radius: 8px; cursor: pointer; }
-    .check-item input { width: 22px; height: 22px; cursor: pointer; accent-color: #28a745; }
-    .check-item label { margin-left: 12px; font-size: 18px; cursor: pointer; color: #333; flex: 1; }
-    #btnPrintGuide { display: none !important; width: 100%; padding: 15px; background: #28a745; color: white; border: none; border-radius: 10px; font-weight: bold; font-size: 20px; cursor: pointer; margin-top: 15px; }
-    #btnPrintGuide.show-btn { display: block !important; }
-    
-    /* Ticket Print Section */
-    .ticket { background: white; color: #000 !important; width: 52mm; padding: 5px 2px 5px 8px; margin: 0 auto; font-family: 'Kanit', sans-serif; text-align: center; box-sizing: border-box; }
-    .ticket * { font-weight: 900 !important; color: #000 !important; }
-    .ticket .big { font-size: 24px; margin: 8px 0; line-height: 1.1; display: block; text-align: center; }
-    #printLicenseNote { background: transparent !important; color: #000 !important; border: 1px dashed #000; padding: 6px 4px; font-weight: 900 !important; font-size: 14px; margin: 5px 2mm; text-align: center !important; display: block; width: auto; box-sizing: border-box; word-wrap: break-word; line-height: 1.2; }
-    #printLicenseItems { margin: 10px 0 10px 5px; font-size: 12px; line-height: 1.4; display: block; text-align: left !important; }
-    
-    @media print { 
-      body > *:not(#ticketLicenseWrapper) { display: none !important; } 
-      #ticketLicenseWrapper { display: block !important; position: absolute; top: 0; left: 0; width: 57mm; } 
-      .ticket { position: absolute; top: 0; left: 0; width: 57mm; padding-left: 5mm; margin: 0; } 
-    }
+    window.recognition = new SpeechRecognition();
+    window.recognition.lang = window.currentLang === 'th' ? 'th-TH' : 'en-US';
+    window.recognition.continuous = false; 
+    window.recognition.interimResults = true; 
 
-    /* Splash Screen */
-    #splash-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #000; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 10000; transition: opacity 0.8s ease; }
-    .splash-logo { width: clamp(120px, 20vw, 180px); margin-bottom: 30px; }
-    .splash-title { font-family: 'Kanit', sans-serif; color: white; font-size: clamp(22px, 3vw, 32px); font-weight: 800; margin-bottom: 5px; }
-    .splash-status { font-family: 'Sarabun', sans-serif; color: #a0a0a0; font-size: 14px; margin-bottom: 25px; }
-    .progress-container { width: min(250px, 70%); height: 6px; background: #1a1a1a; border-radius: 10px; overflow: hidden; }
-    .progress-fill { width: 0%; height: 100%; background: linear-gradient(90deg, #2196F3, #00BCD4, #2196F3); animation: flow 2s linear infinite; }
-    @keyframes flow { 0% { background-position: 200% 0; } 100% { background-position: 0 0; } }
-</style>
-</head>
-<body>
+    window.recognition.onstart = () => { 
+        window.isListening = true;
+        const micBtn = document.getElementById('micBtn');
+        if (micBtn) micBtn.classList.add('recording'); 
+        const statusText = document.getElementById('statusText');
+        if (statusText) statusText.innerText = (window.currentLang === 'th') ? "กำลังฟัง..." : "Listening...";
+    };
 
-  <div id="splash-screen">
-    <img src="https://img2.pic.in.th/59424.png" class="splash-logo" alt="Logo">
-    <div class="splash-title">น้องนำทาง</div>
-    <div id="splash-status-text" class="splash-status">กำลังเริ่มต้นระบบ... (Initializing Database...)</div>
-    <div class="progress-container">
-        <div id="splash-progress-bar" class="progress-fill"></div>
-    </div>
-  </div>
-  
-  <div class="main-container">
-    <div class="top-controls">
-      <button onclick="toggleMute()" id="muteBtn" class="btn-mute"><i id="muteIcon" class="fas fa-volume-up"></i></button>
-      <div class="lang-container">
-        <button onclick="changeLang('th')" id="btn-th" class="btn-lang active"><img src="https://flagcdn.com/w40/th.png"> TH</button>
-        <button onclick="changeLang('en')" id="btn-en" class="btn-lang"><img src="https://flagcdn.com/w40/us.png"> EN</button>
-      </div>
-    </div>
+    window.recognition.onresult = (e) => {
+        if (window.micTimer) clearTimeout(window.micTimer);
+        let transcript = "";
+        for (let i = e.resultIndex; i < e.results.length; ++i) {
+            transcript += e.results[i][0].transcript;
+        }
 
-    <div class="avatar-container">
-      <lottie-player id="lottie-canvas" src="https://lottie.host/568e8594-a319-4491-bf10-a0f5c012fc76/6S3urqybG5.json" background="transparent" speed="1" loop autoplay></lottie-player>
-    </div>
+        if (transcript.trim() !== "") {
+            const inputField = document.getElementById('userInput');
+            if (inputField) inputField.value = transcript;
+            
+            window.micTimer = setTimeout(() => {
+                processQuery(transcript);
+                try { window.recognition.stop(); } catch(err) {} 
+            }, 1800); 
+        }
+    };
 
-    <div class="display-box" id="response-text"></div>
-
-    <div class="faq-title" id="faq-title-text"><i class="fas fa-star"></i> คำถามที่พบบ่อย:</div>
-    <div id="faq-container" class="faq-grid"></div>
-
-    <div class="input-section">
-      <input type="text" id="userInput" placeholder="พิมพ์คำถามที่นี่..." onkeypress="handleKeyPress(event)">
-      <button class="btn-send" onclick="handleManualInput()"><i class="fas fa-paper-plane"></i></button>
-    </div>
-    
-    <div class="mic-section">
-      <button id="micBtn" class="btn-mic" onclick="toggleListening()"><i class="fas fa-microphone"></i></button>
-      <p id="statusText" style="margin-top:10px; color: #636e72; font-size: 14px;">แตะไมค์เพื่อเริ่มพูด</p>
-    </div>
-  </div>
-
-  <div id="ticketLicenseWrapper" style="display: none;">
-    <div class="ticket">
-      <div style="font-size: 15px; font-weight: bold;">🧾 ใบนำทางติดต่อราชการ</div>
-      <div style="font-size: 11px; border-bottom: 1px dashed black; padding-bottom: 5px;">สำนักงานขนส่งอำเภอพยัคฆภูมิพิสัย</div>
-      <div class="big" id="printLicenseType">-</div>
-      <div id="printLicenseNote">-</div>
-      <div style="text-align: left; margin: 10px 0 0 8px; font-size: 12px;">
-        <b>เอกสารที่ต้องใช้:</b>
-        <div id="printLicenseItems"></div>
-      </div>
-      <div style="border-top: 1px dashed black; padding-top: 5px; font-size: 10px; text-align: center;">
-        <div id="printLicenseTime"></div>
-        <div style="font-weight: bold; margin-top: 4px;">*ยื่นใบนี้พร้อมเอกสารที่งานใบอนุญาตขับรถชั้น 2*</div>
-      </div>
-    </div>
-  </div>
-
-  <audio id="queueSound" preload="auto">
-    <source src="https://taiyang12300.github.io/sound/ยื่นใบนำทาง.mp3" type="audio/mpeg">
-  </audio>
-  <video id="video" width="640" height="480" autoplay muted playsinline style="display:none;"></video>
-  
-  <script src="script.js?v=2.1"></script>
-
-  <script>
-    // --- Service Worker ---
-    if ('service-worker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('service-worker.js')
-          .then(reg => console.log('Service Worker registered!'))
-          .catch(err => console.log('Registration failed: ', err));
-      });
-    }
-
-    // --- Core UI Logic ---
-    function toggleMute() {
-      window.isMuted = !window.isMuted;
-      const muteBtn = document.getElementById('muteBtn');
-      const muteIcon = document.getElementById('muteIcon');
-      if (window.isMuted) {
-        window.speechSynthesis.cancel();
-        muteBtn.classList.add('muted');
-        muteIcon.className = 'fas fa-volume-mute';
-      } else {
-        muteBtn.classList.remove('muted');
-        muteIcon.className = 'fas fa-volume-up';
-      }
-    }
-
-    function changeLang(lang) {
-      window.speechSynthesis.cancel();
-      window.isBusy = false;
-      window.currentLang = lang;
-      window.isMuted = false;
-      document.getElementById('btn-th').classList.toggle('active', lang === 'th');
-      document.getElementById('btn-en').classList.toggle('active', lang === 'en');
-      const isTh = (lang === 'th');
-      document.getElementById('userInput').placeholder = isTh ? "พิมพ์คำถามที่นี่..." : "Type your question here...";
-      document.getElementById('statusText').innerText = isTh ? "แตะไมค์เพื่อเริ่มพูด" : "Tap mic to speak";
-      document.getElementById('response-text').innerText = isTh ? "เปลี่ยนเป็นภาษาไทยแล้วครับ" : "Switched to English.";
-      if (window.recognition) window.recognition.lang = isTh ? 'th-TH' : 'en-US';
-      if (typeof renderFAQButtons === "function") renderFAQButtons();
-    }
-
-    function handleManualInput() {
-      const input = document.getElementById('userInput');
-      if (input.value.trim()) { processQuery(input.value.trim()); input.value = ''; }
-    }
-    function handleKeyPress(e) { if (e.key === 'Enter') handleManualInput(); }
-
-    async function processQuery(query) {
-      window.speechSynthesis.cancel();
-      document.getElementById('response-text').innerText = (window.currentLang === 'th') ? "กำลังค้นหา..." : "Searching...";
-      if (typeof getResponse === "function") await getResponse(query);
-    }
-
-    // --- Printing System ---
-    function printLicenseNote(type, note, items) {
-      const now = new Date();
-      document.getElementById('printLicenseType').innerText = type;
-      document.getElementById('printLicenseNote').innerText = note;
-      document.getElementById('printLicenseTime').innerText = `เวลาพิมพ์: ${now.toLocaleString('th-TH')}`;
-      const docArray = items.includes('\\n') ? items.split('\\n') : items.split('\n');
-      const itemsHTML = docArray
-        .filter(i => i.trim() !== "")
-        .map(i => `<div style="text-align: left !important; font-weight: 900 !important; color: #000 !important; margin-bottom: 3px;">[ ✓ ] ${i.trim()}</div>`)
-        .join('');
-      document.getElementById('printLicenseItems').innerHTML = itemsHTML;
-      const audio = document.getElementById('queueSound');
-      if (audio) { audio.currentTime = 0; audio.play().catch(e => {}); }
-      const wrapper = document.getElementById('ticketLicenseWrapper');
-      wrapper.style.display = 'block';
-      setTimeout(() => {
-        window.print();
+    window.recognition.onend = () => { 
+        stopListening(); 
         setTimeout(() => {
-          wrapper.style.display = 'none';
-          if(typeof renderFAQButtons === "function") renderFAQButtons(); 
+            if (!window.isBusy && !isAtHome && window.allowWakeWord && !window.isListening) {
+                startWakeWord();
+            }
         }, 500);
-      }, 300);
+    };
+
+    window.recognition.onerror = (e) => {
+        if (e.error === 'no-speech') return;
+        stopListening();
+    };
+}
+
+function toggleListening() { 
+    window.speechSynthesis.cancel(); 
+    if (window.micTimer) clearTimeout(window.micTimer);
+    
+    if (window.isListening) { 
+        forceStopAllMic();
+        return;
+    } 
+
+    window.isBusy = false; 
+    stopWakeWord(); 
+
+    try {
+        if (window.recognition) window.recognition.start(); 
+    } catch (e) { 
+        if (window.recognition) window.recognition.abort();
+        window.isListening = false;
+    } 
+}
+
+function stopListening() { 
+    window.isListening = false;
+    const micBtn = document.getElementById('micBtn');
+    const statusText = document.getElementById('statusText');
+    if (micBtn) micBtn.classList.remove('recording'); 
+    if (statusText) statusText.innerText = (window.currentLang === 'th') ? "แตะไมค์เพื่อเริ่มพูด" : "Tap mic to speak";
+}
+
+function forceStopAllMic() {
+    isWakeWordActive = false;
+    window.isListening = false; 
+    if (wakeWordRecognition) { try { wakeWordRecognition.abort(); } catch(e) {} }
+    if (window.recognition) { try { window.recognition.abort(); } catch(e) {} }
+    stopListening();
+}
+
+// --- 🚩 ระบบคัดกรองใบขับขี่ & ปุ่มปริ้น (เชื่อมต่อกับ HTML CSS) ---
+
+function showLicenseChecklist(type, expiry) {
+    const isThai = window.currentLang === 'th';
+    const isTemp = type.includes("ชั่วคราว") || type.includes("2 ปี");
+    let docs = ["บัตรประชาชน (ตัวจริง)", "ใบขับขี่เดิม", "ใบรับรองแพทย์ (ไม่เกิน 1 เดือน)"];
+    let note = "";
+
+    if (isTemp) {
+        if (expiry === 'normal') note = "ไม่ต้องอบรม ต่อได้ทันที";
+        else if (expiry === 'over1') note = "อบรม 5 ชม. และสอบข้อเขียนใหม่";
+        else if (expiry === 'over3') note = "อบรม 5 ชม. สอบข้อเขียนและขับรถใหม่";
+    } else {
+        if (expiry === 'normal') { docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)"); note = "อบรมออนไลน์ 1 ชม. และต่อได้ทันที"; }
+        else if (expiry === 'over1') { docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)"); note = "อบรมออนไลน์ 2 ชม. และต้องสอบข้อเขียนใหม่"; }
+        else if (expiry === 'over3') { note = "อบรม 5 ชม. ที่ขนส่งเท่านั้น + สอบข้อเขียน + สอบขับรถ"; }
     }
-  </script>
-</body>
-</html>
+
+    let checklistHTML = "";
+    docs.forEach((d, idx) => {
+        // ใช้ class 'check-item' ตาม CSS ใน HTML ของคุณ
+        checklistHTML += `
+            <div class="check-item" onclick="const c = document.getElementById('chk-${idx}'); c.checked = !c.checked; checkChecklist();">
+                <input type="checkbox" class="doc-check" id="chk-${idx}" onchange="checkChecklist()" onclick="event.stopPropagation()">
+                <label>${d}</label>
+            </div>`;
+    });
+
+    const resultHTML = `
+        <div class="checklist-card">
+            <strong style="font-size:22px; color:#6c5ce7;">${type}</strong><br>
+            <div style="background:#f0edff; color:#6c5ce7; padding:10px; border-radius:8px; margin:10px 0; font-weight:bold;">💡 ${note}</div>
+            <hr style="margin:15px 0; border:0; border-top:1px solid #eee;">
+            ${checklistHTML}
+            <button id="btnPrintGuide" onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}');">
+                🖨️ ปริ้นใบนำทาง
+            </button>
+        </div>`;
+
+    displayResponse(resultHTML);
+    speak(isThai ? "กรุณาตรวจสอบเอกสารให้ครบ เพื่อปริ้นใบนำทางครับ" : "Please check all items to print.");
+}
+
+function checkChecklist() {
+    updateInteractionTime(); 
+    const checks = document.querySelectorAll('.doc-check');
+    const printBtn = document.getElementById('btnPrintGuide');
+    if (!printBtn) return;
+    
+    const allChecked = checks.length > 0 && Array.from(checks).every(c => c.checked);
+    
+    // ใช้ class 'show-btn' ตามที่คุณเขียนไว้ใน <style> ของ HTML
+    if (allChecked) {
+        printBtn.classList.add('show-btn');
+    } else {
+        printBtn.classList.remove('show-btn');
+    }
+}
+
+// --- 🚩 ระบบจัดการหน้าจอ & ฐานข้อมูล ---
+
+async function initDatabase() {
+    const progBar = document.getElementById('splash-progress-bar');
+    if (progBar) progBar.style.width = '30%'; 
+    try {
+        const res = await fetch(GAS_URL);
+        const json = await res.json();
+        if (json.database) { 
+            window.localDatabase = json.database; 
+            if (progBar) progBar.style.width = '100%';
+            completeLoading(); 
+        }
+    } catch (e) { setTimeout(initDatabase, 3000); }
+}
+
+function completeLoading() {
+    const splash = document.getElementById('splash-screen');
+    if (splash) {
+        splash.style.opacity = '0';
+        setTimeout(() => {
+            splash.style.display = 'none';
+            isAtHome = true;
+            initCamera();       
+            initSpeechRecognition(); 
+            displayResponse(window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone.");
+            renderFAQButtons(); 
+        }, 800);
+    }
+}
+
+// --- 🚩 ระบบประมวลผลคำตอบ ---
+
+async function getResponse(userQuery) {
+    if (!userQuery || !window.localDatabase) return;
+    logQuestionToSheet(userQuery); 
+    stopAllSpeech();
+    forceStopAllMic();
+    window.isBusy = true;
+    updateLottie('thinking');
+
+    const query = userQuery.toLowerCase().trim();
+    
+    // คัดกรองเคสใบขับขี่
+    if ((query.includes("ใบขับขี่") || query.includes("ต่อ")) && !query.includes("2 ปี") && !query.includes("5 ปี")) {
+        const askMsg = (window.currentLang === 'th') ? "ใบขับขี่เป็นแบบ 2 ปี หรือ 5 ปีครับ?" : "Is it 2 or 5 years?";
+        displayResponse(askMsg); speak(askMsg);
+        renderOptionButtons([
+            { th: "แบบ 2 ปี", en: "2 years", action: () => startLicenseCheck("ชั่วคราว (2 ปี)") },
+            { th: "แบบ 5 ปี", en: "5 years", action: () => startLicenseCheck("5 ปี") }
+        ]);
+        return;
+    }
+
+    try {
+        let bestMatch = { answer: "", score: 0 };
+        for (const sheetName of Object.keys(window.localDatabase)) {
+            if (["Lottie_State", "Config", "FAQ"].includes(sheetName)) continue;
+            window.localDatabase[sheetName].forEach(item => {
+                const rawKeys = item[0] ? item[0].toString().toLowerCase() : "";
+                const keyList = rawKeys.split(/[,|\n]/).map(k => k.trim());
+                let ans = window.currentLang === 'th' ? (item[1] || "") : (item[2] || item[1]);
+                for (const key of keyList) {
+                    let simScore = calculateSimilarity(query, key);
+                    if (simScore > bestMatch.score) bestMatch = { answer: ans, score: simScore };
+                }
+            });
+        }
+        if (bestMatch.score >= 0.6) { displayResponse(bestMatch.answer); speak(bestMatch.answer); }
+        else { 
+            const noData = window.currentLang === 'th' ? "ขออภัยครับ ไม่พบข้อมูล กรุณาติดต่อเจ้าหน้าที่" : "No info found.";
+            displayResponse(noData); speak(noData);
+            setTimeout(renderFAQButtons, 4000);
+        }
+    } catch (err) { window.isBusy = false; }
+}
+
+function startLicenseCheck(type) {
+    const isThai = window.currentLang === 'th';
+    const msg = isThai ? `ใบขับขี่ ${type} ของท่าน หมดอายุหรือยังครับ?` : `Is your ${type} license expired?`;
+    displayResponse(msg);
+    speak(msg, () => { window.isBusy = false; });
+    renderOptionButtons([
+        { th: "✅ ยังไม่หมดอายุ / ไม่เกิน 1 ปี", en: "Not expired / Under 1 year", action: () => showLicenseChecklist(type, 'normal') },
+        { th: "⚠️ หมดอายุเกิน 1 ปี", en: "Expired over 1 year", action: () => showLicenseChecklist(type, 'over1') },
+        { th: "❌ หมดอายุเกิน 3 ปี", en: "Expired over 3 years", action: () => showLicenseChecklist(type, 'over3') }
+    ]);
+}
+
+// --- ฟังก์ชันเสริม (Helper) ---
+
+function speak(text, callback = null, isGreeting = false) {
+    if (!text || window.isMuted) return;
+    forceStopAllMic(); 
+    window.speechSynthesis.cancel();
+    window.isBusy = true; 
+
+    const msg = new SpeechSynthesisUtterance(text.replace(/<[^>]*>?/gm, ''));
+    msg.lang = 'th-TH';
+    msg.rate = 1.1;
+    msg.onstart = () => { updateLottie('talking'); };
+    msg.onend = () => { 
+        window.isBusy = false; 
+        updateLottie('idle'); 
+        if (callback) callback();
+        if (!isAtHome) {
+            setTimeout(() => {
+                if (window.isBusy || window.isListening) return;
+                if (isGreeting) { window.allowWakeWord = true; startWakeWord(); }
+                else { toggleListening(); }
+            }, 1000); 
+        }
+    };
+    window.speechSynthesis.speak(msg);
+}
+
+function renderFAQButtons() {
+    const container = document.getElementById('faq-container');
+    if (!container || !window.localDatabase) return;
+    container.innerHTML = "";
+    window.localDatabase["FAQ"].slice(1).forEach((row) => {
+        const qText = (window.currentLang === 'th') ? row[0] : row[1];
+        if (qText) {
+            const btn = document.createElement('button'); btn.className = 'faq-btn'; btn.innerText = qText;
+            btn.onclick = () => { getResponse(qText); };
+            container.appendChild(btn);
+        }
+    });
+}
+
+function renderOptionButtons(options) {
+    const container = document.getElementById('faq-container');
+    if (!container) return; container.innerHTML = "";
+    options.forEach(opt => {
+        const btn = document.createElement('button'); btn.className = 'faq-btn';
+        btn.innerText = (window.currentLang === 'th' ? opt.th : opt.en);
+        btn.onclick = () => { if (opt.action) opt.action(); };
+        container.appendChild(btn);
+    });
+}
+
+function calculateSimilarity(s1, s2) {
+    let longer = s1.length < s2.length ? s2 : s1;
+    let shorter = s1.length < s2.length ? s1 : s2;
+    if (longer.length === 0) return 1.0;
+    return (longer.length - editDistance(longer, shorter)) / longer.length;
+}
+
+function editDistance(s1, s2) {
+    let costs = [];
+    for (let i = 0; i <= s1.length; i++) {
+        let lastValue = i;
+        for (let j = 0; j <= s2.length; j++) {
+            if (i === 0) costs[j] = j;
+            else if (j > 0) {
+                let newVal = costs[j - 1];
+                if (s1.charAt(i - 1) !== s2.charAt(j - 1)) newVal = Math.min(Math.min(newVal, lastValue), costs[j]) + 1;
+                costs[j - 1] = lastValue; lastValue = newVal;
+            }
+        }
+        if (i > 0) costs[s2.length] = lastValue;
+    }
+    return costs[s2.length];
+}
+
+function updateLottie(state) {
+    const player = document.getElementById('lottie-canvas');
+    if (!player) return;
+    const assets = {
+        'idle': 'https://lottie.host/568e8594-a319-4491-bf10-a0f5c012fc76/6S3urqybG5.json',
+        'thinking': 'https://lottie.host/e742c203-f211-4521-a5aa-96cd5248d4b8/CKCd2cqmGj.json',
+        'talking': 'https://lottie.host/79a24a65-7d74-4ff7-8ac5-bb3eeaa49073/4BES9eWBuE.json'
+    };
+    player.load(assets[state]);
+}
+
+function displayResponse(text) { 
+    const responseEl = document.getElementById('response-text');
+    if (responseEl) responseEl.innerHTML = text.replace(/\n/g, '<br>'); 
+}
+
+function updateInteractionTime() { lastSeenTime = Date.now(); if (!isAtHome) restartIdleTimer(); }
+function restartIdleTimer() { if (idleTimer) clearTimeout(idleTimer); if (!isAtHome) idleTimer = setTimeout(resetToHome, IDLE_TIME_LIMIT); }
+function resetToHome() { if (window.isBusy || !isAtHome) return; isAtHome = true; window.hasGreeted = false; forceStopAllMic(); displayResponse(window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone."); renderFAQButtons(); }
+
+async function initCamera() {
+    try {
+        video = document.getElementById('video'); 
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 } });
+        if (video) { video.srcObject = stream; video.onloadedmetadata = () => { video.play(); loadFaceModels(); }; }
+    } catch (err) {}
+}
+
+async function loadFaceModels() {
+    const MODEL_URL = 'https://taiyang12300.github.io/model/';
+    try {
+        await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+        await faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL);
+        setupWakeWord(); 
+        requestAnimationFrame(detectPerson);
+    } catch (err) {}
+}
+
+async function detectPerson() {
+    if (!isDetecting || typeof faceapi === 'undefined' || !video) { requestAnimationFrame(detectPerson); return; }
+    const now = Date.now();
+    if (now - lastDetectionTime < DETECTION_INTERVAL) { requestAnimationFrame(detectPerson); return; }
+    lastDetectionTime = now;
+    try {
+        const predictions = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withAgeAndGender();
+        const face = predictions.find(f => f.detection.score > 0.55);
+        if (face) {
+            if (personInFrameTime === null) personInFrameTime = now;
+            if ((now - personInFrameTime) >= 2000 && isAtHome && !window.isBusy && !window.hasGreeted) { greetUser(); }
+            lastSeenTime = now; 
+        }
+    } catch (e) {}
+    requestAnimationFrame(detectPerson);
+}
+
+function greetUser() {
+    if (window.hasGreeted || window.isBusy) return;
+    isAtHome = false; window.hasGreeted = true; 
+    let finalGreet = "สวัสดีครับ มีอะไรให้น้องนำทางช่วยไหมครับ?";
+    displayResponse(finalGreet);
+    speak(finalGreet, () => { window.isBusy = false; window.allowWakeWord = true; }, true); 
+}
+
+function stopAllSpeech() { window.speechSynthesis.cancel(); window.isBusy = false; updateLottie('idle'); }
+
+function setupWakeWord() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+    wakeWordRecognition = new SpeechRecognition();
+    wakeWordRecognition.continuous = true; 
+    wakeWordRecognition.lang = 'th-TH';
+    wakeWordRecognition.onresult = (event) => {
+        let transcript = event.results[event.results.length - 1][0].transcript;
+        if (transcript.includes("น้องนำทาง") || transcript.includes("นำทาง")) {
+            stopWakeWord();
+            speak("ครับผม มีอะไรให้ช่วยไหมครับ?");
+        }
+    };
+}
+
+function startWakeWord() {
+    if (!window.allowWakeWord || isAtHome || window.isListening || window.isBusy) return;
+    isWakeWordActive = true;
+    try { wakeWordRecognition.start(); } catch (e) {}
+}
+
+function stopWakeWord() {
+    isWakeWordActive = false; 
+    if (wakeWordRecognition) { try { wakeWordRecognition.abort(); } catch (e) {} }
+}
+
+async function logQuestionToSheet(userQuery) {
+    if (!userQuery || !GAS_URL) return;
+    try { await fetch(`${GAS_URL}?action=logOnly&query=${encodeURIComponent(userQuery)}`, { mode: 'no-cors' }); } catch (e) {}
+}
+
+document.addEventListener('DOMContentLoaded', initDatabase);
