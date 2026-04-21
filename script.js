@@ -103,71 +103,67 @@ function playAudioLink(url, callback = null) {
 }
 
 // --- 🔍 4. ระบบประมวลผลคำตอบ & คัดกรองใบขับขี่ (License System) ---
-
 async function getResponse(userQuery) {
     if (!userQuery || !window.localDatabase) return;
     logQuestionToSheet(userQuery); stopAllSpeech();
     isAtHome = false; window.isBusy = true;
     updateLottie('thinking');
 
-    const query = userQuery.toLowerCase().trim().replace(/[?？!！]/g, "");
-    
-        // ✅ ระบบคัดกรองใบขับขี่
-    if ((query.includes("ใบขับขี่") || query.includes("license")) && 
-        (query.includes("ต่อ") || query.includes("renew")) && 
-        !query.includes("ชั่วคราว") && !query.includes("5 ปี")) {
+    const query = userQuery.toLowerCase().trim();
+
+    // ✅ คัดกรองใบขับขี่เบื้องต้น
+    if ((query.includes("ใบขับขี่") || query.includes("ต่อ")) && 
+        !query.includes("ชั่วคราว") && !query.includes("5 ปี") && !query.includes("2 ปี")) {
         
-        forceStopAllMic();
         const askMsg = "ใบขับขี่ของท่านเป็นแบบชั่วคราว หรือแบบ 5 ปีครับ?";
         displayResponse(askMsg); 
-
-        // ย้ายการสร้างปุ่มมาไว้ตรงนี้เลย ไม่ต้องรอพูดจบ เพื่อความไว
         renderOptionButtons([
-            { th: "แบบชั่วคราว (2 ปี)", action: () => startLicenseCheck("แบบชั่วคราว (2 ปี)") },
-            { th: "แบบ 5 ปี", action: () => startLicenseCheck("แบบ 5 ปี") }
+            { th: "แบบชั่วคราว (2 ปี)", action: () => getResponse("ต่อใบขับขี่ชั่วคราว") },
+            { th: "แบบ 5 ปี", action: () => getResponse("ต่อใบขับขี่ 5 ปี") }
         ]);
-
-        speak(askMsg, () => { 
-            window.isBusy = false; 
-        });
+        speak(askMsg, () => { window.isBusy = false; });
         return;
     }
 
     try {
         let bestMatch = { answer: "", score: 0, audio: "", checklist: "" };
+        
         for (const sheetName of Object.keys(window.localDatabase)) {
             if (["Lottie_State", "Config", "FAQ"].includes(sheetName)) continue;
+            
             window.localDatabase[sheetName].forEach(item => {
                 const rawKeys = item[0] ? item[0].toString().toLowerCase() : "";
                 if (!rawKeys) return;
+                
                 const keyList = rawKeys.split(/[,|\n]/).map(k => k.trim());
-                
-                let ans = item[1] || "";
-                let aud = item[3] || ""; // ลิงก์เสียง
-                let chk = item[4] || ""; // Checklist
-                
                 for (const key of keyList) {
-                    let score = (query === key) ? 10.0 : calculateSimilarity(query, key);
+                    let score = calculateSimilarity(query, key);
+                    
+                    // 💡 เพิ่มโบนัสคะแนนถ้ามีคำสำคัญตรงกันเป๊ะ (เช่น '2 ปี' หรือ '5 ปี')
+                    if (query.includes("2 ปี") && key.includes("2 ปี")) score += 0.3;
+                    if (query.includes("5 ปี") && key.includes("5 ปี")) score += 0.3;
+
                     if (score > bestMatch.score) {
-                        bestMatch = { answer: ans, score: score, audio: aud, checklist: chk };
+                        bestMatch = { answer: item[1], score: score, audio: item[3], checklist: item[4] };
                     }
                 }
             });
         }
 
-        if (bestMatch.score >= 0.45 && bestMatch.answer !== "") { 
+        if (bestMatch.score >= 0.5) { 
             displayResponse(bestMatch.answer); 
-            if (bestMatch.checklist) renderChecklist(bestMatch.checklist); // แสดง Checklist + Print
+            if (bestMatch.checklist) renderChecklist(bestMatch.checklist); 
 
-            if (bestMatch.audio) playAudioLink(bestMatch.audio); // เล่นเสียงจากลิงก์
-            else speak(bestMatch.answer); // พูดปกติ
+            if (bestMatch.audio) playAudioLink(bestMatch.audio);
+            else speak(bestMatch.answer);
         } else { 
-            const noDataMsg = "ขออภัยครับ น้องหาข้อมูลไม่พบ";
+            const noDataMsg = "ขออภัยครับ น้องหาข้อมูลไม่พบ กรุณาลองสอบถามใหม่อีกครั้ง";
             displayResponse(noDataMsg); speak(noDataMsg);
             setTimeout(renderFAQButtons, 3000); 
         }
     } catch (err) { releaseSystemLock(); }
 }
+
 
 function startLicenseCheck(type) {
     let searchKey = (type === "แบบชั่วคราว (2 ปี)") ? "ต่อใบขับขี่ชั่วคราว" : "ต่อใบขับขี่ 5 ปี";
@@ -180,60 +176,63 @@ function renderChecklist(checklistText) {
     const container = document.getElementById('faq-container');
     if (!container) return;
     
-    const listHtml = checklistText.split('\n').map(item => `<li>✅ ${item}</li>`).join('');
-    const checklistCard = document.createElement('div');
-    checklistCard.className = 'checklist-card';
-    checklistCard.innerHTML = `
-        <div style="text-align:left; background:white; padding:15px; border-radius:10px; margin-bottom:10px; border:2px solid #ddd;">
-            <strong style="color:#2d5a27;">📋 รายการที่ต้องเตรียม:</strong>
-            <ul style="list-style:none; padding:0; margin:10px 0;">${listHtml}</ul>
-            <button onclick="window.print()" class="print-btn" style="width:100%; padding:10px; background:#444; color:white; border:none; border-radius:5px; cursor:pointer;">
-                🖨️ พิมพ์รายการเตรียมตัว
-            </button>
+    const items = checklistText.split('\n').filter(t => t.trim() !== "");
+    let checklistHtml = items.map((item, i) => `
+        <div class="check-item" style="margin: 10px 0; display: flex; align-items: center;">
+            <input type="checkbox" id="chk-${i}" class="doc-checkbox" style="width: 20px; height: 20px; margin-right: 10px;">
+            <label for="chk-${i}" style="font-size: 1.1rem;">${item}</label>
         </div>
+    `).join('');
+
+    const card = document.createElement('div');
+    card.className = 'checklist-card';
+    card.style = "background:#fff; padding:20px; border-radius:15px; border:2px solid #2d5a27; margin-bottom:15px;";
+    card.innerHTML = `
+        <strong style="color:#2d5a27; font-size:1.2rem;">📋 สิ่งที่ต้องเตรียมมา:</strong>
+        <div style="margin: 15px 0;">${checklistHtml}</div>
+        <button id="btnPrint" class="print-btn" style="width:100%; padding:12px; background:#444; color:#fff; border-radius:8px; border:none; display:none;">
+            🖨️ พิมพ์รายการเอกสาร
+        </button>
     `;
-    container.prepend(checklistCard);
+    
+    container.innerHTML = "";
+    container.appendChild(card);
+
+    // ระบบเช็คว่าติ๊กครบหรือยังถึงจะให้ปริ้น
+    const checkboxes = card.querySelectorAll('.doc-checkbox');
+    const btnPrint = card.querySelector('#btnPrint');
+    checkboxes.forEach(chk => {
+        chk.addEventListener('change', () => {
+            const allChecked = Array.from(checkboxes).every(c => c.checked);
+            btnPrint.style.display = allChecked ? 'block' : 'none';
+        });
+    });
+
+    btnPrint.onclick = () => {
+        window.print();
+        speak("กำลังเตรียมพิมพ์เอกสารให้ครับ");
+    };
 }
 
 function renderOptionButtons(options) {
     const container = document.getElementById('faq-container');
-    if (!container) {
-        console.error("❌ ไม่พบ faq-container ในหน้าเว็บ");
-        return;
-    }
-
-    // ล้างปุ่ม FAQ เดิมออก
+    if (!container) return;
     container.innerHTML = "";
 
     options.forEach(opt => {
         const btn = document.createElement('button');
-        
-        // กำหนด Type ให้ชัดเจนเพื่อป้องกัน Browser เข้าใจผิดว่าเป็น Submit
         btn.setAttribute('type', 'button'); 
-        
         btn.className = 'faq-btn';
         btn.innerText = opt.th;
-
-        // ตกแต่งเพิ่มเล็กน้อยเพื่อให้เด่นกว่าปุ่ม FAQ ปกติ (Optional)
-        btn.style.borderColor = "#4CAF50"; 
-        btn.style.fontWeight = "bold";
-
+        btn.style = "border: 2px solid #2d5a27; background: #e8f5e9; font-weight: bold; padding: 12px; margin: 5px; border-radius: 10px; cursor: pointer;";
         btn.onclick = (e) => {
-            if (e) e.preventDefault(); // ป้องกันการทำงานซ้อนทับ
-            console.log("👆 Clicked Option:", opt.th);
-            
+            e.preventDefault();
             stopAllSpeech(); 
             opt.action(); 
-            
-            return false;
         };
-        
         container.appendChild(btn);
     });
-    
-    console.log("✅ Rendered " + options.length + " option buttons.");
 }
-
 // --- 🏠 6. ระบบ Splash Screen & Database Init ---
 
 async function initDatabase() {
