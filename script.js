@@ -45,58 +45,43 @@ function initSpeechRecognition() {
         if (micBtn) micBtn.classList.add('recording'); 
         const statusText = document.getElementById('statusText');
         if (statusText) statusText.innerText = (window.currentLang === 'th') ? "กำลังฟัง..." : "Listening...";
-        console.log("🎙️ [STT] เริ่มการทำงาน (ค้างสถานะไว้รอรับคำถาม)");
     };
 
     window.recognition.onresult = (e) => {
-        if (window.micTimer) clearTimeout(window.micTimer);
-        let transcript = "";
-        for (let i = e.resultIndex; i < e.results.length; ++i) {
-            transcript += e.results[i][0].transcript;
-        }
+    if (window.micTimer) clearTimeout(window.micTimer);
+    let transcript = "";
+    for (let i = e.resultIndex; i < e.results.length; ++i) {
+        transcript += e.results[i][0].transcript;
+    }
 
-        if (transcript.trim() !== "") {
-            const inputField = document.getElementById('userInput');
-            if (inputField) inputField.value = transcript;
+    if (transcript.trim() !== "") {
+        const inputField = document.getElementById('userInput');
+        if (inputField) inputField.value = transcript;
+        
+        // หน่วงเวลา 3 วินาทีหลังจากหยุดพูด
+        window.micTimer = setTimeout(() => {
+            // 🚀 แก้ไขลำดับตรงนี้ครับ
+            const finalQuery = transcript; // 1. ดึงข้อความมาเก็บไว้ในตัวแปรชั่วคราวก่อน
+            if (inputField) inputField.value = ''; // 2. ล้างช่อง input ทันทีให้ว่างเปล่า
             
-            // 🚀 ปรับระยะเวลา 3 วินาที (3000ms) ตามที่คุณต้องการ
-            window.micTimer = setTimeout(() => {
-                const finalQuery = transcript.trim();
-                
-                // 1. ล้างช่อง input ทันทีให้ว่างเปล่า (ป้องกันข้อความค้างในรูป 59478.jpg)
-                if (inputField) inputField.value = ''; 
-                
-                // 2. หยุดการรับเสียงชั่วคราวเพื่อส่งประมวลผล
-                window.recognition.stop(); 
-                
-                // 3. ส่งข้อความไปหาคำตอบ
-                processQuery(finalQuery); 
-                console.log("✅ [STT] ส่งข้อมูลและล้างหน้าจอแล้ว:", finalQuery);
-            }, 3000); 
-        }
+            processQuery(finalQuery); // 3. ค่อยส่งข้อความที่เก็บไว้ไปหาคำตอบ
+            window.recognition.stop(); 
+        }, 3000); // ระยะเวลาเปิดไมค์ที่คุณตั้งไว้ 3 วินาที
+      }
     };
 
     window.recognition.onend = () => { 
         stopListening(); 
-        window.isListening = false;
-        
-        // 🔄 กลับไปโหมด Wake Word ทันทีเมื่อไมค์หลักจบงาน
+        // เมื่อไมค์ STT จบ ให้กลับไปโหมด Wake Word (ถ้าไม่ได้ยุ่งอยู่และไม่อยู่หน้า Home)
         if (typeof startWakeWord === "function" && !window.isBusy && !isAtHome) {
-            console.log("🔄 [STT End] กลับสู่โหมดรอเรียก 'น้องนำทาง'...");
             startWakeWord();
         }
     };
 
-    // แก้ไขจุดสะกดผิดจาก wakeWordRecognition เป็น window.recognition เพื่อความถูกต้องของฟังก์ชันนี้
-    window.recognition.onerror = (event) => {
-        if (event.error === 'no-speech') return;
-        console.error("❌ [STT Error]:", event.error);
+    window.recognition.onerror = (e) => {
+        if (e.error === 'no-speech') return;
+        console.error("Mic Error:", e.error);
         stopListening();
-        
-        // ถ้า Error แต่คนยังอยู่ ให้พยายามเปิด Wake Word ใหม่
-        if (!isAtHome && !window.isBusy) {
-            startWakeWord();
-        }
     };
 }
 
