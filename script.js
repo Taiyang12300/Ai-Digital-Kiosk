@@ -93,30 +93,14 @@ function initSpeechRecognition() {
     };
 
         window.recognition.onend = () => { 
-        // 1. เคลียร์สถานะ UI และตัวแปรควบคุมหลัก
         stopListening(); 
         window.isListening = false;
         
-        // 2. 🚩 [สำคัญ] เคลียร์สถานะโหมดถ้าปัจจุบันคือ STT
-        // เพื่อบอกระบบว่า "ไมค์ว่างแล้ว" โหมดอื่นสามารถจองต่อได้
-        if (window.micMode === 'stt') {
-            window.micMode = 'none';
-        }
-        
-        console.log("🏁 [STT End] ไมค์หลักปิดการทำงานแล้ว");
-
-        // 3. 🔄 ตรวจสอบเงื่อนไขเพื่อกลับไปโหมด Wake Word (Standby)
-        // ต้องมั่นใจว่า AI ไม่ได้กำลังพูด (isBusy) และไม่ได้อยู่หน้า Home
-        if (typeof startWakeWord === "function" && !window.isBusy && !isAtHome) {
-            
-            // ใช้ setTimeout เล็กน้อย (200ms) เพื่อให้ Browser คืนสิทธิ์การใช้ Hardware ไมค์
-            // ป้องกัน Error: "recognition already started"
+        // 🚩 ถ้าไม่มีคำถาม (ไมค์ตัดเอง) ให้กลับไปโหมด Wake Word
+        if (window.micMode === 'stt' && !window.isBusy && !isAtHome) {
             setTimeout(() => {
-                if (window.micMode === 'none') { // เช็คอีกครั้งว่าไม่มีใครแย่งเปิดไปก่อน
-                    console.log("🔄 [System] ส่งไม้ต่อให้ 'น้องนำทาง' (Wake Word)...");
-                    startWakeWord();
-                }
-            }, 200);
+                switchMicMode('wakeword');
+            }, 500);
         }
     };
 
@@ -150,26 +134,15 @@ function initSpeechRecognition() {
 }
 
 function toggleListening() { 
-    // 🚀 MASTER RESET: ขัดจังหวะทันทีเมื่อกดปุ่ม
     window.speechSynthesis.cancel(); 
-    
-    // หยุดไฟล์เสียงอื่นๆ
-    const audios = document.querySelectorAll('audio');
-    audios.forEach(a => { a.pause(); a.currentTime = 0; });
+    window.isBusy = false;
 
-    if (typeof forceStopAllMic === "function") forceStopAllMic(); 
-    if (window.micTimer) clearTimeout(window.micTimer);
-    
-    window.isBusy = false; // ปลดล็อคสถานะเพื่อให้ยอมฟังใหม่
-
-    if (window.isListening) { 
-        if (window.recognition) window.recognition.stop(); 
+    // ถ้าเปิด STT อยู่แล้วกดซ้ำ = ปิด แล้วกลับไป Wake Word
+    if (window.isListening || window.micMode === 'stt') { 
+        switchMicMode('wakeword');
     } else { 
-        try {
-            if (window.recognition) {
-                window.recognition.start(); 
-            }
-        } catch (e) { console.warn("Mic Start Error:", e); }
+        // ถ้าอยู่ในโหมดอื่น (เช่น Wake Word) แล้วกดปุ่ม = บังคับเข้าโหมด STT ทันที
+        switchMicMode('stt');
     } 
 }
 
@@ -221,8 +194,32 @@ function completeLoading() {
     }, 600);
 }
 
-// --- 🚩 ฟังก์ชันกลางสำหรับจัดการสิทธิ์และการเล่นเสียง ---
+function switchMicMode(newMode) {
+    console.log(`🔄 Switching mode: ${window.micMode} -> ${newMode}`);
+    
+    // 1. ปิดไมค์ทุกตัวก่อนเสมอ
+    if (wakeWordRecognition) { try { wakeWordRecognition.abort(); } catch(e) {} }
+    if (window.recognition) { try { window.recognition.abort(); } catch(e) {} }
+    
+    window.micMode = newMode;
+    window.isListening = false;
+    
+    // 2. เปิดไมค์ตามโหมดใหม่ที่ต้องการ
+    if (newMode === 'wakeword') {
+        if (!window.isBusy && !isAtHome) {
+            isWakeWordActive = true;
+            try { wakeWordRecognition.start(); } catch(e) { console.warn("WakeWord Start Error:", e); }
+        }
+    } 
+    else if (newMode === 'stt') {
+        if (!window.isBusy) {
+            window.isListening = true;
+            try { window.recognition.start(); } catch(e) { console.warn("STT Start Error:", e); }
+        }
+    }
+}
 
+// --- 🚩 ฟังก์ชันกลางสำหรับจัดการสิทธิ์และการเล่นเสียง ---
 function forceStopAllMic() {
     // 1. 🚩 ล้างสถานะโหมดกลางเป็นโมฆะทันที
     window.micMode = 'none'; 
@@ -320,35 +317,22 @@ function setupWakeWord() {
         console.log("👂 [WakeWord] สแตนด์บายรอเรียกชื่อ...");
     };
 
-    wakeWordRecognition.onresult = (event) => {
-        // เช็คความปลอดภัยก่อนประมวลผล
-        if (!window.allowWakeWord || window.isBusy || window.isListening) return;
+    wakeWordRecognition.onresult
+    if (transcript.includes("น้องนำทาง") || transcript.includes("นำทาง")) {
+        switchMicMode('none'); // หยุดฟังทันที
+        window.isBusy = true;     
 
-        let transcript = "";
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-            transcript += event.results[i][0].transcript;
-        }
+        let msg = "ครับผม มีอะไรให้ช่วยไหมครับ?";
+        displayResponse(msg);
 
-        if (transcript.includes("น้องนำทาง") || transcript.includes("นำทาง")) {
-            // 🚀 พบคำสั่ง: ปิดไมค์ทุกตัวทันทีเพื่อเตรียมพูด
-            isWakeWordActive = false; 
-            forceStopAllMic();        
-            window.isBusy = true;     
-
-            let msg = "";
-            if (window.currentLang === 'th') {
-                const affirmations = ["ครับผม", "สวัสดีครับ", "น้องนำทางมาแล้วครับ"];
-                const questions = ["มีอะไรให้ช่วยไหมครับ?", "สอบถามข้อมูลได้เลยนะครับ"];
-                msg = `${affirmations[Math.floor(Math.random() * affirmations.length)]} ${questions[Math.floor(Math.random() * questions.length)]}`;
-            } else {
-                msg = "Yes! How can I help you?";
-            }
-            
-            displayResponse(msg);
-            setTimeout(() => { speak(msg); }, 300); 
-        }
-    };
-
+        // 🚀 ขานรับจบแล้ว "เปิดไมค์ STT" ทันทีตามลูปที่คุณต้องการ
+        setTimeout(() => { 
+            speak(msg, () => {
+                switchMicMode('stt'); 
+            }); 
+        }, 300); 
+    }
+    
     wakeWordRecognition.onend = () => {
         // 🚩 [ปรับปรุง] ถ้าปัจจุบันคือโหมด wakeword และเงื่อนไขครบ ให้ Restart ตัวเอง
         if (window.micMode === 'wakeword' && !isAtHome && personInFrameTime !== null && !window.isBusy && !window.isListening && isWakeWordActive) {
@@ -453,6 +437,7 @@ function resetToHome() {
     }
     if (isAtHome) return; 
     stopAllSpeech(); 
+    switchMicMode('none');
     forceStopAllMic(); 
     forceUnmute(); 
     window.hasGreeted = false;
@@ -658,8 +643,7 @@ async function processQuery(query) {
 function speak(text, callback = null, isGreeting = false) {
     if (!text || window.isMuted) return;
     
-    forceStopAllMic(); 
-    window.speechSynthesis.cancel();
+    switchMicMode('none'); // ปิดไมค์ทันทีที่เริ่มพูด
     window.isBusy = true; 
 
     const msg = new SpeechSynthesisUtterance(text.replace(/<[^>]*>?/gm, '').replace(/[*#-]/g, ""));
@@ -674,24 +658,20 @@ function speak(text, callback = null, isGreeting = false) {
 
         if (callback) callback();
 
-        if (!isAtHome) {
-            // หน่วงเวลา 2 วินาทีเพื่อให้ระบบเสียงนิ่งก่อนเปิดไมค์รับคำสั่งต่อ
+        if (!isAtHome && personInFrameTime !== null) {
             setTimeout(() => {
-                if (window.isBusy) return;
-
+                // 🚩 ถ้าเป็นการทักทายครั้งแรก (Greeting) -> เปิด Wake Word รอเรียกชื่อ
                 if (isGreeting) {
                     window.allowWakeWord = true;
-                    startWakeWord(); 
-                } else {
-                    if (!window.isListening && typeof toggleListening === "function") {
-                        console.log("🎤 [Auto] เปิดปุ่มไมค์รอคำถามต่อ...");
-                        toggleListening(); 
-                    }
+                    switchMicMode('wakeword'); 
+                } 
+                // 🚩 ถ้าเป็นการตอบคำถามเสร็จ -> กลับไปโหมด Wake Word (ดักฟังเงียบๆ)
+                else {
+                    switchMicMode('wakeword');
                 }
-            }, 2000); 
+            }, 1000); 
         }
     };
-
     msg.onerror = () => { window.isBusy = false; updateLottie('idle'); };
     window.speechSynthesis.speak(msg);
 }
