@@ -538,7 +538,8 @@ function speak(text, callback = null, isGreeting = false) {
     let phoneticText = text.replace(/Smart Queue/gi, "สมาร์ท คิว")
                            .replace(/DLT/gi, "ดีแอลที");
     
-    const msg = new SpeechSynthesisUtterance(text.replace(/<[^>]*>?/gm, '').replace(/[*#-]/g, ""));
+    // 3. ใช้ phoneticText ในการสร้างเสียงพูด (สำคัญมาก!)
+    const msg = new SpeechSynthesisUtterance(phoneticText.replace(/<[^>]*>?/gm, '').replace(/[*#-]/g, ""));
     msg.lang = 'th-TH';
     msg.rate = 1.05;
     
