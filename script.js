@@ -535,6 +535,9 @@ function speak(text, callback = null, isGreeting = false) {
     window.speechSynthesis.cancel();
     window.isBusy = true; 
 
+    let phoneticText = text.replace(/Smart Queue/gi, "สมาร์ท คิว")
+                           .replace(/DLT/gi, "ดีแอลที");
+    
     const msg = new SpeechSynthesisUtterance(text.replace(/<[^>]*>?/gm, '').replace(/[*#-]/g, ""));
     msg.lang = 'th-TH';
     msg.rate = 1.05;
