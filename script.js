@@ -112,7 +112,7 @@ async function getResponse(userQuery) {
 
     const query = userQuery.toLowerCase().trim().replace(/[?？!！]/g, "");
     
-    // ✅ ระบบคัดกรองใบขับขี่
+        // ✅ ระบบคัดกรองใบขับขี่
     if ((query.includes("ใบขับขี่") || query.includes("license")) && 
         (query.includes("ต่อ") || query.includes("renew")) && 
         !query.includes("ชั่วคราว") && !query.includes("5 ปี")) {
@@ -120,12 +120,15 @@ async function getResponse(userQuery) {
         forceStopAllMic();
         const askMsg = "ใบขับขี่ของท่านเป็นแบบชั่วคราว หรือแบบ 5 ปีครับ?";
         displayResponse(askMsg); 
+
+        // ย้ายการสร้างปุ่มมาไว้ตรงนี้เลย ไม่ต้องรอพูดจบ เพื่อความไว
+        renderOptionButtons([
+            { th: "แบบชั่วคราว (2 ปี)", action: () => startLicenseCheck("แบบชั่วคราว (2 ปี)") },
+            { th: "แบบ 5 ปี", action: () => startLicenseCheck("แบบ 5 ปี") }
+        ]);
+
         speak(askMsg, () => { 
             window.isBusy = false; 
-            renderOptionButtons([
-                { th: "แบบชั่วคราว (2 ปี)", action: () => startLicenseCheck("แบบชั่วคราว (2 ปี)") },
-                { th: "แบบ 5 ปี", action: () => startLicenseCheck("แบบ 5 ปี") }
-            ]);
         });
         return;
     }
@@ -194,12 +197,41 @@ function renderChecklist(checklistText) {
 
 function renderOptionButtons(options) {
     const container = document.getElementById('faq-container');
-    if (!container) return; container.innerHTML = "";
+    if (!container) {
+        console.error("❌ ไม่พบ faq-container ในหน้าเว็บ");
+        return;
+    }
+
+    // ล้างปุ่ม FAQ เดิมออก
+    container.innerHTML = "";
+
     options.forEach(opt => {
-        const btn = document.createElement('button'); btn.className = 'faq-btn'; btn.innerText = opt.th;
-        btn.onclick = () => { stopAllSpeech(); opt.action(); };
+        const btn = document.createElement('button');
+        
+        // กำหนด Type ให้ชัดเจนเพื่อป้องกัน Browser เข้าใจผิดว่าเป็น Submit
+        btn.setAttribute('type', 'button'); 
+        
+        btn.className = 'faq-btn';
+        btn.innerText = opt.th;
+
+        // ตกแต่งเพิ่มเล็กน้อยเพื่อให้เด่นกว่าปุ่ม FAQ ปกติ (Optional)
+        btn.style.borderColor = "#4CAF50"; 
+        btn.style.fontWeight = "bold";
+
+        btn.onclick = (e) => {
+            if (e) e.preventDefault(); // ป้องกันการทำงานซ้อนทับ
+            console.log("👆 Clicked Option:", opt.th);
+            
+            stopAllSpeech(); 
+            opt.action(); 
+            
+            return false;
+        };
+        
         container.appendChild(btn);
     });
+    
+    console.log("✅ Rendered " + options.length + " option buttons.");
 }
 
 // --- 🏠 6. ระบบ Splash Screen & Database Init ---
