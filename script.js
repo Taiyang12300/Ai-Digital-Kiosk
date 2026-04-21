@@ -349,24 +349,65 @@ function startLicenseCheck(type) {
 
 function showLicenseChecklist(type, expiry) {
     const isThai = window.currentLang === 'th';
-    const isTemp = type.includes("ชั่วคราว");
+    const isTemp = type.includes("ชั่วคราว") || type.includes("2 ปี");
     let docs = ["บัตรประชาชน (ตัวจริง)", "ใบขับขี่เดิม", "ใบรับรองแพทย์ (ไม่เกิน 1 เดือน)"];
-    let note = (expiry === 'normal') ? "ต่อได้ทันที" : "ต้องสอบข้อเขียนใหม่";
-    
+    let note = "";
+
+    if (isTemp) {
+        if (expiry === 'normal') note = "ไม่ต้องอบรม ต่อได้ทันที";
+        else if (expiry === 'over1') note = "อบรมสำนักงาน 5 ชั่วโมง และสอบข้อเขียนใหม่";
+        else if (expiry === 'over3') note = "อบรมสำนักงาน 5 ชั่วโมง สอบข้อเขียนและสอบขับรถใหม่";
+    } else {
+        if (expiry === 'normal') { docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)"); note = "อบรมออนไลน์ 1 ชม. และต่อได้ทันที"; }
+        else if (expiry === 'over1') { docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)"); note = "อบรมออนไลน์ 2 ชม. และต้องสอบข้อเขียนใหม่"; }
+        else if (expiry === 'over3') { note = "ต้องอบรม 5 ชม. ที่ขนส่งเท่านั้น + สอบข้อเขียน + สอบขับรถ"; }
+    }
+
     let checklistHTML = "";
     docs.forEach((d, idx) => {
-        checklistHTML += `<div class="check-item"><input type="checkbox" class="doc-check" id="chk-${idx}" onchange="checkChecklist()"><label for="chk-${idx}">${d}</label></div>`;
+        // แก้ไขให้รองรับการคลิกที่แถว และมั่นใจว่าเรียก checkChecklist()
+        checklistHTML += `
+            <div class="check-item" style="cursor:pointer; margin-bottom:10px;" onclick="const c = document.getElementById('chk-${idx}'); c.checked = !c.checked; checkChecklist();">
+                <input type="checkbox" class="doc-check" id="chk-${idx}" onchange="checkChecklist()" onclick="event.stopPropagation()">
+                <label style="cursor:pointer; margin-left:8px;">${d}</label>
+            </div>`;
     });
-    const resultHTML = `<div class="checklist-card"><strong>${type}</strong><br><small>💡 ${note}</small><hr>${checklistHTML}<button id="btnPrintGuide" style="display:none;" onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}'); resetToHome();">🖨️ ปริ้นใบนำทาง</button></div>`;
+
+    const resultHTML = `
+        <div class="checklist-card" style="text-align:left; padding:15px; border-radius:12px; background:#fff; border:1px solid #ddd;">
+            <strong style="font-size:22px; color:#2c3e50;">${type}</strong><br>
+            <div style="background:#e8f0fe; color:#1a73e8; padding:10px; border-radius:8px; margin:10px 0; font-weight:bold; font-size:16px;">💡 ${note}</div>
+            <hr style="border:0; border-top:1px solid #eee; margin:15px 0;">
+            ${checklistHTML}
+            <button id="btnPrintGuide" 
+                style="display:none; width:100%; padding:15px; background:#27ae60; color:white; border:none; border-radius:10px; font-size:18px; font-weight:bold; margin-top:15px; cursor:pointer; transition: 0.3s;" 
+                onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}'); setTimeout(() => { resetToHome(); }, 2000);">
+                🖨️ ปริ้นใบนำทาง
+            </button>
+        </div>`;
+
     displayResponse(resultHTML);
-    speak(isThai ? "กรุณาตรวจสอบเอกสารและปริ้นใบนำทางครับ" : "Please check items and print.");
+    speak(isThai ? "กรุณาตรวจสอบเอกสารให้ครบทุกข้อ เพื่อปริ้นใบนำทางครับ" : "Please check all items to print.");
 }
 
 function checkChecklist() {
+    updateInteractionTime(); 
     const checks = document.querySelectorAll('.doc-check');
     const printBtn = document.getElementById('btnPrintGuide');
-    const allChecked = Array.from(checks).every(c => c.checked);
-    if (printBtn) printBtn.style.display = allChecked ? 'block' : 'none';
+    
+    if (!printBtn) return;
+
+    // ตรวจสอบว่า checkbox ทุกอันถูกติ๊กหรือยัง
+    const allChecked = checks.length > 0 && Array.from(checks).every(c => c.checked);
+    
+    if (allChecked) {
+        // บังคับแสดงผลด้วยสไตล์ที่ชัดเจน
+        printBtn.style.display = 'block';
+        setTimeout(() => { printBtn.style.opacity = '1'; }, 10);
+        console.log("✅ Checklist Complete: Show Print Button");
+    } else {
+        printBtn.style.display = 'none';
+    }
 }
 
 // --- 🚩 4. ระบบประมวลผลคำตอบ ---
