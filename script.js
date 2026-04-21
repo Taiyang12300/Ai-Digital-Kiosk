@@ -161,75 +161,50 @@ async function getResponse(userQuery) {
     } catch (err) { releaseSystemLock(); }
 }
 
-function startLicenseExpiryCheck(type) {
-    const msg = `ใบขับขี่ ${type} ของท่าน หมดอายุหรือยังครับ?`;
+function startLicenseCheck(type) {
+    forceStopAllMic(); isAtHome = false;
+    const isThai = window.currentLang === 'th';
+    const msg = isThai ? `ใบขับขี่ ${type} ของท่าน หมดอายุหรือยังครับ?` : `Is your ${type} license expired?`;
     displayResponse(msg);
-    renderOptionButtons([
-        { th: "✅ ยังไม่หมดอายุ / ไม่เกิน 1 ปี", action: () => generateLicenseResult(type, 'normal') },
-        { th: "⚠️ หมดอายุเกิน 1 ปี (ไม่เกิน 3 ปี)", action: () => generateLicenseResult(type, 'over1') },
-        { th: "❌ หมดอายุเกิน 3 ปี", action: () => generateLicenseResult(type, 'over3') }
-    ]);
     speak(msg, () => { window.isBusy = false; });
+    renderOptionButtons([
+        { th: "✅ ยังไม่หมดอายุ / ไม่เกิน 1 ปี", en: "Not expired / Under 1 year", s_th: `ต่อใบขับขี่ ${type}`, s_en: `renew ${type} license`, action: () => { forceStopAllMic(); showLicenseChecklist(type, 'normal'); } },
+        { th: "⚠️ หมดอายุเกิน 1 ปี (แต่ไม่เกิน 3 ปี)", en: "Expired 1-3 years", s_th: `ต่อใบขับขี่ ${type} เกิน 1 ปี`, s_en: `renew ${type} over 1 year`, action: () => { forceStopAllMic(); showLicenseChecklist(type, 'over1'); } },
+        { th: "❌ หมดอายุเกิน 3 ปี", en: "Expired over 3 years", s_th: `ต่อใบขับขี่ ${type} เกิน 3 ปี`, s_en: `renew ${type} over 3 year`, action: () => { forceStopAllMic(); showLicenseChecklist(type, 'over3'); } }
+    ]);
 }
 
-function generateLicenseResult(type, expiry) {
+function showLicenseChecklist(type, expiry) {
+    const isThai = window.currentLang === 'th';
     const isTemp = type.includes("ชั่วคราว") || type.includes("2 ปี");
     let docs = ["บัตรประชาชน (ตัวจริง)", "ใบขับขี่เดิม", "ใบรับรองแพทย์ (ไม่เกิน 1 เดือน)"];
     let note = "";
-
     if (isTemp) {
         if (expiry === 'normal') note = "ไม่ต้องอบรม ต่อได้ทันที";
-        else if (expiry === 'over1') note = "อบรมสำนักงาน 5 ชม. และสอบข้อเขียนใหม่";
-        else if (expiry === 'over3') note = "อบรมสำนักงาน 5 ชม. สอบข้อเขียนและสอบขับรถใหม่";
+        else if (expiry === 'over1') note = "อบรมสำนักงาน 5 ชั่วโมง และสอบข้อเขียนใหม่";
+        else if (expiry === 'over3') note = "อบรมสำนักงาน 5 ชั่วโมง สอบข้อเขียนและสอบขับรถใหม่";
     } else {
-        if (expiry === 'normal') { docs.push("ผลอบรมออนไลน์ (e-Learning)"); note = "อบรมออนไลน์ 1 ชม. และต่อได้ทันที"; }
-        else if (expiry === 'over1') { docs.push("ผลอบรมออนไลน์ (e-Learning)"); note = "อบรมออนไลน์ 2 ชม. และสอบข้อเขียนใหม่"; }
-        else if (expiry === 'over3') { note = "ต้องอบรมที่ขนส่ง 5 ชม. + สอบข้อเขียน + สอบขับรถ"; }
+        if (expiry === 'normal') { docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)"); note = "อบรมออนไลน์ 1 ชม. และต่อได้ทันที"; }
+        else if (expiry === 'over1') { docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)"); note = "อบรมออนไลน์ 2 ชม. และต้องสอบข้อเขียนใหม่"; }
+        else if (expiry === 'over3') { note = "ต้องอบรม 5 ชม. ที่ขนส่งเท่านั้น + สอบข้อเขียน + สอบขับรถ"; }
     }
-    
-    renderChecklist(docs.join('\n'), `ใบขับขี่ ${type}`, note);
-    speak("กรุณาตรวจสอบเอกสารให้ครบตามเช็คลิส และติ๊กตรวจสอบให้ครบเพื่อพิมพ์ใบนำทาง");
+    let checklistHTML = "";
+    docs.forEach((d, idx) => {
+        checklistHTML += `<div class="check-item" onclick="document.getElementById('chk-${idx}').click()"><input type="checkbox" class="doc-check" id="chk-${idx}" onchange="checkChecklist()" onclick="event.stopPropagation()"><label>${d}</label></div>`;
+    });
+    const resultHTML = `<div class="checklist-card"><strong style="font-size:22px;">${type}</strong><br><div style="background:#e8f0fe; color:#1a73e8; padding:8px; border-radius:5px; margin-top:5px; font-weight:bold;">💡 ${note}</div><hr style="margin:15px 0; border:0; border-top:1px solid #eee;">${checklistHTML}<button id="btnPrintGuide" style="display:none;" onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}'); setTimeout(() => { resetToHome(); }, 2000);">🖨️ ปริ้นใบนำทาง</button></div>`;
+    displayResponse(resultHTML);
+    speak(isThai ? "กรุณาติ๊กตรวจสอบเอกสารให้ครบ เพื่อปริ้นใบนำทางครับ" : "Please check all items to print.");
 }
 
-// --- 📋 5. ระบบ Checklist & Printing ---
-
-function renderChecklist(checklistText, title = "สิ่งที่ต้องเตรียมมา", subNote = "") {
-    const container = document.getElementById('faq-container');
-    if (!container) return;
-    
-    const items = checklistText.split('\n').filter(t => t.trim() !== "");
-    let checklistHtml = items.map((item, i) => `
-        <div class="check-item" style="margin: 12px 0; display: flex; align-items: center;">
-            <input type="checkbox" id="chk-${i}" class="doc-checkbox" style="width: 25px; height: 25px; margin-right: 12px;">
-            <label for="chk-${i}" style="font-size: 1.2rem;">${item}</label>
-        </div>
-    `).join('');
-
-    container.innerHTML = `
-        <div class="checklist-card" style="background:#fff; padding:20px; border-radius:15px; border:2px solid #2d5a27; margin-bottom:15px; text-align:left;">
-            <strong style="color:#2d5a27; font-size:1.3rem;">📋 ${title}</strong>
-            ${subNote ? `<div style="color:#1a73e8; margin:5px 0; font-weight:bold;">💡 ${subNote}</div>` : ''}
-            <hr>
-            <div style="margin: 15px 0;">${checklistHtml}</div>
-            <button id="btnPrint" class="print-btn" style="width:100%; padding:15px; background:#2d5a27; color:#fff; border-radius:10px; border:none; display:none; font-weight:bold; font-size:1.1rem;">
-                🖨️ พิมพ์ใบนำทาง
-            </button>
-        </div>
-    `;
-
-    const checkboxes = container.querySelectorAll('.doc-checkbox');
-    const btnPrint = container.querySelector('#btnPrint');
-    checkboxes.forEach(chk => {
-        chk.addEventListener('change', () => {
-            const allChecked = Array.from(checkboxes).every(c => c.checked);
-            btnPrint.style.display = allChecked ? 'block' : 'none';
-        });
-    });
-
-    btnPrint.onclick = () => {
-        window.print();
-        speak("ยื่นใบนำทางพร้อมเอกสารที่งานใบอนุญาตขับรถชั้นที่ 2 ครับ");
-    };
+function checkChecklist() {
+    updateInteractionTime(); 
+    const checks = document.querySelectorAll('.doc-check');
+    const printBtn = document.getElementById('btnPrintGuide');
+    if (!printBtn) return;
+    const allChecked = checks.length > 0 && Array.from(checks).every(c => c.checked);
+    if (allChecked) { printBtn.classList.add('show-btn'); printBtn.style.setProperty('display', 'block', 'important'); }
+    else { printBtn.classList.remove('show-btn'); printBtn.style.setProperty('display', 'none', 'important'); }
 }
 
 function renderOptionButtons(options) {
