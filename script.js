@@ -119,16 +119,23 @@ function completeLoading() {
     const progBar = document.getElementById('splash-progress-bar');
     const statusTxt = document.getElementById('splash-status-text');
 
+    // 1. ดัน Progress ไปให้สุดก่อน
     if (progBar) progBar.style.width = '100%';
     if (statusTxt) statusTxt.innerText = 'ระบบพร้อมใช้งานแล้ว';
     
+    // 2. ทิ้งช่วงให้คนอ่านสถานะแวบหนึ่ง (600ms)
     setTimeout(() => {
         if (splash) {
-            splash.style.transition = 'opacity 0.8s ease';
+            // ใช้การ Transition ทั้งความจาง และการขยายตัว (Scale)
+            splash.style.transition = 'opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1), transform 0.8s cubic-bezier(0.4, 0, 0.2, 1)';
             splash.style.opacity = '0';
+            splash.style.transform = 'scale(1.1)'; // หน้าจอจะดูเหมือนลอยห่างออกไป
+            splash.style.pointerEvents = 'none'; // ป้องกันการกดทับขณะกำลังจาง
+
             setTimeout(() => {
                 splash.style.display = 'none';
                 
+                // เริ่มต้นระบบภายใน
                 isAtHome = true;
                 window.isBusy = false;
                 window.hasGreeted = false;
@@ -139,11 +146,11 @@ function completeLoading() {
 
                 renderFAQButtons(); 
                 initCamera();       
-                initSpeechRecognition(); // [NEW] เริ่มต้นระบบ STT
+                initSpeechRecognition(); 
                 console.log("🏠 [System] Home screen ready.");
-            }, 800);
+            }, 800); // รอจน Transition จบพอดี
         }
-    }, 500);
+    }, 600);
 }
 
 // --- 🚩 ฟังก์ชันกลางสำหรับจัดการสิทธิ์และการเล่นเสียง ---
@@ -639,17 +646,35 @@ function displayResponse(text) {
 
 async function initDatabase() {
     const progBar = document.getElementById('splash-progress-bar');
-    if (progBar) progBar.style.width = '30%'; 
+    let currentWidth = 0;
+    
+    // --- 🚀 ส่วนที่เพิ่ม: ตัวจำลองการโหลดให้ดูสมูท ---
+    // ค่อยๆ เพิ่มเปอร์เซ็นต์หลอกๆ ไปเรื่อยๆ ทุก 200ms
+    const progressInterval = setInterval(() => {
+        if (currentWidth < 90) { // ให้วิ่งไปรอที่ 90%
+            // สุ่มเพิ่มทีละ 1-3% เพื่อให้ดูเหมือนกำลังประมวลผลจริง
+            currentWidth += Math.random() * 3; 
+            if (progBar) progBar.style.width = currentWidth + '%';
+        }
+    }, 200);
+
     try {
         const res = await fetch(GAS_URL);
         const json = await res.json();
+        
         if (json.database) { 
             window.localDatabase = json.database; 
+            
+            // เมื่อโหลดเสร็จจริง ให้หยุดตัวจำลองแล้วดีดไป 100%
+            clearInterval(progressInterval);
             if (progBar) progBar.style.width = '100%';
-            completeLoading(); 
+            
+            // รอให้ Transition ของ CSS ทำงานจนสุดแถบ (ประมาณ 600ms) แล้วค่อยเปลี่ยนหน้า
+            setTimeout(completeLoading, 600); 
         }
     } catch (e) { 
         console.error("Database Retry...");
+        clearInterval(progressInterval); // ล้างค่าก่อนลองใหม่
         setTimeout(initDatabase, 3000); 
     }
 }
