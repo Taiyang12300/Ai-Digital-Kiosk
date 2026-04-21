@@ -62,7 +62,8 @@ function initSpeechRecognition() {
             window.micTimer = setTimeout(() => {
                 processQuery(transcript);
                 window.recognition.stop(); 
-            }, 1800); 
+                if (inputField) inputField.value = ''; 
+            }, 3000); 
         }
     };
 
