@@ -1,21 +1,22 @@
 /**
- * 🚀 สมองกลน้องนำทาง - THE FINAL SSOT (Fixed Greeting & Auto-Reset)
- * แก้ไขล่าสุด: 21 เมษายน 2026
- * สถานะ: เสถียร 100% - ป้องกันการทักซ้ำและรีเซ็ตหน้าจออัตโนมัติเมื่อคนเดินออก
+ * 🚀 สมองกลน้องนำทาง - THE MASTER HYBRID (Full Version)
+ * รวมระบบ: Splash Screen + License Filter + Anti-Double Greet + SSOT
+ * อัปเดตล่าสุด: 21 เมษายน 2026
  */
 
 // --- ⚙️ 1. Global States (ความจริงชุดเดียว) ---
 window.localDatabase = null;
 window.currentLang = 'th'; 
 window.isMuted = false; 
-window.isBusy = false;          
-window.isSpeaking = false;      
-window.isListening = false;     
+window.isBusy = false;          // ระบบกำลังประมวลผล
+window.isSpeaking = false;      // ระบบกำลังส่งเสียง
+window.isListening = false;     // ไมค์ STT กำลังทำงาน
 window.hasGreeted = false;      // ตัวล็อก: ห้ามทักซ้ำถ้ายังเห็นคนเดิม
 window.allowWakeWord = false; 
 let isAtHome = true; 
-let manualMicOverride = false;  
+let manualMicOverride = false;  // ล็อกพิเศษป้องกัน Wake Word แทรกขณะถาม
 
+// URL ของ Google Apps Script
 const GAS_URL = "https://script.google.com/macros/s/AKfycbz1bkIsQ588u-rpjY-8nMlya5_c0DsIabRvyPyCC_sPs5vyeJ_1wcOBaqKfg7cvlM3XJw/exec"; 
 
 let idleTimer = null; 
@@ -28,7 +29,7 @@ const DETECTION_INTERVAL = 200;
 
 let wakeWordRecognition;
 
-// --- 🛡️ 2. ระบบควบคุมศูนย์กลาง (Centralized Control) ---
+// --- 🛡️ 2. ระบบควบคุมศูนย์กลาง (Centralized Control - SSOT) ---
 
 function releaseSystemLock() {
     window.isBusy = false;
@@ -70,7 +71,7 @@ function stopAllSpeech() {
     updateLottie('idle'); 
 }
 
-// --- 🔊 3. ระบบเสียง (Speech) ---
+// --- 🔊 3. ระบบเสียง (Speech & Audio) ---
 
 function speak(text, callback = null) {
     if (!text || window.isMuted) { releaseSystemLock(); return; }
@@ -90,67 +91,7 @@ function speak(text, callback = null) {
     window.speechSynthesis.speak(msg);
 }
 
-// --- 👁️ 4. ระบบดวงตา AI & ตรรกะการทักทาย (Greeting Logic) ---
-
-async function detectPerson() {
-    if (typeof faceapi === 'undefined' || !video) { requestAnimationFrame(detectPerson); return; }
-    const now = Date.now();
-    if (now - lastDetectionTime < DETECTION_INTERVAL) { requestAnimationFrame(detectPerson); return; }
-    lastDetectionTime = now;
-
-    try {
-        const predictions = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withAgeAndGender();
-        const face = predictions.find(f => {
-            const box = f.detection.box;
-            const centerX = box.x + (box.width / 2);
-            return f.detection.score > 0.55 && box.width > 90 && (centerX > 80 && centerX < 560);
-        });
-
-        if (face) {
-            if (personInFrameTime === null) personInFrameTime = now;
-            window.detectedGender = face.gender; 
-            lastSeenTime = now; // อัปเดตเวลาที่ยังเห็นคนอยู่
-
-            // เงื่อนไขทักทาย: ยืนนาน 2 วิ + อยู่หน้า Home + ยังไม่เคยทัก + ไม่ยุ่ง
-            if ((now - personInFrameTime) >= 2000 && isAtHome && !window.isBusy && !window.hasGreeted) { 
-                greetUser(); 
-            }
-        } else {
-            // ✅ ถ้าคนหายไปเกิน 5 วินาที ให้รีเซ็ตระบบทั้งหมดเพื่อเริ่มใหม่กับคนถัดไป
-            if (personInFrameTime !== null && (now - lastSeenTime > 5000)) {
-                console.log("🚶 Person Left: Resetting Greet Lock.");
-                personInFrameTime = null; 
-                window.hasGreeted = false; // ปลดล็อกเพื่อให้ทักคนใหม่ได้
-                window.allowWakeWord = false;
-                if (!isAtHome) resetToHome();
-            }
-        }
-    } catch (e) {}
-    requestAnimationFrame(detectPerson);
-}
-
-function greetUser() {
-    if (window.hasGreeted || window.isBusy) return;
-    
-    isAtHome = false; 
-    window.hasGreeted = true; // ล็อกทันที: จะไม่ทักซ้ำจนกว่าคนเดิมจะเดินออกไป (personInFrameTime เป็น null)
-    window.isBusy = true; 
-    
-    const now = new Date();
-    const gender = window.detectedGender || 'male';
-    let timeGreet = now.getHours() < 12 ? "สวัสดีตอนเช้าครับ" : now.getHours() < 17 ? "สวัสดีตอนบ่ายครับ" : "สวัสดีตอนเย็นครับ";
-    let pType = (gender === 'male') ? "คุณผู้ชาย" : "คุณผู้หญิง";
-    let finalGreet = window.currentLang === 'th' ? `${timeGreet} ${pType} มีอะไรให้น้องนำทางช่วยไหมครับ?` : "Welcome, how can I help you?";
-
-    displayResponse(finalGreet);
-    speak(finalGreet, () => { 
-        window.isBusy = false; 
-        window.allowWakeWord = true; 
-        setTimeout(startWakeWord, 500);
-    });
-}
-
-// --- 🎤 5. ระบบรับคำสั่งเสียง (Wake Word & STT) ---
+// --- 🎤 4. ระบบรับคำสั่งเสียง (Wake Word & STT) ---
 
 function setupWakeWord() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -215,7 +156,7 @@ function toggleListening() {
     setTimeout(() => { try { window.recognition.start(); } catch (e) { window.recognition.abort(); } }, 200);
 }
 
-// --- 🔍 6. ระบบประมวลผลคำตอบ (Search Logic) ---
+// --- 🔍 5. ระบบประมวลผลคำตอบ (Search Logic & License Filter) ---
 
 async function getResponse(userQuery) {
     if (!userQuery || !window.localDatabase) return;
@@ -227,6 +168,24 @@ async function getResponse(userQuery) {
 
     const query = userQuery.toLowerCase().trim().replace(/[?？!！]/g, "");
     
+    // ✅ ระบบคัดกรองใบขับขี่
+    if ((query.includes("ใบขับขี่") || query.includes("license")) && 
+        (query.includes("ต่อ") || query.includes("renew")) && 
+        !query.includes("ชั่วคราว") && !query.includes("5 ปี")) {
+        
+        forceStopAllMic(); 
+        const askMsg = (window.currentLang === 'th') ? "ใบขับขี่ของท่านเป็นแบบชั่วคราว หรือแบบ 5 ปีครับ?" : "Temporary or 5-year type?";
+        displayResponse(askMsg); 
+        speak(askMsg, () => { 
+            window.isBusy = false; 
+            renderOptionButtons([
+                { th: "แบบชั่วคราว (2 ปี)", en: "Temporary (2 years)", action: () => startLicenseCheck("แบบชั่วคราว (2 ปี)") },
+                { th: "แบบ 5 ปี", en: "5-year type", action: () => startLicenseCheck("แบบ 5 ปี") }
+            ]);
+        });
+        return;
+    }
+
     try {
         let bestMatch = { answer: "", score: 0 };
         for (const sheetName of Object.keys(window.localDatabase)) {
@@ -254,12 +213,67 @@ async function getResponse(userQuery) {
     } catch (err) { releaseSystemLock(); }
 }
 
-// --- 🏠 7. ระบบหน้าแรก & การรีเซ็ต ---
+function startLicenseCheck(type) {
+    let searchKey = (type === "แบบชั่วคราว (2 ปี)") ? "ต่อใบขับขี่ชั่วคราว" : "ต่อใบขับขี่ 5 ปี";
+    getResponse(searchKey);
+}
+
+// --- 👁️ 6. ระบบดวงตา AI & การทักทาย ---
+
+async function detectPerson() {
+    if (typeof faceapi === 'undefined' || !video) { requestAnimationFrame(detectPerson); return; }
+    const now = Date.now();
+    if (now - lastDetectionTime < DETECTION_INTERVAL) { requestAnimationFrame(detectPerson); return; }
+    lastDetectionTime = now;
+
+    try {
+        const predictions = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withAgeAndGender();
+        const face = predictions.find(f => {
+            const box = f.detection.box;
+            const centerX = box.x + (box.width / 2);
+            return f.detection.score > 0.55 && box.width > 90 && (centerX > 80 && centerX < 560);
+        });
+
+        if (face) {
+            if (personInFrameTime === null) personInFrameTime = now;
+            window.detectedGender = face.gender; 
+            lastSeenTime = now; 
+            if ((now - personInFrameTime) >= 2000 && isAtHome && !window.isBusy && !window.hasGreeted) { 
+                greetUser(); 
+            }
+        } else {
+            // ✅ รีเซ็ตเมื่อคนหายไป 5 วินาที
+            if (personInFrameTime !== null && (now - lastSeenTime > 5000)) {
+                console.log("🚶 Person Left: Resetting Greet State.");
+                personInFrameTime = null; 
+                window.hasGreeted = false; 
+                window.allowWakeWord = false;
+                if (!isAtHome) resetToHome();
+            }
+        }
+    } catch (e) {}
+    requestAnimationFrame(detectPerson);
+}
+
+function greetUser() {
+    if (window.hasGreeted || window.isBusy) return;
+    isAtHome = false; window.hasGreeted = true; window.isBusy = true; 
+    const now = new Date();
+    const gender = window.detectedGender || 'male';
+    let timeGreet = now.getHours() < 12 ? "สวัสดีตอนเช้าครับ" : now.getHours() < 17 ? "สวัสดีตอนบ่ายครับ" : "สวัสดีตอนเย็นครับ";
+    let pType = (gender === 'male') ? "คุณผู้ชาย" : "คุณผู้หญิง";
+    let finalGreet = window.currentLang === 'th' ? `${timeGreet} ${pType} มีอะไรให้น้องนำทางช่วยไหมครับ?` : "Welcome!";
+    displayResponse(finalGreet);
+    speak(finalGreet, () => { 
+        window.isBusy = false; window.allowWakeWord = true; setTimeout(startWakeWord, 500);
+    });
+}
+
+// --- 🏠 7. ระบบหน้าแรก & Splash Screen ---
 
 function resetToHome() {
     if (window.isBusy || window.isSpeaking) return;
-    stopAllSpeech(); 
-    forceStopAllMic(); 
+    stopAllSpeech(); forceStopAllMic(); 
     isAtHome = true; 
     // หมายเหตุ: ห้ามรีเซ็ต hasGreeted ที่นี่ เพื่อกันทักซ้ำขณะคนเดิมยังยืนอยู่
     window.allowWakeWord = false; 
@@ -270,16 +284,41 @@ function resetToHome() {
 }
 
 async function initDatabase() {
+    const progBar = document.getElementById('splash-progress-bar');
+    const statusTxt = document.getElementById('splash-status-text');
+    if (progBar) progBar.style.width = '30%';
+
     try {
         const res = await fetch(GAS_URL);
         const json = await res.json();
-        if (json.database) { window.localDatabase = json.database; completeLoading(); }
-    } catch (e) { setTimeout(initDatabase, 5000); }
+        if (json.database) { 
+            window.localDatabase = json.database; 
+            completeLoading(); 
+        }
+    } catch (e) { 
+        if (statusTxt) statusTxt.innerText = "กำลังลองเชื่อมต่อฐานข้อมูลใหม่...";
+        setTimeout(initDatabase, 5000); 
+    }
 }
 
 function completeLoading() {
     const splash = document.getElementById('splash-screen');
-    if (splash) { splash.style.opacity = '0'; setTimeout(() => { splash.style.display = 'none'; resetToHome(); initCamera(); }, 800); }
+    const progBar = document.getElementById('splash-progress-bar');
+    const statusTxt = document.getElementById('splash-status-text');
+    if (progBar) progBar.style.width = '100%';
+    if (statusTxt) statusTxt.innerText = 'ระบบพร้อมใช้งานแล้ว';
+    
+    setTimeout(() => {
+        if (splash) {
+            splash.style.transition = 'opacity 0.8s ease';
+            splash.style.opacity = '0';
+            setTimeout(() => {
+                splash.style.display = 'none';
+                resetToHome();
+                initCamera();       
+            }, 800);
+        }
+    }, 500);
 }
 
 async function initCamera() {
@@ -341,9 +380,18 @@ function renderFAQButtons() {
     });
 }
 
+function renderOptionButtons(options) {
+    const container = document.getElementById('faq-container'); if (!container) return; container.innerHTML = "";
+    options.forEach(opt => {
+        const btn = document.createElement('button'); btn.className = 'faq-btn'; btn.innerText = opt.th;
+        btn.onclick = () => { stopAllSpeech(); opt.action(); };
+        container.appendChild(btn);
+    });
+}
+
 async function loadFaceModels() {
     const MODEL_URL = 'https://taiyang12300.github.io/model/';
-    try { await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL); await faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL); setupWakeWord(); requestAnimationFrame(detectPerson); } catch (err) { console.error("❌ AI Model Fail"); }
+    try { await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL); await faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL); setupWakeWord(); requestAnimationFrame(detectPerson); } catch (err) {}
 }
 
 async function logQuestionToSheet(userQuery) { if (!userQuery || !GAS_URL) return; try { await fetch(`${GAS_URL}?action=logOnly&query=${encodeURIComponent(userQuery)}`, { mode: 'no-cors' }); } catch (e) {} }
