@@ -243,7 +243,8 @@ function setupWakeWord() {
     wakeWordRecognition.lang = 'th-TH';
 
     wakeWordRecognition.onresult = (event) => {
-        if (!window.allowWakeWord || window.isBusy || window.isListening) return;
+        // เพิ่มการเช็ค !window.hasGreeted เพื่อความปลอดภัย (ไม่ฟังก่อนทักทาย)
+        if (!window.allowWakeWord || window.isBusy || window.isListening || !window.hasGreeted) return;
 
         let transcript = "";
         for (let i = event.resultIndex; i < event.results.length; ++i) {
@@ -265,15 +266,24 @@ function setupWakeWord() {
             }
             
             displayResponse(msg);
-            setTimeout(() => { speak(msg); }, 300); 
+
+            // 🚀 แก้ไข: เมื่อขานตอบจบ ให้เปิดไมค์รอฟังคำถาม (toggleListening)
+            setTimeout(() => { 
+                speak(msg, () => {
+                    window.isBusy = false;
+                    toggleListening(); // เปิดไมค์ STT ทันที
+                }); 
+            }, 300); 
         }
     };
 
     wakeWordRecognition.onend = () => {
-        if (!isAtHome && personInFrameTime !== null && !window.isBusy && !window.isListening && isWakeWordActive) {
+        // 🚀 แก้ไข: เปลี่ยนจาก !isAtHome เป็น window.hasGreeted 
+        // เพื่อให้ดักฟังชื่อได้ทั้งที่หน้าโฮมและหน้าอื่นๆ หากทักทายกันแล้ว
+        if (window.hasGreeted && personInFrameTime !== null && !window.isBusy && !window.isListening && isWakeWordActive) {
             setTimeout(() => {
                 try {
-                    if (!window.isBusy && !window.isListening && !isAtHome && isWakeWordActive) {
+                    if (!window.isBusy && !window.isListening && isWakeWordActive) {
                         wakeWordRecognition.start(); 
                     }
                 } catch(e) {}
@@ -292,7 +302,7 @@ function setupWakeWord() {
 }
 
 function startWakeWord() {
-    if (!window.allowWakeWord || isAtHome || window.isListening || window.isMuted || window.isBusy) {
+    if (!window.allowWakeWord || window.isListening || window.isMuted || window.isBusy || windw.hasGreeted ) {
         isWakeWordActive = false;
         return;
     }
@@ -355,8 +365,7 @@ function resetToHome() {
 }
 
 function backToHomeKeepPerson() {
-    // 1. เคลียร์เฉพาะสถานะหน้าจอและการพูด
-    stopAllSpeech(); 
+    // 1. เคลียร์เฉพาะสถานะหน้าจอและการพูด 
     forceStopAllMic(); 
     window.isBusy = false;
     isAtHome = true; // กลับสถานะ Home
