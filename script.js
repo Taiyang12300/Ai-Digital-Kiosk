@@ -351,6 +351,25 @@ function resetToHome() {
     if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
 }
 
+function backToHomeKeepPerson() {
+    // 1. เคลียร์เฉพาะสถานะหน้าจอและการพูด
+    stopAllSpeech(); 
+    forceStopAllMic(); 
+    window.isBusy = false;
+    isAtHome = true; // กลับสถานะ Home
+
+    // 2. แสดงหน้าจอโฮมและปุ่ม FAQ
+    displayResponse(window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone.");
+    renderFAQButtons(); 
+    updateLottie('idle');
+
+    // 3. เริ่มระบบ Wake Word รอรับคำสั่งต่อ (โดยไม่ทักทายซ้ำ)
+    window.allowWakeWord = true;
+    startWakeWord();
+
+    console.log("🏠 [System] Back to Home (Keeping Person Context)");
+}
+
 function restartIdleTimer() {
     if (idleTimer) clearTimeout(idleTimer);
     if (!isAtHome) idleTimer = setTimeout(resetToHome, IDLE_TIME_LIMIT);
@@ -455,9 +474,18 @@ function showLicenseChecklist(type, expiry) {
     docs.forEach((d, idx) => {
         checklistHTML += `<div class="check-item" onclick="document.getElementById('chk-${idx}').click()"><input type="checkbox" class="doc-check" id="chk-${idx}" onchange="checkChecklist()" onclick="event.stopPropagation()"><label>${d}</label></div>`;
     });
-    const resultHTML = `<div class="checklist-card"><strong style="font-size:22px;">${type}</strong><br><div style="background:#e8f0fe; color:#1a73e8; padding:8px; border-radius:5px; margin-top:5px; font-weight:bold;">💡 ${note}</div><hr style="margin:15px 0; border:0; border-top:1px solid #eee;">${checklistHTML}<button id="btnPrintGuide" style="display:none;" onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}'); setTimeout(() => { resetToHome(); }, 2000);">🖨️ ปริ้นใบนำทาง</button></div>`;
-    displayResponse(resultHTML);
-    speak(isThai ? "กรุณาติ๊กตรวจสอบเอกสารให้ครบ เพื่อปริ้นใบนำทางครับ" : "Please check all items to print.");
+    const resultHTML = `
+<div class="checklist-card">
+    <strong style="font-size:22px;">${type}</strong><br>
+    <div style="background:#e8f0fe; color:#1a73e8; padding:8px; border-radius:5px; margin-top:5px; font-weight:bold;">💡 ${note}</div>
+    <hr style="margin:15px 0; border:0; border-top:1px solid #eee;">
+    ${checklistHTML}
+    <button id="btnPrintGuide" style="display:none;" 
+        onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}'); 
+        setTimeout(() => { backToHomeKeepPerson(); }, 3000);"> 
+        🖨️ ปริ้นใบนำทาง
+    </button>
+</div>`;
 }
 
 function checkChecklist() {
