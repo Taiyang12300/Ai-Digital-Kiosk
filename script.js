@@ -514,6 +514,8 @@ async function getResponse(userQuery) {
     updateLottie('thinking');
 
     const query = userQuery.toLowerCase().trim().replace(/[?？!！]/g, "");
+    
+    // [1. คัดกรองใบขับขี่ - คงเดิม]
     const isLicense = query.includes("ใบขับขี่") || query.includes("license");
     const isRenew = query.includes("ต่อ") || query.includes("renew");
 
@@ -531,32 +533,54 @@ async function getResponse(userQuery) {
 
     try {
         let bestMatch = { answer: "", score: 0 };
+        let exactMatchFound = false; // 🚀 เพิ่มตัวแปรเช็คความเป๊ะ
+
         for (const sheetName of Object.keys(window.localDatabase)) {
             if (["Lottie_State", "Config", "FAQ"].includes(sheetName)) continue;
-            window.localDatabase[sheetName].forEach(item => {
+            
+            for (const item of window.localDatabase[sheetName]) {
                 const rawKeys = item[0] ? item[0].toString().toLowerCase() : "";
-                if (!rawKeys) return;
+                if (!rawKeys) continue;
+                
                 const keyList = rawKeys.split(/[,|\n]/).map(k => k.trim()).filter(k => k !== "");
                 let ans = window.currentLang === 'th' ? (item[1] || "") : (item[2] || item[1]);
+
                 for (const key of keyList) {
-                    let score = 0;
-                    if (query === key) score = 10.0;
-                    else {
-                        let simScore = calculateSimilarity(query, key);
-                        score = simScore * 5;
+                    const lowerKey = key.toLowerCase();
+                    
+                    // 🚩 ชั้นที่ 1: Exact Match (เป๊ะ 100%)
+                    if (query === lowerKey) {
+                        bestMatch = { answer: ans, score: 100 };
+                        exactMatchFound = true;
+                        break;
                     }
-                    if (score > bestMatch.score) bestMatch = { answer: ans, score: score };
+                    
+                    // 🚩 ชั้นที่ 2: Word Inclusion (มีคำในประโยค)
+                    if (!exactMatchFound && query.includes(lowerKey) && lowerKey.length > 2) {
+                        let score = (lowerKey.length / query.length) * 10;
+                        if (score > bestMatch.score) bestMatch = { answer: ans, score: score };
+                    }
+
+                    // 🚩 ชั้นที่ 3: Similarity (Fuzzy)
+                    if (!exactMatchFound) {
+                        let simScore = calculateSimilarity(query, lowerKey) * 5;
+                        if (simScore > bestMatch.score) bestMatch = { answer: ans, score: simScore };
+                    }
                 }
-            });
+                if (exactMatchFound) break;
+            }
+            if (exactMatchFound) break;
         }
-        if (bestMatch.score >= 0.45 && bestMatch.answer !== "") { 
+
+        // ปรับเกณฑ์คะแนนขึ้นเป็น 0.6 เพื่อความคม
+        if ((exactMatchFound || bestMatch.score >= 0.6) && bestMatch.answer !== "") { 
             displayResponse(bestMatch.answer); speak(bestMatch.answer); 
         } else { 
             const noDataMsg = window.currentLang === 'th' ? "ขออภัยครับ น้องหาข้อมูลไม่พบ กรุณาติดต่อเจ้าหน้าที่นะครับ" : "No info found.";
             displayResponse(noDataMsg); speak(noDataMsg);
             setTimeout(renderFAQButtons, 3000); 
         }
-    } catch (err) { window.isBusy = false; }
+    } catch (err) { window.isBusy = false; updateLottie('idle'); }
 }
 
 async function processQuery(query) {
