@@ -551,7 +551,29 @@ function speak(text, callback = null, isGreeting = false) {
 
     let phoneticText = text.replace(/Smart Queue/gi, "สมาร์ท คิว").replace(/DLT/gi, "ดีแอลที");
     const msg = new SpeechSynthesisUtterance(phoneticText.replace(/<[^>]*>?/gm, '').replace(/[*#-]/g, ""));
-    msg.lang = 'th-TH';
+    
+    // --- ส่วนที่ปรับปรุง: การเลือกเสียงที่ดีที่สุด ---
+    const targetLang = window.currentLang === 'th' ? 'th-TH' : 'en-US';
+    msg.lang = targetLang;
+    
+    const voices = window.speechSynthesis.getVoices();
+    
+    // ค้นหาเสียงโดยเรียงลำดับความสำคัญ: 1. Google (ไทย) -> 2. Premium/Enhanced -> 3. ตัวแรกที่เจอของภาษานั้น
+    let selectedVoice = voices.find(v => v.name.includes('Google') && v.lang === targetLang);
+    
+    if (!selectedVoice) {
+        selectedVoice = voices.find(v => (v.name.includes('Premium') || v.name.includes('Enhanced')) && v.lang === targetLang);
+    }
+    
+    if (!selectedVoice) {
+        selectedVoice = voices.find(v => v.lang === targetLang);
+    }
+
+    if (selectedVoice) {
+        msg.voice = selectedVoice;
+    }
+    // -------------------------------------------
+
     msg.rate = 1.05;
     
     msg.onstart = () => { updateLottie('talking'); };
@@ -562,7 +584,6 @@ function speak(text, callback = null, isGreeting = false) {
         if (callback) callback();
 
         if (!isAtHome) {
-            // 🚀 ปรับการเปิดไมค์อัตโนมัติให้ปลอดภัยขึ้น
             setTimeout(() => {
                 if (window.isBusy) return;
 
@@ -570,7 +591,6 @@ function speak(text, callback = null, isGreeting = false) {
                     window.allowWakeWord = true;
                     startWakeWord(); 
                 } else {
-                    // ตรวจสอบว่าไม่มีการฟังอยู่เดิมก่อนจะเปิด [Auto]
                     if (!window.isListening) {
                         console.log("🎤 [Auto] Safe Opening Mic...");
                         toggleListening(); 
@@ -585,13 +605,21 @@ function speak(text, callback = null, isGreeting = false) {
                         }, 7000); 
                     }
                 }
-            }, 1000); // รอให้ระบบ TTS คืนค่า Hardware ครู่หนึ่ง
+            }, 1000); 
         }
     };
 
-    msg.onerror = () => { window.isBusy = false; updateLottie('idle'); };
+    msg.onerror = () => { 
+        console.error("TTS Error occurred.");
+        window.isBusy = false; 
+        updateLottie('idle'); 
+    };
+
     window.speechSynthesis.speak(msg);
 }
+
+// เพิ่มบรรทัดนี้ไว้ท้ายไฟล์ script.js เพื่อให้ Browser โหลดรายชื่อเสียงให้พร้อม
+window.speechSynthesis.onvoiceschanged = () => { window.speechSynthesis.getVoices(); };
 
 function stopAllSpeech() { 
     window.speechSynthesis.cancel(); 
