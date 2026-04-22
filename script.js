@@ -651,7 +651,6 @@ function speak(text, callback = null, isGreeting = false) {
                     }
                 }
             }, 1000); 
-        }
     };
 
     msg.onerror = (e) => { 
