@@ -193,6 +193,7 @@ function playAudioLink(url, callback = null) {
     if (window.micTimer) clearTimeout(window.micTimer); 
     
     window.isBusy = true;
+    window.isAudioPlaying = true;
     updateLottie('talking');
 
     const audio = new Audio(url);
@@ -203,6 +204,7 @@ function playAudioLink(url, callback = null) {
     };
 
     audio.onended = () => {
+        window.isAudioPlaying = false;
         setTimeout(() => {
             window.isBusy = false;
             updateLottie('idle');
@@ -218,6 +220,7 @@ function playAudioLink(url, callback = null) {
     };
 
     audio.onerror = () => { 
+        window.isAudioPlaying = false;
         window.isBusy = false; 
         updateLottie('idle'); 
     };
@@ -619,7 +622,7 @@ function speak(text, callback = null, isGreeting = false) {
 
         if (!isAtHome) {
             setTimeout(() => {
-                if (window.isBusy) return;
+                if (window.isBusy || window.isAudioPlaying) return;
 
                 if (isGreeting) {
                     window.allowWakeWord = true;
@@ -631,7 +634,7 @@ function speak(text, callback = null, isGreeting = false) {
 
                         if (window.micTimer) clearTimeout(window.micTimer);
                         window.micTimer = setTimeout(() => {
-                            if (window.isListening && !window.isBusy) {
+                            if (window.isListening && !window.isBusy && !window.isAudioPlaying) {
                                 forceStopAllMic(); 
                                 window.allowWakeWord = true;
                                 startWakeWord(); 
