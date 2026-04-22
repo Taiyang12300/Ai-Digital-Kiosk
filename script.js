@@ -549,33 +549,48 @@ function speak(text, callback = null, isGreeting = false) {
     window.speechSynthesis.cancel();
     window.isBusy = true; 
 
-    let phoneticText = text.replace(/Smart Queue/gi, "สมาร์ท คิว").replace(/DLT/gi, "ดีแอลที");
+    // จูนคำอ่านให้เป็นธรรมชาติมากขึ้น (Phonetic)
+    let phoneticText = text
+        .replace(/Smart Queue/gi, "สมาร์ท คิว")
+        .replace(/DLT/gi, "ดีแอลที")
+        .replace(/ครับ/g, "ครับบ")
+        .replace(/ค่ะ/g, "ข่ะ");
+
     const msg = new SpeechSynthesisUtterance(phoneticText.replace(/<[^>]*>?/gm, '').replace(/[*#-]/g, ""));
     
-    // --- ส่วนที่ปรับปรุง: การเลือกเสียงที่ดีที่สุด ---
+    // --- 🚀 ส่วนที่ปรับปรุง: การเลือกเสียงที่ดีที่สุด พร้อมระบบ Log ---
     const targetLang = window.currentLang === 'th' ? 'th-TH' : 'en-US';
     msg.lang = targetLang;
     
     const voices = window.speechSynthesis.getVoices();
     
-    // ค้นหาเสียงโดยเรียงลำดับความสำคัญ: 1. Google (ไทย) -> 2. Premium/Enhanced -> 3. ตัวแรกที่เจอของภาษานั้น
+    // 1. ค้นหาเสียง Google
     let selectedVoice = voices.find(v => v.name.includes('Google') && v.lang === targetLang);
     
-    if (!selectedVoice) {
+    if (selectedVoice) {
+        console.log(`%c[TTS] 🌟 Using High-Quality Voice: ${selectedVoice.name}`, "color: #00b894; font-weight: bold; border-left: 3px solid #00b894; padding-left: 10px;");
+    } else {
+        // 2. ถ้าไม่เจอ Google ให้หา Premium/Enhanced
         selectedVoice = voices.find(v => (v.name.includes('Premium') || v.name.includes('Enhanced')) && v.lang === targetLang);
-    }
-    
-    if (!selectedVoice) {
-        selectedVoice = voices.find(v => v.lang === targetLang);
+        
+        if (selectedVoice) {
+            console.log(`%c[TTS] ✨ Using Premium Voice: ${selectedVoice.name}`, "color: #0984e3; font-weight: bold;");
+        } else {
+            // 3. ใช้เสียงมาตรฐาน
+            selectedVoice = voices.find(v => v.lang === targetLang);
+            console.warn(`[TTS] ⚠️ Google Voice not found. Using system default: ${selectedVoice ? selectedVoice.name : 'Unknown'}`);
+        }
     }
 
     if (selectedVoice) {
         msg.voice = selectedVoice;
     }
+
+    // ปรับจูนความนุ่มนวล
+    msg.rate = 0.95;  // ความเร็วที่ดูใจเย็นและสุภาพ
+    msg.pitch = 1.0; // โทนเสียงมาตรฐาน (ปรับเป็น 1.1 ได้ถ้าอยากให้เสียงดูใสขึ้น)
     // -------------------------------------------
 
-    msg.rate = 1.05;
-    
     msg.onstart = () => { updateLottie('talking'); };
     
     msg.onend = () => { 
@@ -602,24 +617,21 @@ function speak(text, callback = null, isGreeting = false) {
                                 window.allowWakeWord = true;
                                 startWakeWord(); 
                             }
-                        }, 7000); 
+                        }, 6000); 
                     }
                 }
             }, 1000); 
         }
     };
 
-    msg.onerror = () => { 
-        console.error("TTS Error occurred.");
+    msg.onerror = (e) => { 
+        console.error("TTS Error occurred:", e);
         window.isBusy = false; 
         updateLottie('idle'); 
     };
 
     window.speechSynthesis.speak(msg);
 }
-
-// เพิ่มบรรทัดนี้ไว้ท้ายไฟล์ script.js เพื่อให้ Browser โหลดรายชื่อเสียงให้พร้อม
-window.speechSynthesis.onvoiceschanged = () => { window.speechSynthesis.getVoices(); };
 
 function stopAllSpeech() { 
     window.speechSynthesis.cancel(); 
