@@ -573,8 +573,7 @@ function speak(text, callback = null, isGreeting = false) {
     let phoneticText = text
         .replace(/Smart Queue/gi, "สมาร์ท คิว")
         .replace(/DLT/gi, "ดีแอลที")
-        .replace(/ครับ/g, "ครับบ")
-        .replace(/ค่ะ/g, "ข่ะ");
+        
 
     const msg = new SpeechSynthesisUtterance(phoneticText.replace(/<[^>]*>?/gm, '').replace(/[*#-]/g, ""));
     
