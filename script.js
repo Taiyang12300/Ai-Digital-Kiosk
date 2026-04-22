@@ -576,6 +576,13 @@ async function processQuery(query) {
 
 function speak(text, callback = null, isGreeting = false) {
     if (!text || window.isMuted) return;
+
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length === 0) {
+        console.warn("[TTS] Voices not loaded yet. Retrying in 100ms...");
+        setTimeout(() => speak(text, callback, isGreeting), 100);
+        return;
+    }
     
     forceStopAllMic(); 
     window.speechSynthesis.cancel();
@@ -586,7 +593,6 @@ function speak(text, callback = null, isGreeting = false) {
         .replace(/Smart Queue/gi, "สมาร์ท คิว")
         .replace(/DLT/gi, "ดีแอลที")
         
-
     const msg = new SpeechSynthesisUtterance(phoneticText.replace(/<[^>]*>?/gm, '').replace(/[*#-]/g, ""));
     
     // --- 🚀 ส่วนที่ปรับปรุง: การเลือกเสียงที่ดีที่สุด พร้อมระบบ Log ---
@@ -791,3 +797,17 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('beforeunload', () => { stopAllSpeech(); forceStopAllMic(); });
 
 document.addEventListener('DOMContentLoaded', initDatabase);
+
+// 🚩 ระบบป้องกันเสียงหุ่นยนต์: บังคับให้ Browser โหลดเสียงทันทีที่พร้อม
+if (typeof speechSynthesis !== 'undefined' && speechSynthesis.onvoiceschanged !== undefined) {
+    speechSynthesis.onvoiceschanged = () => {
+        const voices = speechSynthesis.getVoices();
+        console.log(`%c[System] 🎤 TTS Voices Loaded: ${voices.length} voices available.`, "color: #fdcb6e; font-weight: bold;");
+        
+        // ทดสอบหาเสียงภาษาไทยดูว่ามาหรือยัง
+        const thVoice = voices.find(v => v.lang === 'th-TH');
+        if (thVoice) {
+            console.log(`%c[System] ✅ Thai Voice Ready: ${thVoice.name}`, "color: #00b894;");
+        }
+    };
+}
