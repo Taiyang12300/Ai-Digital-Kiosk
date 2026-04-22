@@ -81,7 +81,8 @@ function initSpeechRecognition() {
         console.warn("ไม่พบไมโครโฟน หรือถูกปฏิเสธสิทธิ์");
     }
     console.error("Mic Error:", e.error);
-};
+  };
+}
 
 function toggleListening() { 
     window.speechSynthesis.cancel(); 
