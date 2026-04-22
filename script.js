@@ -577,7 +577,9 @@ async function processQuery(query) {
 function speak(text, callback = null, isGreeting = false) {
     if (!text || window.isMuted) return;
 
-    const voices = window.speechSynthesis.getVoices();
+    // 1. ดึงค่า Voices มาไว้ในตัวแปรเดียว
+    let voices = window.speechSynthesis.getVoices();
+    
     if (voices.length === 0) {
         console.warn("[TTS] Voices not loaded yet. Retrying in 100ms...");
         setTimeout(() => speak(text, callback, isGreeting), 100);
@@ -588,34 +590,27 @@ function speak(text, callback = null, isGreeting = false) {
     window.speechSynthesis.cancel();
     window.isBusy = true; 
 
-    // จูนคำอ่านให้เป็นธรรมชาติมากขึ้น (Phonetic)
+    // จูนคำอ่าน (Phonetic)
     let phoneticText = text
         .replace(/Smart Queue/gi, "สมาร์ท คิว")
-        .replace(/DLT/gi, "ดีแอลที")
+        .replace(/DLT/gi, "ดีแอลที");
         
     const msg = new SpeechSynthesisUtterance(phoneticText.replace(/<[^>]*>?/gm, '').replace(/[*#-]/g, ""));
-    
-    // --- 🚀 ส่วนที่ปรับปรุง: การเลือกเสียงที่ดีที่สุด พร้อมระบบ Log ---
     const targetLang = window.currentLang === 'th' ? 'th-TH' : 'en-US';
     msg.lang = targetLang;
     
-    const voices = window.speechSynthesis.getVoices();
-    
-    // 1. ค้นหาเสียง Google
+    // 2. เลือกเสียงที่ดีที่สุด (ใช้ตัวแปร voices เดิม ไม่ประกาศซ้ำ)
     let selectedVoice = voices.find(v => v.name.includes('Google') && v.lang === targetLang);
     
     if (selectedVoice) {
         console.log(`%c[TTS] 🌟 Using High-Quality Voice: ${selectedVoice.name}`, "color: #00b894; font-weight: bold; border-left: 3px solid #00b894; padding-left: 10px;");
     } else {
-        // 2. ถ้าไม่เจอ Google ให้หา Premium/Enhanced
         selectedVoice = voices.find(v => (v.name.includes('Premium') || v.name.includes('Enhanced')) && v.lang === targetLang);
-        
         if (selectedVoice) {
             console.log(`%c[TTS] ✨ Using Premium Voice: ${selectedVoice.name}`, "color: #0984e3; font-weight: bold;");
         } else {
-            // 3. ใช้เสียงมาตรฐาน
             selectedVoice = voices.find(v => v.lang === targetLang);
-            console.warn(`[TTS] ⚠️ Google Voice not found. Using system default: ${selectedVoice ? selectedVoice.name : 'Unknown'}`);
+            console.warn(`[TTS] ⚠️ Voice not found. Using system default.`);
         }
     }
 
@@ -623,10 +618,8 @@ function speak(text, callback = null, isGreeting = false) {
         msg.voice = selectedVoice;
     }
 
-    // ปรับจูนความนุ่มนวล
-    msg.rate = 1.05;  // ความเร็วที่ดูใจเย็นและสุภาพ
-    msg.pitch = 0.9; // โทนเสียงมาตรฐาน (ปรับเป็น 1.1 ได้ถ้าอยากให้เสียงดูใสขึ้น)
-    // -------------------------------------------
+    msg.rate = 1.05;
+    msg.pitch = 0.9;
 
     msg.onstart = () => { updateLottie('talking'); };
     
@@ -635,28 +628,27 @@ function speak(text, callback = null, isGreeting = false) {
         updateLottie('idle'); 
         if (callback) callback();
 
-            setTimeout(() => {
-                if (window.isBusy || window.isAudioPlaying) return;
+        setTimeout(() => {
+            if (window.isBusy || window.isAudioPlaying) return;
+            if (isGreeting) {
+                window.allowWakeWord = true;
+                startWakeWord(); 
+            } else {
+                if (!window.isListening && window.hasGreeted) {
+                    console.log("🎤 [Auto] Safe Opening Mic...");
+                    toggleListening(); 
 
-                if (isGreeting) {
-                    window.allowWakeWord = true;
-                    startWakeWord(); 
-                } else {
-                    if (!window.isListening && window.hasGreeted) {
-                        console.log("🎤 [Auto] Safe Opening Mic...");
-                        toggleListening(); 
-
-                        if (window.micTimer) clearTimeout(window.micTimer);
-                        window.micTimer = setTimeout(() => {
-                            if (window.isListening && !window.isBusy && !window.isAudioPlaying) {
-                                forceStopAllMic(); 
-                                window.allowWakeWord = true;
-                                startWakeWord(); 
-                            }
-                        }, 6000); 
-                    }
+                    if (window.micTimer) clearTimeout(window.micTimer);
+                    window.micTimer = setTimeout(() => {
+                        if (window.isListening && !window.isBusy && !window.isAudioPlaying) {
+                            forceStopAllMic(); 
+                            window.allowWakeWord = true;
+                            startWakeWord(); 
+                        }
+                    }, 6000); 
                 }
-            }, 1000); 
+            }
+        }, 1000); 
     };
 
     msg.onerror = (e) => { 
