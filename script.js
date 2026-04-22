@@ -302,7 +302,7 @@ function setupWakeWord() {
 }
 
 function startWakeWord() {
-    if (!window.allowWakeWord || window.isListening || window.isMuted || window.isBusy || windw.hasGreeted ) {
+    if (!window.allowWakeWord || window.isListening || window.isMuted || window.isBusy || !window.hasGreeted ) {
         isWakeWordActive = false;
         return;
     }
@@ -629,7 +629,6 @@ function speak(text, callback = null, isGreeting = false) {
         updateLottie('idle'); 
         if (callback) callback();
 
-        if (!isAtHome) {
             setTimeout(() => {
                 if (window.isBusy || window.isAudioPlaying) return;
 
@@ -637,7 +636,7 @@ function speak(text, callback = null, isGreeting = false) {
                     window.allowWakeWord = true;
                     startWakeWord(); 
                 } else {
-                    if (!window.isListening) {
+                    if (!window.isListening && window.hasGreeted) {
                         console.log("🎤 [Auto] Safe Opening Mic...");
                         toggleListening(); 
 
