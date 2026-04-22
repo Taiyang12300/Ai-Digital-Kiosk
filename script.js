@@ -461,6 +461,7 @@ function showLicenseChecklist(type, expiry) {
     const isTemp = type.includes("ชั่วคราว") || type.includes("2 ปี");
     let docs = ["บัตรประชาชน (ตัวจริง)", "ใบขับขี่เดิม", "ใบรับรองแพทย์ (ไม่เกิน 1 เดือน)"];
     let note = "";
+    
     if (isTemp) {
         if (expiry === 'normal') note = "ไม่ต้องอบรม ต่อได้ทันที";
         else if (expiry === 'over1') note = "อบรมสำนักงาน 5 ชั่วโมง และสอบข้อเขียนใหม่";
@@ -470,22 +471,28 @@ function showLicenseChecklist(type, expiry) {
         else if (expiry === 'over1') { docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)"); note = "อบรมออนไลน์ 2 ชม. และต้องสอบข้อเขียนใหม่"; }
         else if (expiry === 'over3') { note = "ต้องอบรม 5 ชม. ที่ขนส่งเท่านั้น + สอบข้อเขียน + สอบขับรถ"; }
     }
+    
     let checklistHTML = "";
     docs.forEach((d, idx) => {
         checklistHTML += `<div class="check-item" onclick="document.getElementById('chk-${idx}').click()"><input type="checkbox" class="doc-check" id="chk-${idx}" onchange="checkChecklist()" onclick="event.stopPropagation()"><label>${d}</label></div>`;
     });
+
+    // ✅ แก้ไข: เปลี่ยนจาก resetToHome() เป็น backToHomeKeepPerson() เพื่อไม่ให้ทักซ้ำ
     const resultHTML = `
-<div class="checklist-card">
-    <strong style="font-size:22px;">${type}</strong><br>
-    <div style="background:#e8f0fe; color:#1a73e8; padding:8px; border-radius:5px; margin-top:5px; font-weight:bold;">💡 ${note}</div>
-    <hr style="margin:15px 0; border:0; border-top:1px solid #eee;">
-    ${checklistHTML}
-    <button id="btnPrintGuide" style="display:none;" 
-        onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}'); 
-        setTimeout(() => { backToHomeKeepPerson(); }, 3000);"> 
-        🖨️ ปริ้นใบนำทาง
-    </button>
-</div>`;
+        <div class="checklist-card">
+            <strong style="font-size:22px;">${type}</strong><br>
+            <div style="background:#e8f0fe; color:#1a73e8; padding:8px; border-radius:5px; margin-top:5px; font-weight:bold;">💡 ${note}</div>
+            <hr style="margin:15px 0; border:0; border-top:1px solid #eee;">
+            ${checklistHTML}
+            <button id="btnPrintGuide" style="display:none;" 
+                onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}'); 
+                setTimeout(() => { backToHomeKeepPerson(); }, 3000);"> 
+                🖨️ ปริ้นใบนำทาง
+            </button>
+        </div>`;
+
+    displayResponse(resultHTML);
+    speak(isThai ? "กรุณาติ๊กตรวจสอบเอกสารให้ครบ เพื่อปริ้นใบนำทางครับ" : "Please check all items to print.");
 }
 
 function checkChecklist() {
