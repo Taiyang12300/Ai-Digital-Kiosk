@@ -73,12 +73,15 @@ function initSpeechRecognition() {
     };
 
     window.recognition.onerror = (e) => {
-        window.isListening = false; // ถ้า Error ต้องเคลียร์สถานะเพื่อให้เริ่มใหม่ได้
-        updateMicUI(false);
-        if (e.error === 'no-speech' || e.error === 'aborted') return;
-        console.error("Mic Error:", e.error);
-    };
-}
+    window.isListening = false;
+    updateMicUI(false);
+    if (e.error === 'no-speech' || e.error === 'aborted') return;
+    
+    if (e.error === 'audio-capture') {
+        console.warn("ไม่พบไมโครโฟน หรือถูกปฏิเสธสิทธิ์");
+    }
+    console.error("Mic Error:", e.error);
+};
 
 function toggleListening() { 
     window.speechSynthesis.cancel(); 
@@ -537,7 +540,7 @@ async function processQuery(query) {
 }
 
 // --- 🚩 5. ระบบเสียง (แก้ไขให้ขัดจังหวะได้และเชื่อมต่อ STT) ---
-function speak(text, callback = null, isGreeting = false) {
+
 function speak(text, callback = null, isGreeting = false) {
     if (!text || window.isMuted) return;
     
