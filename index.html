@@ -193,6 +193,77 @@
         0% { background-position: 200% 0; } 
         100% { background-position: 0 0; } 
     }
+
+    /* 🏎️ ปรับแต่ง Quick Menu ให้รองรับ 3 คอลัมน์ */
+.quick-menu {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr); /* แบ่ง 3 ส่วนเท่ากัน */
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 25px;
+}
+
+.quick-card {
+  background: white;
+  border: 2px solid #e0e0e0;
+  border-radius: 18px;
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column; /* วางไอคอนบน ข้อความล่าง */
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.03);
+  min-height: 120px;
+}
+
+.card-icon {
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  color: white;
+}
+
+.card-text {
+  color: #2d3436;
+  font-size: 13px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.card-text b {
+  font-size: 16px;
+}
+
+/* --- สีแยกตามประเภท --- */
+
+/* รถยนต์ - สีม่วง */
+.card-car { border-color: #dcd6f7; }
+.card-car .card-icon { background: #6c5ce7; }
+.card-car b { color: #6c5ce7; }
+
+/* มอเตอร์ไซค์ - สีเขียว */
+.card-motor { border-color: #c2f0e5; }
+.card-motor .card-icon { background: #00b894; }
+.card-motor b { color: #00b894; }
+
+/* รถบรรทุก - สีส้ม/เหลือง */
+.card-truck { border-color: #ffeaa7; }
+.card-truck .card-icon { background: #e17055; }
+.card-truck b { color: #e17055; }
+
+/* เอฟเฟกต์เมื่อกด */
+.quick-card:active {
+  transform: scale(0.92);
+  background: #f8f9fa;
+}
+    
 </style>
 </head>
 <body>
@@ -221,6 +292,24 @@
 
     <div class="display-box" id="response-text"></div>
 
+    <div class="faq-title"><i class="fas fa-id-card"></i> ตรวจสอบเอกสารใบขับขี่:</div>
+    <div class="quick-menu">
+      <button class="quick-card card-car" onclick="startLicenseCheck('รถยนต์')">
+        <div class="card-icon"><i class="fas fa-car"></i></div>
+        <div class="card-text">ใบขับขี่<br><b>รถยนต์</b></div>
+      </button>
+      
+      <button class="quick-card card-motor" onclick="startLicenseCheck('รถจักรยานยนต์')">
+        <div class="card-icon"><i class="fas fa-motorcycle"></i></div>
+        <div class="card-text">ใบขับขี่<br><b>มอเตอร์ไซค์</b></div>
+      </button>
+
+      <button class="quick-card card-truck" onclick="startLicenseCheck('รถบรรทุก/สาธารณะ')">
+        <div class="card-icon"><i class="fas fa-truck"></i></div>
+        <div class="card-text">ใบขับขี่<br><b>รถบรรทุก</b></div>
+      </button>
+    </div>
+    
     <div class="faq-title" id="faq-title-text"><i class="fas fa-star"></i> คำถามที่พบบ่อย:</div>
     <div id="faq-container" class="faq-grid"></div>
 
@@ -233,7 +322,7 @@
       <button id="micBtn" class="btn-mic" onclick="toggleListening()"><i class="fas fa-microphone"></i></button>
       <p id="statusText" style="margin-top:10px; color: #636e72; font-size: 14px;">แตะไมค์เพื่อเริ่มพูด</p>
     </div>
-  </div>
+</div>
 
   <div id="ticketLicenseWrapper" style="display: none;">
     <div class="ticket">
