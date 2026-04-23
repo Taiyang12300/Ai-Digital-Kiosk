@@ -854,9 +854,27 @@ function renderFAQButtons() {
 
 function renderOptionButtons(options) {
     const container = document.getElementById('faq-container');
-    if (!container) return; container.innerHTML = "";
+    if (!container) return; 
+    container.innerHTML = "";
+    
     options.forEach(opt => {
-        const btn = document.createElement('button'); btn.className = 'faq-btn'; btn.style.border = "2px solid #6c5ce7";
+        const btn = document.createElement('button'); 
+        btn.className = 'faq-btn'; 
+        
+        // --- ส่วนที่เพิ่ม/ปรับปรุง ---
+        // ถ้ามีค่า borderColor ให้ทำแถบสีหนาด้านซ้าย ถ้าไม่มีให้ใช้เส้นขอบม่วงแบบเดิม
+        if (opt.borderColor) {
+            btn.style.borderLeft = `10px solid ${opt.borderColor}`;
+            btn.style.borderTop = "1px solid #ddd";
+            btn.style.borderRight = "1px solid #ddd";
+            btn.style.borderBottom = "1px solid #ddd";
+            btn.style.textAlign = "left"; // ให้ข้อความชิดซ้ายจะสวยกว่าเมื่อมีแถบสี
+            btn.style.paddingLeft = "15px";
+        } else {
+            btn.style.border = "2px solid #6c5ce7";
+        }
+        // -----------------------
+
         btn.innerText = (window.currentLang === 'th' ? opt.th : opt.en);
         btn.onclick = () => { 
             stopAllSpeech(); 
