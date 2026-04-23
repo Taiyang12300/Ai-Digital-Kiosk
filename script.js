@@ -545,26 +545,59 @@ function startLicenseCheck(type) {
 
 function showLicenseChecklist(type, expiry) {
     const isThai = window.currentLang === 'th';
+    // เช็คว่าเป็นรถชั่วคราว (2 ปี) หรือไม่
     const isTemp = type.includes("ชั่วคราว") || type.includes("2 ปี");
+    // เช็คว่าเป็นรถบรรทุก/สาธารณะ หรือไม่
+    const isTruck = type.includes("รถบรรทุก") || type.includes("สาธารณะ");
+    
     let docs = ["บัตรประชาชน (ตัวจริง)", "ใบขับขี่เดิม", "ใบรับรองแพทย์ (ไม่เกิน 1 เดือน)"];
     let note = "";
-    if (isTemp) {
+
+    if (isTruck) {
+        // --- 🚛 กรณีรถบรรทุก/สาธารณะ (ประเภท ท. หรือ บ.) ---
+        if (expiry === 'normal') {
+            note = "อบรมที่สำนักงาน/ออนไลน์ตามประเภท และทดสอบสมรรถภาพร่างกาย";
+            docs.push("ผลผ่านการอบรม (ถ้ามี)");
+        } else if (expiry === 'over1') {
+            note = "ต้องสอบข้อเขียนใหม่ และอบรมตามระเบียบรถสาธารณะ";
+        } else if (expiry === 'over3') {
+            note = "ต้องสอบข้อเขียน สอบขับรถใหม่ และเช็คประวัติอาชญากรรม";
+            docs.push("ใบเช็คประวัติอาชญากรรม (สำหรับ ท.)");
+        }
+    } else if (isTemp) {
+        // --- 🚗 กรณีใบขับขี่ชั่วคราว (2 ปี) ---
         if (expiry === 'normal') note = "ไม่ต้องอบรม ต่อได้ทันที";
         else if (expiry === 'over1') note = "อบรมสำนักงาน 5 ชั่วโมง และสอบข้อเขียนใหม่";
         else if (expiry === 'over3') note = "อบรมสำนักงาน 5 ชั่วโมง สอบข้อเขียนและสอบขับรถใหม่";
     } else {
-        if (expiry === 'normal') { docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)"); note = "อบรมออนไลน์ 1 ชม. และต่อได้ทันที"; }
-        else if (expiry === 'over1') { docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)"); note = "อบรมออนไลน์ 2 ชม. และต้องสอบข้อเขียนใหม่"; }
-        else if (expiry === 'over3') { note = "ต้องอบรม 5 ชม. ที่ขนส่งเท่านั้น + สอบข้อเขียน + สอบขับรถ"; }
+        // --- 🚘 กรณีใบขับขี่ 5 ปี (เปลี่ยนเป็น 5 ปี) ---
+        if (expiry === 'normal') { 
+            docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)"); 
+            note = "อบรมออนไลน์ 1 ชม. และต่อได้ทันที"; 
+        } else if (expiry === 'over1') { 
+            docs.push("ผลผ่านการอบรมออนไลน์ (DLT e-Learning)"); 
+            note = "อบรมออนไลน์ 2 ชม. และต้องสอบข้อเขียนใหม่"; 
+        } else if (expiry === 'over3') { 
+            note = "ต้องอบรม 5 ชม. ที่ขนส่งเท่านั้น + สอบข้อเขียน + สอบขับรถ"; 
+        }
     }
+
     let checklistHTML = "";
     docs.forEach((d, idx) => {
         checklistHTML += `<div class="check-item" onclick="document.getElementById('chk-${idx}').click()"><input type="checkbox" class="doc-check" id="chk-${idx}" onchange="checkChecklist()" onclick="event.stopPropagation()"><label>${d}</label></div>`;
     });
-    // โครงสร้างบรรทัดเดียวแบบเดิม ป้องกันหน้าจอเพี้ยน เปลี่ยนเพียงฟังก์ชันจบงาน
-    const resultHTML = `<div class="checklist-card"><strong style="font-size:22px;">${type}</strong><br><div style="background:#e8f0fe; color:#1a73e8; padding:8px; border-radius:5px; margin-top:5px; font-weight:bold;">💡 ${note}</div><hr style="margin:15px 0; border:0; border-top:1px solid #eee;">${checklistHTML}<button id="btnPrintGuide" style="display:none;" onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}'); setTimeout(() => { backToHomeKeepPerson(); }, 6000);">🖨️ ปริ้นใบนำทาง</button></div>`;
+
+    const resultHTML = `
+        <div class="checklist-card">
+            <strong style="font-size:22px;">${type}</strong><br>
+            <div style="background:#e8f0fe; color:#1a73e8; padding:8px; border-radius:5px; margin-top:5px; font-weight:bold;">💡 ${note}</div>
+            <hr style="margin:15px 0; border:0; border-top:1px solid #eee;">
+            ${checklistHTML}
+            <button id="btnPrintGuide" style="display:none;" onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}'); setTimeout(() => { backToHomeKeepPerson(); }, 6000);">🖨️ ปริ้นใบนำทาง</button>
+        </div>`;
+
     displayResponse(resultHTML);
-    speak(isThai ? "กรุณาติ๊กตรวจสอบเอกสารให้ครบ เพื่อปริ้นใบนำทางครับ" : "Please check all items to print.");
+    speak(isThai ? "กรุณาตรวจสอบเอกสารให้ครบถ้วน เพื่อพิมพ์ใบนำทางครับ" : "Please check all items to print your guide.");
 }
 
 function checkChecklist() {
