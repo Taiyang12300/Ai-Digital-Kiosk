@@ -188,32 +188,36 @@ function forceStopAllMic() {
 function playAudioLink(url, callback = null) {
     if (!url) return;
 
+    // 🚩 ล็อคประตูทันที! (ย้ายขึ้นมาบนสุด)
+    window.isBusy = true; 
+    window.isAudioPlaying = true; // ล็อคซ้ำสองชั้น
+
     stopAllSpeech(); 
-    forceStopAllMic(); 
+    forceStopAllMic(); // สั่งปิดหูบอท
+    
     if (window.micTimer) clearTimeout(window.micTimer); 
     
-    window.isBusy = true;
-    window.isAudioPlaying = true;
     updateLottie('talking');
 
     const audio = new Audio(url);
 
     audio.onplay = () => {
+        // 🔒 ย้ำอีกครั้งว่าห้ามใครเปิดไมค์ระหว่างนี้
         forceStopAllMic();
         window.isBusy = true;
     };
 
     audio.onended = () => {
+        // เล่นจบแล้วค่อยๆ ปลดล็อค
         window.isAudioPlaying = false;
         setTimeout(() => {
-            window.isBusy = false;
+            window.isBusy = false; // ปลดล็อค BUSY ตรงนี้
             updateLottie('idle');
             updateInteractionTime();
             
             if (callback) {
                 callback();
             } else if (window.allowWakeWord && !isAtHome) {
-                window.allowWakeWord = true;
                 startWakeWord();
             }
         }, 1000); 
@@ -225,7 +229,10 @@ function playAudioLink(url, callback = null) {
         updateLottie('idle'); 
     };
 
-    audio.play().catch(e => { window.isBusy = false; });
+    audio.play().catch(e => { 
+        window.isBusy = false; 
+        window.isAudioPlaying = false;
+    });
 }
 
 // --- 1. ระบบจัดการสถานะ & Wake Word Setup ---
