@@ -531,15 +531,35 @@ function greetUser() {
 
 // --- 🚩 3. ระบบคัดกรองใบขับขี่ ---
 function startLicenseCheck(type) {
-    forceStopAllMic(); isAtHome = false;
+    forceStopAllMic(); 
+    isAtHome = false;
     const isThai = window.currentLang === 'th';
     const msg = isThai ? `ใบขับขี่ ${type} ของท่าน หมดอายุหรือยังครับ?` : `Is your ${type} license expired?`;
+    
     displayResponse(msg);
     speak(msg, () => { window.isBusy = false; });
+
+    // ส่งอาเรย์ปุ่มไปให้ renderOptionButtons 
+    // เพิ่ม property 'color' (ถ้าฟังก์ชัน render เดิมของนายช่างรองรับการรับค่าสี)
     renderOptionButtons([
-        { th: "✅ ยังไม่หมดอายุ / ไม่เกิน 1 ปี", en: "Not expired / Under 1 year", s_th: `ต่อใบขับขี่ ${type}`, s_en: `renew ${type} license`, action: () => { forceStopAllMic(); showLicenseChecklist(type, 'normal'); } },
-        { th: "⚠️ หมดอายุเกิน 1 ปี (แต่ไม่เกิน 3 ปี)", en: "Expired 1-3 years", s_th: `ต่อใบขับขี่ ${type} เกิน 1 ปี`, s_en: `renew ${type} over 1 year`, action: () => { forceStopAllMic(); showLicenseChecklist(type, 'over1'); } },
-        { th: "❌ หมดอายุเกิน 3 ปี", en: "Expired over 3 years", s_th: `ต่อใบขับขี่ ${type} เกิน 3 ปี`, s_en: `renew ${type} over 3 year`, action: () => { forceStopAllMic(); showLicenseChecklist(type, 'over3'); } }
+        { 
+            th: "✅ ยังไม่หมดอายุ / ไม่เกิน 1 ปี", 
+            en: "Not expired / Under 1 year", 
+            action: () => { forceStopAllMic(); showLicenseChecklist(type, 'normal'); },
+            borderColor: "#28a745" // สีเขียว
+        },
+        { 
+            th: "⚠️ หมดอายุเกิน 1 ปี (แต่ไม่เกิน 3 ปี)", 
+            en: "Expired 1-3 years", 
+            action: () => { forceStopAllMic(); showLicenseChecklist(type, 'over1'); },
+            borderColor: "#ffc107" // สีเหลือง
+        },
+        { 
+            th: "❌ หมดอายุเกิน 3 ปี", 
+            en: "Expired over 3 years", 
+            action: () => { forceStopAllMic(); showLicenseChecklist(type, 'over3'); },
+            borderColor: "#dc3545" // สีแดง
+        }
     ]);
 }
 
