@@ -83,17 +83,12 @@
       line-height: 1.6; 
     }
     
-   .faq-title { 
-   width: 100%; 
-   margin: 15px 0; 
-   font-weight: 800; 
-   color: #2d3436; 
-   /* แก้จาก (26px, 1.5vw, 18px) เป็นตัวเลขที่เรียงจากน้อยไปมาก */
-   font-size: clamp(20px, 2.5vw, 28px); 
-   display: flex; 
-   align-items: center; 
-   gap: 10px; 
-   }
+22   .faq-title { width: 100%; margin: 10px 0; font-weight: 800; color: #2d3436; font-size: clamp(18px, 2.5vw, px); display: flex; align-items: center; gap: 8px; }
+    .faq-grid { 
+      display: grid; 
+      grid-template-columns: repeat(auto-fit, minmax(clamp(130px, 20vw, 180px), 1fr)); 
+      gap: 12px; width: 100%; margin-bottom: 20px; 
+    }
     
     .faq-btn { 
       padding: 12px; background: white; color: var(--primary); border: 2px solid #e0e0ff; border-radius: 15px; 
