@@ -11,6 +11,8 @@ window.hasGreeted = false;
 window.allowWakeWord = false; 
 window.isListening = false; // [NEW] สถานะการฟังจากปุ่มไมค์
 window.recognition = null;  // [NEW] ตัวแปร Recognition กลาง
+window.isManualAborted = false; // [NEW] ตัวแปรป้องกันไมค์เด้งสวนอัตโนมัติ
+window.currentAudio = null;
 
 let isAtHome = true; 
 const GAS_URL = "https://script.google.com/macros/s/AKfycbz1bkIsQ588u-rpjY-8nMlya5_c0DsIabRvyPyCC_sPs5vyeJ_1wcOBaqKfg7cvlM3XJw/exec"; 
@@ -64,10 +66,19 @@ function initSpeechRecognition() {
         }
     };
 
-    window.recognition.onend = () => { 
+        window.recognition.onend = () => { 
         window.isListening = false; // เคลียร์สถานะทุกครั้งที่จบ
         updateMicUI(false); 
-        if (typeof startWakeWord === "function" && !window.isBusy && !isAtHome) {
+
+        // 🚩 [จุดป้องกัน] ถ้าบอทกำลังยุ่ง หรือเราสั่งเบรกไว้ ห้ามไปปลุก Wake Word
+        if (window.isManualAborted || window.isBusy || window.isAudioPlaying) {
+            console.log("🔇 [STT Mic] Stopped. WakeWord won't start because system is busy.");
+            return; 
+        }
+
+        // 🚀 ถ้าทุกอย่างปกติ (บอทว่าง และไม่ได้อยู่ที่หน้า Home) ให้กลับไปฟัง Wake Word ต่อ
+        if (typeof startWakeWord === "function" && !isAtHome) {
+            console.log("👂 [STT Mic] Ended. Switching back to WakeWord standby.");
             startWakeWord();
         }
     };
@@ -85,25 +96,40 @@ function initSpeechRecognition() {
 }
 
 function toggleListening() { 
+    // 1. สั่งเงียบปากบอททันที
     window.speechSynthesis.cancel(); 
+    if (window.currentAudio) {
+        window.currentAudio.pause();
+        window.currentAudio = null;
+    }
+
+    // 2. ดึงเบรกมือป้องกัน Wake Word เด้งสวน
     if (typeof forceStopAllMic === "function") forceStopAllMic(); 
+    
+    // 🚩 [NEW] ปลดเบรกมือเฉพาะจุด เพื่อให้ Recognition ตัวนี้ทำงานได้
+    // แต่ยังคงค่า true ไว้ในช่วงสั้นๆ เพื่อให้ onend ตัวอื่นไม่ทำงาน
+    window.isManualAborted = false; 
+
     if (window.micTimer) clearTimeout(window.micTimer);
     
     window.isBusy = false; 
+    window.isAudioPlaying = false; // ปลดล็อคสถานะเสียง
 
-    // 🚀 จุดสำคัญ: ตรวจสอบสถานะก่อนเริ่ม
+    // 🚀 จังหวะสลับโหมด
     if (window.isListening) { 
+        // ถ้าฟังอยู่แล้ว ให้หยุด
         try { window.recognition.stop(); } catch(e) {}
     } else { 
-        // หน่วงเวลาเล็กน้อยเพื่อให้ตัวเก่า abort เสร็จสมบูรณ์
+        // ถ้ายังไม่ฟัง ให้เริ่ม (หน่วงเวลาเล็กน้อยเพื่อให้ Hardware เคลียร์สถานะจาก forceStop)
         setTimeout(() => {
             try {
-                if (!window.isListening) { // Double Check
+                // Double Check ว่าไม่มีใครแอบเปิดไปก่อนหน้า
+                if (!window.isListening) { 
                     window.recognition.start(); 
+                    console.log("🎤 [Manual] User Triggered Mic");
                 }
             } catch (e) { 
                 console.warn("Prevented Mic Overlap:", e.message); 
-                // หากยัง Error ให้ลองรีเซ็ตสถานะแล้วเริ่มใหม่
                 window.isListening = false;
             }
         }, 300);
@@ -172,6 +198,7 @@ function completeLoading() {
 // --- 🚩 ฟังก์ชันกลางสำหรับจัดการสิทธิ์และการเล่นเสียง ---
 
 function forceStopAllMic() {
+    window.isManualAborted = true; // 🚩 ปักธงว่า "ฉันสั่งปิดเองนะ" ห้ามเปิดสวน!
     isWakeWordActive = false;
     window.isListening = false; 
 
@@ -188,36 +215,50 @@ function forceStopAllMic() {
 function playAudioLink(url, callback = null) {
     if (!url) return;
 
-    // 🚩 ล็อคประตูทันที! (ย้ายขึ้นมาบนสุด)
+    // 🚩 1. แจ้งทุกคนให้ทราบว่า "ฉันยุ่งมาก" และ "ฉันสั่งปิดไมค์เอง"
     window.isBusy = true; 
-    window.isAudioPlaying = true; // ล็อคซ้ำสองชั้น
+    window.isAudioPlaying = true;
+    window.isManualAborted = true; // [NEW] ย้ำให้ onend รู้ว่านี่คือความตั้งใจของเรา
 
     stopAllSpeech(); 
-    forceStopAllMic(); // สั่งปิดหูบอท
+    forceStopAllMic(); // 🛑 สั่งหยุดไมค์ทุกตัวทันที
     
     if (window.micTimer) clearTimeout(window.micTimer); 
     
     updateLottie('talking');
 
+    // 🚩 2. จัดการตัวแปร Audio ให้เป็นระเบียบ
+    if (window.currentAudio) { 
+        window.currentAudio.pause(); // หยุดไฟล์เก่าที่อาจเล่นค้างอยู่
+    }
+    
     const audio = new Audio(url);
+    window.currentAudio = audio; // เก็บลงตัวแปรกลางเพื่อให้ฟังก์ชันอื่นสั่งหยุดได้
 
     audio.onplay = () => {
-        // 🔒 ย้ำอีกครั้งว่าห้ามใครเปิดไมค์ระหว่างนี้
-        forceStopAllMic();
+        // 🔒 ล็อกซ้ำสองชั้น เผื่อมี Event แปลกๆ ไปปลุกไมค์ตอนกำลัง Buffering
         window.isBusy = true;
+        window.isManualAborted = true; 
+        if (wakeWordRecognition) try { wakeWordRecognition.abort(); } catch(e) {}
     };
 
     audio.onended = () => {
-        // เล่นจบแล้วค่อยๆ ปลดล็อค
         window.isAudioPlaying = false;
+        window.currentAudio = null; // เคลียร์ไฟล์เสียงที่จบแล้ว
+        
         setTimeout(() => {
-            window.isBusy = false; // ปลดล็อค BUSY ตรงนี้
+            // 🔓 ปลดล็อกให้ระบบกลับมาทำงานปกติ
+            window.isBusy = false;
+            window.isManualAborted = false; // [NEW] ปลดเบรกมือ
+            
             updateLottie('idle');
             updateInteractionTime();
             
             if (callback) {
                 callback();
-            } else if (window.allowWakeWord && !isAtHome) {
+            } else if (window.allowWakeWord && window.hasGreeted) { 
+                // เปลี่ยนจาก !isAtHome เป็น window.hasGreeted 
+                // เพื่อให้สอดคล้องกับ Logic ใหม่ที่นายช่างแก้นะครับ
                 startWakeWord();
             }
         }, 1000); 
@@ -226,12 +267,15 @@ function playAudioLink(url, callback = null) {
     audio.onerror = () => { 
         window.isAudioPlaying = false;
         window.isBusy = false; 
+        window.isManualAborted = false;
         updateLottie('idle'); 
     };
 
     audio.play().catch(e => { 
+        console.error("Audio Play Error:", e);
         window.isBusy = false; 
         window.isAudioPlaying = false;
+        window.isManualAborted = false;
     });
 }
 
@@ -284,13 +328,20 @@ function setupWakeWord() {
         }
     };
 
-    wakeWordRecognition.onend = () => {
-        // 🚀 แก้ไข: เปลี่ยนจาก !isAtHome เป็น window.hasGreeted 
-        // เพื่อให้ดักฟังชื่อได้ทั้งที่หน้าโฮมและหน้าอื่นๆ หากทักทายกันแล้ว
+        wakeWordRecognition.onend = () => {
+        // 🚩 [จุดสำคัญที่สุด] ถ้าเราตั้งใจสั่งปิด หรือบอทกำลังยุ่ง/เล่นเสียงอยู่ ให้หยุดสนิท ห้ามเปิดใหม่!
+        if (window.isManualAborted || window.isBusy || window.isAudioPlaying) {
+            console.log("🔇 [WakeWord] Stay quiet. System is busy or manually aborted.");
+            isWakeWordActive = false;
+            return; // จบการทำงานตรงนี้เลย ไม่ไปต่อที่ if ข้างล่าง
+        }
+
+        // --- ส่วนเดิมของนายช่าง ---
         if (window.hasGreeted && personInFrameTime !== null && !window.isBusy && !window.isListening && isWakeWordActive) {
             setTimeout(() => {
                 try {
-                    if (!window.isBusy && !window.isListening && isWakeWordActive) {
+                    // เช็ค Busy อีกรอบก่อนจะ Start จริง เผื่อจังหวะหน่วง 1.5 วิ มีเสียงแทรกขึ้นมา
+                    if (!window.isBusy && !window.isListening && isWakeWordActive && !window.isManualAborted) {
                         wakeWordRecognition.start(); 
                     }
                 } catch(e) {}
@@ -309,17 +360,34 @@ function setupWakeWord() {
 }
 
 function startWakeWord() {
+    // 1. เช็คเงื่อนไขพื้นฐานเหมือนเดิม
     if (!window.allowWakeWord || window.isListening || window.isMuted || window.isBusy || !window.hasGreeted ) {
         isWakeWordActive = false;
         return;
     }
+
+    // 🚩 [จุดสำคัญ] ปลดล็อก Flag ที่เราเคยสั่งกั้นไว้ใน forceStopAllMic
+    window.isManualAborted = false; 
+
     try { 
+        // สั่งหยุดไมค์ตัวอื่นก่อน (ถ้ามี) เพื่อเตรียมเปิด Wake Word
         forceStopAllMic(); 
+
+        // 🚩 หลังจากสั่ง forceStopAllMic ต้องรีบปลดล็อกคืนทันที 
+        // เพราะ forceStopAllMic จะไปตั้งค่า isManualAborted = true ไว้
+        window.isManualAborted = false; 
+
         setTimeout(() => {
-            isWakeWordActive = true; 
-            wakeWordRecognition.start(); 
+            // เช็ค Busy อีกรอบเผื่อจังหวะหน่วง 200ms มีอะไรแทรก
+            if (!window.isBusy && !window.isListening && window.allowWakeWord) {
+                isWakeWordActive = true; 
+                wakeWordRecognition.start(); 
+                console.log("👂 [WakeWord] Started Listening...");
+            }
         }, 200);
-    } catch (e) {}
+    } catch (e) {
+        console.error("WakeWord Start Error:", e);
+    }
 }
 
 function stopWakeWord() {
@@ -692,9 +760,29 @@ function speak(text, callback = null, isGreeting = false) {
 }
 
 function stopAllSpeech() { 
+    // 1. หยุดเสียงอ่านของระบบ (TTS)
     window.speechSynthesis.cancel(); 
+    
+    // 2. หยุดไฟล์เสียงจาก Audio Link (ถ้ามีเล่นค้างอยู่)
+    if (window.currentAudio) {
+        try {
+            window.currentAudio.pause();
+            window.currentAudio.currentTime = 0; // ย้อนกลับไปเริ่มใหม่ (ถ้าจะเล่นอีกรอบ)
+        } catch (e) { console.warn("Audio stop error:", e); }
+        window.currentAudio = null;
+    }
+
+    // 3. ปลดล็อกสถานะการทำงาน (Flags)
     window.isBusy = false; 
+    window.isAudioPlaying = false;
+    
+    // 🚩 [NEW] ปลดเบรกมือเพื่อให้ Wake Word กลับมาทำงานได้ (ถ้าเงื่อนไขครบ)
+    window.isManualAborted = false; 
+
+    // 4. อัปเดตหน้าตาบอท
     updateLottie('idle'); 
+    
+    console.log("🤫 [System] All speech and audio stopped.");
 }
 
 function renderFAQButtons() {
