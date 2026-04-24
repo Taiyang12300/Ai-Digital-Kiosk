@@ -534,31 +534,61 @@ function startLicenseCheck(type) {
     forceStopAllMic(); 
     isAtHome = false;
     const isThai = window.currentLang === 'th';
-    const msg = isThai ? `ใบขับขี่ ${type} ของท่าน หมดอายุหรือยังครับ?` : `Is your ${type} license expired?`;
     
+    // 🚛 กรณีรถบรรทุก: ข้ามไปถามวันหมดอายุเลย เพราะมีแบบเดียว (3 ปี)
+    if (type.includes("รถบรรทุก") || type.includes("สาธารณะ")) {
+        selectLicenseExpiry(type, '3to3');
+        return;
+    }
+
+    // 🚗 กรณีรถยนต์/มอเตอร์ไซค์: ต้องให้เลือกประเภทก่อน
+    const msg = isThai ? `ใบขับขี่ ${type} เดิมของท่าน เป็นแบบไหนครับ?` : `What type is your current ${type} license?`;
     displayResponse(msg);
     speak(msg, () => { window.isBusy = false; });
 
-    // ส่งอาเรย์ปุ่มไปให้ renderOptionButtons 
-    // เพิ่ม property 'color' (ถ้าฟังก์ชัน render เดิมของนายช่างรองรับการรับค่าสี)
+    renderOptionButtons([
+        { 
+            th: "แบบชั่วคราว (2 ปี)", 
+            en: "Temporary (2 years)", 
+            action: () => { forceStopAllMic(); selectLicenseExpiry(type + " (ชั่วคราว)", '2to5'); },
+            borderColor: "#a29bfe" 
+        },
+        { 
+            th: "แบบบุคคล (5 ปี)", 
+            en: "Personal (5 years)", 
+            action: () => { forceStopAllMic(); selectLicenseExpiry(type + " (5 ปี)", '5to5'); },
+            borderColor: "#6c5ce7" 
+        }
+    ]);
+}
+
+// 🕒 ฟังก์ชันขั้นที่ 2: ถามเรื่องวันหมดอายุ
+function selectLicenseExpiry(type, period) {
+    const isThai = window.currentLang === 'th';
+    const msg = isThai 
+    ? `ใบขับขี่ ${type} ของท่าน หมดอายุหรือยังครับ?` 
+    : `Has your ${type} license expired?`;
+    displayResponse(msg);
+    speak(msg, () => { window.isBusy = false; });
+
     renderOptionButtons([
         { 
             th: "✅ ยังไม่หมดอายุ / ไม่เกิน 1 ปี", 
             en: "Not expired / Under 1 year", 
-            action: () => { forceStopAllMic(); showLicenseChecklist(type, 'normal'); },
-            borderColor: "#28a745" // สีเขียว
+            action: () => { forceStopAllMic(); showLicenseChecklist(type, period, 'normal'); },
+            borderColor: "#28a745" 
         },
         { 
-            th: "⚠️ หมดอายุเกิน 1 ปี (แต่ไม่เกิน 3 ปี)", 
+            th: "⚠️ หมดอายุเกิน 1 ปี (ไม่เกิน 3 ปี)", 
             en: "Expired 1-3 years", 
-            action: () => { forceStopAllMic(); showLicenseChecklist(type, 'over1'); },
-            borderColor: "#ffc107" // สีเหลือง
+            action: () => { forceStopAllMic(); showLicenseChecklist(type, period, 'over1'); },
+            borderColor: "#ffc107" 
         },
         { 
             th: "❌ หมดอายุเกิน 3 ปี", 
             en: "Expired over 3 years", 
-            action: () => { forceStopAllMic(); showLicenseChecklist(type, 'over3'); },
-            borderColor: "#dc3545" // สีแดง
+            action: () => { forceStopAllMic(); showLicenseChecklist(type, period, 'over3'); },
+            borderColor: "#dc3545" 
         }
     ]);
 }
