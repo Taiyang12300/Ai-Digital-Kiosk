@@ -12,6 +12,7 @@
  * - [TTS-UPGRADE] cleanTextForSpeech() + ปรับ rate/pitch ให้ Pattara ฟังธรรมชาติขึ้น
  * - [WALK-AWAY] หยุดอ่านและกลับหน้าโฮมเมื่อคนเดินออกจากกล้อง
  * - [FACE-MEMORY] จำใบหน้าชั่วคราวเพื่อไม่ทักทายซ้ำในวันเดียวกัน (จำกัด 50 คน)
+ * - [WELCOME-BACK] ทักทายแบบคุ้นเคยเมื่อประชาชนคนเดิมเดินกลับมาหน้าตู้อีกครั้ง
  */
 
 window.localDatabase = null;
@@ -538,13 +539,9 @@ async function detectPerson() {
 
             if ((now - personInFrameTime) >= 1000 && isAtHome && !window.isBusy && !window.hasGreeted) {
                 if (alreadySeen) {
-                    // คนเดิมกลับมา → ไม่ทักทายซ้ำ แต่พร้อมรับคำถาม
-                    console.log("🔁 [Face-Memory] คนเดิมกลับมา ไม่ทักทายซ้ำ");
-                    isAtHome = false;
-                    window.hasGreeted = true;
-                    window.isBusy = false;
-                    window.allowWakeWord = true;
-                    startWakeWord();
+                    // คนเดิมกลับมา → ทักทายแบบคุ้นเคย (ใช้งานฟังก์ชันใหม่)
+                    console.log("🔁 [Face-Memory] คนเดิมกลับมา ทักทายแบบคุ้นเคย");
+                    greetWelcomeBack(); 
                 } else {
                     // คนใหม่ → ทักทายและจำใบหน้า
                     console.log(`👤 [Detected] เพศ: ${window.detectedGender}, อายุประมาณ: ${window.detectedAge} ปี`);
@@ -605,6 +602,38 @@ function greetUser() {
         finalGreet = `${timeGreet} ${pType}... ${ends[Math.floor(Math.random() * ends.length)]}`;
     } else {
         finalGreet = `Hello ${gender === 'male' ? 'Sir' : 'Madam'}, how can I help you?`;
+    }
+
+    displayResponse(finalGreet);
+    speak(finalGreet, () => {
+        window.isBusy = false;
+        window.allowWakeWord = true;
+    }, true);
+}
+
+// --- ฟังก์ชันสำหรับทักทายคนที่เคยคุยด้วยแล้วในวันนั้น ---
+function greetWelcomeBack() {
+    if (window.hasGreeted || window.isBusy) return;
+    forceUnmute();
+    isAtHome = false;
+    window.hasGreeted = true;
+    window.isBusy = true;
+
+    const gender = window.detectedGender || 'male';
+    let finalGreet = "";
+
+    if (window.currentLang === 'th') {
+        const pType = (gender === 'male') ? "คุณผู้ชาย" : "คุณผู้หญิง";
+        // สุ่มคำทักทายสำหรับคนที่กลับมาหน้าตู้อีกครั้ง
+        const phrases = [
+            "มีอะไรให้ผมช่วยเพิ่มเติมไหมครับ?",
+            "สอบถามข้อมูลเพิ่มเติมได้เลยนะครับ",
+            "ต้องการติดต่อเรื่องอื่นเพิ่มเติม สอบถามได้เลยครับ",
+            "ยินดีต้อนรับกลับมาครับ มีอะไรให้รับใช้เพิ่มไหมครับ?"
+        ];
+        finalGreet = `${pType}... ${phrases[Math.floor(Math.random() * phrases.length)]}`;
+    } else {
+        finalGreet = `Welcome back! Do you need any further assistance?`;
     }
 
     displayResponse(finalGreet);
