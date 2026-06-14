@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
+  <title>AI Digital Kiosk - DLT (Local Brain)</title>
+  
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;500;800&family=Kanit:wght@300;500;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
+  
+  <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+
+  <link rel="icon" type="image/png" href="https://img2.pic.in.th/59424.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#6c5ce7">
+  
+  <style>
+    :root { 
+      --primary: #6c5ce7; 
+      --bg: #f9f9fb; 
+      --accent: #ff7675; 
+      --base-font: clamp(16px, 2vw, 20px);
+    }
+    
+    body { 
+      font-family: 'Sarabun', sans-serif; 
+      background: var(--bg); 
+      margin: 0; 
+      padding: 0; 
+      display: flex; 
+      justify-content: center; 
+      height: 100dvh;
+      overflow: hidden;
+      -webkit-text-size-adjust: none;
+    }
+
+    .main-container { 
+      width: 100%; 
+      max-width: clamp(350px, 90%, 800px); 
+      padding: clamp(6px, 1vw, 12px);
+      padding-bottom: 0;
+      display: flex; 
+      flex-direction: column; 
+      align-items: center; 
+      box-sizing: border-box;
+      height: 100dvh;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* โซนบน: scroll ได้เมื่อตอบคำถาม */
+    .scroll-zone {
+      flex: 1;
+      width: 100%;
+      overflow-y: auto;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 0;
+      padding-bottom: 4px;
+      scrollbar-width: none;
+    }
+    .scroll-zone::-webkit-scrollbar { display: none; }
+
+    /* โซนล่าง: ตรึงไว้เสมอ */
+    .bottom-zone {
+      width: 100%;
+      flex-shrink: 0;
+      background: var(--bg);
+      padding-bottom: env(safe-area-inset-bottom, 8px);
+    }
+    
+    .top-controls { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5dvh; flex-shrink: 0; }
+    .lang-container { display: flex; gap: 8px; }
+    
+    .btn-lang, .btn-mute { 
+      display: flex; align-items: center; justify-content: center; gap: 6px; 
+      padding: clamp(6px, 1vw, 10px) clamp(10px, 1.5vw, 16px); 
+      border-radius: 25px; border: 2px solid #e0e0e0; background: white; color: #636e72; 
+      cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+      font-size: clamp(12px, 1.3vw, 16px);
+    }
+    .btn-lang.active { border-color: var(--primary); background: #f0edff; color: var(--primary); font-weight: bold; }
+    .btn-mute.muted { background: var(--accent); color: white; border-color: var(--accent); }
+
+    .avatar-container { 
+      width: clamp(60px, 9dvh, 110px); 
+      height: clamp(60px, 9dvh, 110px); 
+      margin-bottom: 0.5dvh; 
+      border-radius: 50%; background: white; box-shadow: 0 5px 15px rgba(0,0,0,0.05); 
+      overflow: hidden; flex-shrink: 0; 
+    }
+    #lottie-canvas { width: 100%; height: 100%; }
+
+    .display-box { 
+      background: white; border-radius: 16px; 
+      padding: clamp(8px, 1.5vw, 14px); 
+      box-shadow: 0 10px 20px rgba(0,0,0,0.05); 
+      width: 100%; box-sizing: border-box; text-align: left; 
+      min-height: 48px; 
+      font-size: clamp(14px, 1.6vw, 18px); 
+      margin-bottom: 6px; color: #2d3436; 
+      border-left: clamp(4px, 1vw, 6px) solid var(--primary); 
+      line-height: 1.4; 
+    }
+    
+    .faq-title { width: 100%; margin: 5px 0; font-weight: 800; color: #2d3436; font-size: clamp(13px, 1.8vw, 16px); display: flex; align-items: center; gap: 6px; }
+    .faq-grid { 
+      display: grid; 
+      grid-template-columns: repeat(auto-fit, minmax(clamp(110px, 18vw, 160px), 1fr)); 
+      gap: 7px; width: 100%; margin-bottom: 8px; 
+    }
+    
+    .faq-btn { 
+      padding: 8px 6px; background: white; color: var(--primary); border: 2px solid #e0e0ff; border-radius: 12px; 
+      font-size: clamp(11px, 1.2vw, 14px); 
+      cursor: pointer; transition: all 0.2s; font-weight: 500; 
+      min-height: clamp(38px, 5dvh, 55px); 
+      display: flex; align-items: center; justify-content: center; text-align: center; 
+    }
+    .faq-btn:active { transform: scale(0.95); background: var(--primary); color: white; }
+
+    /* input+mic ย้ายไปอยู่ใน bottom-zone แทน */
+    .input-section { width: 100%; display: flex; gap: 10px; margin-bottom: 6px; padding-bottom: 0; }
+    #userInput { 
+      flex: 1; padding: 12px 18px; border-radius: 30px; border: 2px solid #ddd; outline: none; 
+      font-size: clamp(14px, 1.4vw, 17px); font-family: 'Sarabun'; 
+    }
+    .btn-send { width: 46px; height: 46px; border-radius: 50%; border: none; background: var(--primary); color: white; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+
+    .mic-section { 
+      width: 100%;
+      padding: 2px 0 2px;
+      text-align: center; 
+      flex-shrink: 0;
+    }
+
+    .btn-mic { 
+      width: clamp(56px, 6.5dvh, 76px); 
+      height: clamp(56px, 6.5dvh, 76px); 
+      border-radius: 50%; 
+      border: none; 
+      background: var(--primary); 
+      color: white; 
+      font-size: clamp(24px, 3vw, 32px); 
+      cursor: pointer; 
+      display: flex; 
+      align-items: center; 
+      justify-content: center; 
+      margin: 0 auto; 
+      box-shadow: 0 10px 20px rgba(108,92,231,0.3); 
+    }
+    .btn-mic.recording { background: var(--accent); animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0% { transform: scale(1); } 70% { transform: scale(1.1); } 100% { transform: scale(1); } }
+
+    .checklist-card { text-align: left; background: white; padding: 15px; border-radius: 12px; border: 1px solid #ddd; }
+    .check-item { display: flex; align-items: center; margin-bottom: 12px; background: #f0f2f5; padding: 10px; border-radius: 8px; cursor: pointer; }
+    .check-item input { width: 22px; height: 22px; cursor: pointer; accent-color: #28a745; }
+    .check-item label { margin-left: 12px; font-size: 18px; cursor: pointer; color: #333; flex: 1; }
+    #btnPrintGuide { display: none !important; width: 100%; padding: 15px; background: #28a745; color: white; border: none; border-radius: 10px; font-weight: bold; font-size: 20px; cursor: pointer; margin-top: 15px; }
+    #btnPrintGuide.show-btn { display: block !important; }
+
+    /* Splash Screen */
+    #splash-screen { 
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #000; 
+        display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 10000; 
+        transition: opacity 0.8s ease, transform 0.8s ease; 
+    }
+    .splash-logo { width: clamp(120px, 20vw, 180px); margin-bottom: 30px; }
+    .splash-title { font-family: 'Kanit', sans-serif; color: white; font-size: clamp(22px, 3vw, 32px); font-weight: 800; margin-bottom: 5px; }
+    .splash-status { font-family: 'Sarabun', sans-serif; color: #a0a0a0; font-size: 14px; margin-bottom: 25px; }
+    .progress-container { width: min(250px, 70%); height: 6px; background: #1a1a1a; border-radius: 10px; overflow: hidden; }
+    .progress-fill { 
+        width: 0%; height: 100%; background: linear-gradient(90deg, #2196F3, #00BCD4, #2196F3); 
+        background-size: 200% 100%; animation: flow 2s linear infinite; transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1); 
+    }
+    @keyframes flow { 0% { background-position: 200% 0; } 100% { background-position: 0 0; } }
+
+    /* ปุ่มพิมพ์สำเนาบัตรประชาชน */
+    .idcard-single-section { width: 100%; margin-bottom: 8px; }
+    .btn-idcard-single {
+      width: 100%; background: white; border: 2px solid #74b9ff; border-radius: 14px; padding: 10px 16px;
+      display: flex; align-items: center; justify-content: center; gap: 12px; cursor: pointer; transition: all 0.2s ease;
+      box-shadow: 0 4px 12px rgba(9, 132, 227, 0.06);
+    }
+    .btn-idcard-single .icon-box { width: 38px; height: 38px; border-radius: 50%; background: #0984e3; color: white; display: flex; align-items: center; justify-content: center; font-size: 17px; }
+    .btn-idcard-single .text-box { color: #2d3436; font-size: 13px; text-align: left; line-height: 1.3; }
+    .btn-idcard-single .text-box b { font-size: 15px; color: #0984e3; }
+    .btn-idcard-single:active { transform: scale(0.97); background: #f1f7ff; }
+    .btn-idcard-single.processing { cursor: wait !important; filter: grayscale(1) !important; opacity: 0.5 !important; }
+
+    /* เมนูคัดกรองใบขับขี่ */
+    .quick-menu { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; width: 100%; margin-bottom: 8px; }
+    .quick-card {
+      background: white; border: 2px solid #e0e0e0; border-radius: 14px; padding: 8px 6px; 
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; 
+      cursor: pointer; transition: all 0.2s ease; box-shadow: 0 4px 10px rgba(0,0,0,0.03); min-height: clamp(80px, 11dvh, 110px);
+    }
+    .card-icon { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 17px; color: white; }
+    .card-text { color: #2d3436; font-size: 11px; line-height: 1.2; text-align: center; }
+    .card-text b { font-size: 14px; }
+
+    .card-car { border-color: #dcd6f7; } .card-car .card-icon { background: #6c5ce7; } .card-car b { color: #6c5ce7; }
+    .card-motor { border-color: #c2f0e5; } .card-motor .card-icon { background: #00b894; } .card-motor b { color: #00b894; }
+    .card-truck { border-color: #ffeaa7; } .card-truck .card-icon { background: #e17055; } .card-truck b { color: #e17055; }
+    .quick-card:active { transform: scale(0.92); background: #f8f9fa; }
+
+    #faq-container .faq-btn {
+      justify-content: flex-start; padding-left: clamp(15px, 2vw, 25px); font-weight: 500; text-align: left; background: #ffffff; border: 1px solid #d1d8e0; 
+      transition: all 0.2s ease; display: flex; align-items: center; gap: 12px; border-left: 1px solid #d1d8e0; 
+    }
+    #faq-container .faq-btn:active { background: #f1f2f6; transform: scale(0.98) translateX(5px); }
+    .faq-btn b { font-weight: 800; color: #2d3436; }
+
+    /* ป๊อปอัปติดตั้งระบบหลังบ้าน */
+    .setup-modal-overlay {
+      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+      background: rgba(0, 0, 0, 0.75); z-index: 10001; align-items: center; justify-content: center;
+      backdrop-filter: blur(5px); font-family: 'Sarabun', sans-serif;
+    }
+    .setup-modal-card {
+      background: white; padding: clamp(20px, 4vw, 35px); border-radius: 24px; max-width: 550px; width: 90%; 
+      text-align: center; box-shadow: 0 15px 30px rgba(0,0,0,0.3); animation: modalBounce 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    @keyframes modalBounce { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .setup-modal-card h2 { color: var(--accent); font-family: 'Kanit'; font-weight: 800; margin-top: 0; font-size: 24px; display: flex; align-items: center; justify-content: center; gap: 10px; }
+    .setup-btn-download {
+      display: flex; align-items: center; justify-content: center; gap: 12px; padding: 14px; 
+      color: white; text-decoration: none; border-radius: 14px; margin-bottom: 12px; font-weight: bold; font-size: 16px; transition: all 0.2s;
+    }
+    .setup-btn-zip { background: #007bff; box-shadow: 0 4px 10px rgba(0, 123, 255, 0.2); }
+    .setup-btn-node { background: #28a745; box-shadow: 0 4px 10px rgba(40, 167, 69, 0.2); }
+    .setup-close-btn { background: #636e72; color: white; border: none; padding: 8px 20px; border-radius: 8px; cursor: pointer; font-family: 'Sarabun'; font-weight: bold; margin-top: 10px; }
+
+    /* ==========================================================
+       ระบบควบคุมแยกประเภทกระดาษพิมพ์ (html2pdf)
+       ========================================================== */
+    #id-card-copy-print, #ticketLicenseWrapper { 
+      display: none; 
+    }
+    
+    body.print-mode-ticket > *:not(#ticketLicenseWrapper) { display: none !important; }
+    body.print-mode-ticket #ticketLicenseWrapper { 
+      display: block !important;
+      position: absolute; top: 0; left: 0; width: 57mm; background: white; z-index: 9999;
+    } 
+    body.print-mode-ticket #ticketLicenseWrapper .ticket { 
+      width: 52mm; padding: 5px 5mm 5px 2mm; margin: 0; font-family: 'Kanit', sans-serif; text-align: center; display: block !important;
+    } 
+    
+    body.print-mode-idcard > *:not(#id-card-copy-print) { display: none !important; }
+    body.print-mode-idcard #id-card-copy-print {
+      display: flex !important; flex-direction: column; width: 210mm; min-height: 297mm;
+      font-family: 'Sarabun', sans-serif; 
+      font-size: 15px !important;
+      line-height: 1.4; 
+      padding: 20mm 25mm; color: #333333; box-sizing: border-box; background: white;
+      position: absolute; top: 0; left: 0; z-index: 9999;
+    }
+
+    .print-header { text-align: center; margin-bottom: 25px; border-bottom: none !important; padding-bottom: 10px; }
+    .print-header h2 { font-size: 16px !important; margin: 0; font-weight: bold; color:#333333 !important; }
+    
+    .print-content { display: flex !important; flex-direction: row !important; gap: 25px; align-items: flex-start; }
+    .photo-section { width: 3.0cm; flex-shrink: 0; } 
+    
+    #id-card-copy-print img.dlt-logo { width: 60px !important; height: 60px !important; margin: 0 auto 8px auto !important; display: block !important; object-fit: contain !important; filter: grayscale(100%) brightness(130%) contrast(110%) !important; opacity: 1 !important; background-color: #ffffff !important; box-shadow: none !important; }
+    #id-card-copy-print #id-card-render { width: 2.3cm !important; height: 2.9cm !important; border: none !important; border-radius: 0px !important; display: block !important; object-fit: cover !important; filter: grayscale(100%) brightness(125%) contrast(115%) !important; background-color: #ffffff !important; box-shadow: none !important; }
+    
+    .info-section { flex: 1; display: flex !important; flex-direction: column !important; gap: 4px; }
+    .info-row { display: flex !important; align-items: center; width: 100% !important; }
+    .label { width: 120px !important; white-space: nowrap !important; font-weight: normal; flex-shrink: 0; color:#444444 !important; font-size: 14px !important; }
+    .value { flex: 1; white-space: nowrap !important; color:#222222 !important; font-size: 14px !important; }
+
+    .info-row.address-row .label { width: auto !important; margin-right: 6px !important; }
+    #val-address { display: inline !important; width: auto !important; margin-top: 0 !important; line-height: inherit !important; word-wrap: normal !important; white-space: nowrap !important; padding-bottom: 0 !important; }
+    
+    .info-group-inline { display: flex !important; flex-direction: row; gap: 40px; width: 100% !important; }
+    .info-group-inline .info-row { flex: initial; width: auto; }
+    .info-group-inline .info-row:first-child { width: 290px !important; flex-shrink: 0 !important; }
+    
+    .certification-section { margin-top: auto !important; text-align: center !important; width: 100% !important; display: flex !important; flex-direction: column !important; align-items: center !important; padding-top: 30px; }
+    .certification-section p { margin: 2px 0 !important; font-size: 14px !important; color: #333333 !important; }
+    
+    .print-footer { position: absolute !important; bottom: 15mm !important; left: 20mm !important; right: 20mm !important; text-align: center !important; border-top: 1px solid #000 !important; padding-top: 10px !important; }
+    .print-footer p { font-size: 12px !important; color: #555555; margin: 0; }
+
+    /* สไตล์ใบนำทาง */
+    .ticket * { font-weight: 900 !important; color: #000 !important; }
+    .ticket .big { font-size: 24px; margin: 8px 0; line-height: 1.1; display: block; text-align: center; }
+    #printLicenseNote { border: 1px dashed #000; padding: 6px 4px; font-size: 14px; margin: 5px 2mm; text-align: center !important; display: block; line-height: 1.2; }
+    #printLicenseItems { margin: 10px 0 10px 5px; font-size: 12px; line-height: 1.4; display: block; text-align: left !important; }
+
+    .feedback-btn {
+      padding: 12px 25px;
+      border-radius: 25px;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+      font-family: 'Sarabun';
+      font-weight: 500;
+      transition: transform 0.2s, filter 0.2s;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .feedback-btn:active { transform: scale(0.95); }
+    .btn-correct { background: #2ecc71; color: white; }
+    .btn-incorrect { background: #e74c3c; color: white; }
+  </style>
+</head>
+<body>
+
+  <div id="setup-modal" class="setup-modal-overlay">
+    <div class="setup-modal-card">
+        <h2><i class="fas fa-exclamation-triangle"></i> ไม่พบระบบเชื่อมต่อเครื่องอ่านบัตร</h2>
+        <p style="color: #2d3436; margin-bottom: 20px;">คอมพิวเตอร์เครื่องนี้ยังไม่ได้เปิดใช้งาน หรือยังไม่ได้ติดตั้งตัวโปรแกรมสคริปต์หลังบ้านสำหรับดึงข้อมูลบัตรประชาชน</p>
+        <hr style="border:0; border-top:1px solid #eee; margin:20px 0;">
+        <div style="margin-bottom: 20px; text-align: left;">
+            <p style="font-weight:800; color: #2d3436; margin-bottom:10px;"><i class="fas fa-tools"></i> สำหรับเจ้าหน้าที่ (ทำเฉพาะตอนย้ายมาเครื่องใหม่ครั้งแรก):</p>
+            <a href="https://docs.google.com/uc?export=download&id=1ANjNUuMAmUIoT0909f-2024LSf94Pxvo" download class="setup-btn-download setup-btn-zip">
+              <i class="fas fa-file-archive" style="font-size: 20px;"></i> 📥 1. ดาวน์โหลดชุดหลังบ้าน (kiosk-backend.zip)
+            </a>
+            <a href="https://nodejs.org/dist/v20.11.0/node-v20.11.0-x64.msi" target="_blank" class="setup-btn-download setup-btn-node">
+                <i class="fab fa-node-js" style="font-size: 20px;"></i> 🟢 2. ดาวน์โหลดโปรแกรม Node.js (64-bit)
+            </a>
+        </div>
+        <div style="font-size:12px; color:#555; text-align:left; background:#f1f2f6; padding:12px; border-radius: 10px; border-left:4px solid #636e72; line-height: 1.4;">
+            <b>💡 วิธีเริ่มระบบ:</b> หลังจากติดตั้ง Node.js เรียบร้อย ให้ทำการแตกไฟล์ข้อ 1 ไปวางในเครื่อง แล้วดับเบิลคลิกไฟล์ <b>start-backend.bat</b> หน้าต่างนี้จะแวบหายไปโดยอัตโนมัติและไม่ขึ้นมากวนใจอีกครับ
+        </div>
+        <button class="setup-close-btn" onclick="closeSetupModal()">ปิดหน้าต่างชั่วคราว</button>
+    </div>
+  </div>
+
+  <div id="splash-screen">
+    <img src="https://img2.pic.in.th/59424.png" class="splash-logo" alt="Logo">
+    <div class="splash-title">น้องนำทาง</div>
+    <div id="splash-status-text" class="splash-status">กำลังเริ่มต้นระบบ... (Initializing Database...)</div>
+    <div class="progress-container"><div id="splash-progress-bar" class="progress-fill"></div></div>
+  </div>
+  
+  <div class="main-container">
+    <div class="top-controls">
+      <button onclick="toggleMute()" id="muteBtn" class="btn-mute"><i id="muteIcon" class="fas fa-volume-up"></i></button>
+      <div class="lang-container">
+        <button onclick="changeLang('th')" id="btn-th" class="btn-lang active"><img src="https://flagcdn.com/w40/th.png"> TH</button>
+        <button onclick="changeLang('en')" id="btn-en" class="btn-lang"><img src="https://flagcdn.com/w40/us.png"> EN</button>
+      </div>
+    </div>
+
+    <div class="scroll-zone">
+      <div class="avatar-container">
+        <lottie-player id="lottie-canvas" src="https://lottie.host/568e8594-a319-4491-bf10-a0f5c012fc76/6S3urqybG5.json" background="transparent" speed="1" loop autoplay></lottie-player>
+      </div>
+
+      <div class="display-box" id="response-text">กำลังเริ่มต้นระบบ...</div>
+      <div id="feedback-container" style="margin-top: -4px; margin-bottom: 6px; display: flex; gap: 12px; justify-content: center; min-height: 32px;"></div>
+
+      <div class="idcard-single-section">
+        <button class="btn-idcard-single" onclick="triggerIdCardPrint()">
+          <div class="icon-box"><i class="fas fa-print"></i></div>
+          <div class="text-box">ระบบบริการสะดวก<br><b>พิมพ์สำเนาบัตรประชาชน</b></div>
+        </button>
+      </div>
+
+      <div class="faq-title"><i class="fas fa-id-card"></i> ระบบคัดกรองเอกสารต่อใบขับขี่:</div>
+      <div class="quick-menu">
+        <button class="quick-card card-car" onclick="startLicenseCheck('รถยนต์')">
+          <div class="card-icon"><i class="fas fa-car"></i></div>
+          <div class="card-text">ใบขับขี่<br><b>รถยนต์</b></div>
+        </button>
+        <button class="quick-card card-motor" onclick="startLicenseCheck('รถจักรยานยนต์')">
+          <div class="card-icon"><i class="fas fa-motorcycle"></i></div>
+          <div class="card-text">ใบขับขี่<br><b>มอเตอร์ไซค์</b></div>
+        </button>
+        <button class="quick-card card-truck" onclick="startLicenseCheck('รถบรรทุก/สาธารณะ')">
+          <div class="card-icon"><i class="fas fa-truck"></i></div>
+          <div class="card-text">ใบขับขี่<br><b>รถบรรทุก</b></div>
+        </button>
+      </div>
+      
+      <div class="faq-title" id="faq-title-text"><i class="fas fa-star"></i> คำถามที่พบบ่อย:</div>
+      <div id="faq-container" class="faq-grid"></div>
+    </div>
+
+    <div class="bottom-zone">
+      <div class="input-section">
+        <input type="text" id="userInput" placeholder="พิมพ์คำถามที่นี่..." onkeypress="handleKeyPress(event)">
+        <button class="btn-send" onclick="handleManualInput()"><i class="fas fa-paper-plane"></i></button>
+      </div>
+      <div class="mic-section">
+        <button id="micBtn" class="btn-mic" onclick="toggleListening()"><i class="fas fa-microphone"></i></button>
+        <p id="statusText" style="margin-top:4px; color: #636e72; font-size: 11px;">แตะไมค์เพื่อเริ่มพูด</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="ticketLicenseWrapper">
+    <div class="ticket">
+      <div style="font-size: 15px; font-weight: bold;">🧾 ใบนำทางติดต่อราชการ</div>
+      <div style="font-size: 11px; border-bottom: 1px dashed black; padding-bottom: 5px;">สำนักงานขนส่งอำเภอพยัคฆภูมิพิสัย</div>
+      <div class="big" id="printLicenseType">-</div>
+      <div id="printLicenseNote">-</div>
+      <div style="text-align: left; margin: 10px 0 0 8px; font-size: 12px;">
+        <b>เอกสารที่ต้องใช้:</b>
+        <div id="printLicenseItems"></div>
+      </div>
+      <div style="border-top: 1px dashed black; padding-top: 5px; font-size: 10px; text-align: center;">
+        <div id="printLicenseTime"></div>
+        <div style="font-weight: bold; margin-top: 4px;">*ยื่นใบนี้พร้อมเอกสารที่งานใบอนุญาตขับรถชั้น 2*</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="id-card-copy-print">
+    <div class="print-header">
+        <img src="https://img1.pic.in.th/images/60668.png" class="dlt-logo" alt="DLT Logo">
+        <h2>กรมการขนส่งทางบก (Department of Land Transport)</h2>
+    </div>
+    <div class="print-content">
+        <div class="photo-section">
+            <img id="id-card-render" src="" alt="รูปบัตรประชาชน">
+        </div>
+        <div class="info-section">
+            <div class="info-row"><span class="label">เลขประจำตัว :</span><span class="value" id="val-id">—</span></div>
+            <div class="info-row"><span class="label">ชื่อ-สกุล (ไทย) :</span><span class="value" id="val-name-th">—</span></div>
+            <div class="info-row"><span class="label">ชื่อ-สกุล (อังกฤษ) :</span><span class="value" id="val-name-en">—</span></div>
+            <div class="info-group-inline">
+                <div class="info-row"><span class="label">วันเกิด :</span><span class="value" id="val-dob">—</span></div>
+                <div class="info-row"><span class="label">เพศ :</span><span class="value" id="val-gender">—</span></div>
+            </div>
+            <div class="info-group-inline">
+                <div class="info-row"><span class="label">วันออกบัตร :</span><span class="value" id="val-issue">—</span></div>
+                <div class="info-row"><span class="label">วันหมดอายุ :</span><span class="value" id="val-expiry">—</span></div>
+            </div>
+            <div class="info-row address-row"><span class="label">ที่อยู่ :</span><span class="value" id="val-address">—</span></div>
+        </div>
+    </div>
+    <div class="certification-section">
+        <p style="font-weight: bold; font-size: 13pt !important; margin-bottom: 30px !important;">สำเนาถูกต้อง</p>
+        <p>ลงชื่อ...............................................................................</p>
+        <p style="margin-top: 6px !important;">(...............................................................................)</p>
+        <p style="font-size: 10.5pt !important; color: #333 !important; margin-top: 4px !important;">เจ้าของบัตร</p>
+    </div>
+    <div class="print-footer">
+        <p>* เอกสารนี้จัดทำโดยระบบอัตโนมัติเพื่อใช้ประกอบคำขอ ณ สำนักงานขนส่งจังหวัดมหาสารคาม สาขาอำเภอพยัคฆภูมิพิสัย เท่านั้น *</p>
+    </div>
+  </div>
+
+  <audio id="queueSound" preload="auto">
+    <source src="https://taiyang12300.github.io/sound/ยื่นใบนำทาง.mp3" type="audio/mpeg">
+  </audio>
+  <video id="video" width="640" height="480" autoplay muted playsinline style="display:none;"></video>
+  
+  <script src="https://code.responsivevoice.org/responsivevoice.js"></script>
+  <script src="script.js?v=2.2"></script>
+
+  <script>
+    // Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('service-worker.js').catch(err => console.log(err)));
+    }
+
+    function toggleMute() {
+      window.isMuted = !window.isMuted;
+      const muteBtn = document.getElementById('muteBtn');
+      const muteIcon = document.getElementById('muteIcon');
+      if (window.isMuted) {
+        if (typeof stopAllSpeech === "function") stopAllSpeech();
+        else { window.speechSynthesis.cancel(); if (typeof responsiveVoice !== 'undefined') responsiveVoice.cancel(); }
+        muteBtn.classList.add('muted'); muteIcon.className = 'fas fa-volume-mute';
+      } else {
+        muteBtn.classList.remove('muted'); muteIcon.className = 'fas fa-volume-up';
+      }
+    }
+
+    function changeLang(lang) {
+      window.speechSynthesis.cancel(); window.isBusy = false; window.currentLang = lang; window.isMuted = false;
+      document.getElementById('btn-th').classList.toggle('active', lang === 'th');
+      document.getElementById('btn-en').classList.toggle('active', lang === 'en');
+      const isTh = (lang === 'th');
+      document.getElementById('userInput').placeholder = isTh ? "พิมพ์คำถามที่นี่..." : "Type your question here...";
+      document.getElementById('statusText').innerText = isTh ? "แตะไมค์เพื่อเริ่มพูด" : "Tap mic to speak";
+      document.getElementById('response-text').innerText = isTh ? "เปลี่ยนเป็นภาษาไทยแล้วครับ" : "Switched to English.";
+      if (window.recognition) window.recognition.lang = isTh ? 'th-TH' : 'en-US';
+      if (typeof renderFAQButtons === "function") renderFAQButtons();
+    }
+
+    function handleManualInput() {
+      const input = document.getElementById('userInput');
+      if (input.value.trim()) { processQuery(input.value.trim()); input.value = ''; }
+    }
+    function handleKeyPress(e) { if (e.key === 'Enter') handleManualInput(); }
+
+    async function processQuery(query) {
+      window.speechSynthesis.cancel();
+      document.getElementById('response-text').innerText = (window.currentLang === 'th') ? "กำลังค้นหา..." : "Searching...";
+      if (typeof getResponse === "function") await getResponse(query);
+    }
+
+    // ==========================================================
+    // ฟังก์ชันปรับแสง/คอนทราสต์รูปภาพก่อนพิมพ์
+    // ==========================================================
+    function ยกระดับภาพพิมพ์(base64Data, brightness = 40, contrast = 35) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                try {
+                    ctx.drawImage(img, 0, 0);
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const data = imageData.data;
+                    const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+                    for (let i = 0; i < data.length; i += 4) {
+                        const gray = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+                        let r = gray + brightness;
+                        r = factor * (r - 128) + 128;
+                        const finalVal = Math.min(255, Math.max(0, r));
+                        data[i] = finalVal; data[i+1] = finalVal; data[i+2] = finalVal;
+                    }
+                    ctx.putImageData(imageData, 0, 0);
+                    resolve(canvas.toDataURL('image/jpeg', 0.9));
+                } catch (canvasErr) {
+                    console.warn('[Canvas] ถูกบล็อกหรือ CORS Error — ใช้ภาพต้นฉบับแทน');
+                    resolve(base64Data.startsWith('data:image') ? base64Data : `data:image/jpeg;base64,${base64Data}`);
+                }
+            };
+            img.onerror = () => {
+                resolve(base64Data.startsWith('data:image') ? base64Data : `data:image/jpeg;base64,${base64Data}`);
+            };
+            img.src = base64Data.startsWith('data:image') ? base64Data : `data:image/jpeg;base64,${base64Data}`;
+        });
+    }
+
+    // ==========================================================
+    // ฟังก์ชันล้างข้อมูลบัตรออกจาก DOM ทันที
+    // ==========================================================
+    function clearIdCardDOM() {
+        ['id', 'name-th', 'name-en', 'address', 'dob', 'gender', 'issue', 'expiry'].forEach(id => {
+            const el = document.getElementById(`val-${id}`);
+            if (el) el.innerText = '—';
+        });
+        const imgEl = document.getElementById('id-card-render');
+        if (imgEl) imgEl.src = '';
+        console.log('🧹 [DOM] ล้างข้อมูลบัตรออกจากหน้าจอแล้ว');
+    }
+
+    // ==========================================================
+    // ระบบเชื่อมต่อ SIAM-ID WebSocket
+    // ==========================================================
+    let wsClient = null;
+    let wsConnected = false;
+
+    function setPrintBtnReady(ready) {
+        const btn = document.querySelector('.btn-idcard-single');
+        if (!btn) return;
+        if (ready) {
+            btn.classList.remove('processing', 'printing-now');
+            btn.style.opacity = '1';
+            btn.style.pointerEvents = 'auto';
+            btn.title = '';
+        } else {
+            btn.classList.add('processing');
+            btn.classList.remove('printing-now');
+            btn.style.opacity = '0.5';
+            btn.style.pointerEvents = 'none';
+            btn.title = 'กรุณาเสียบบัตรประชาชนที่เครื่องอ่านก่อน';
+        }
+    }
+
+    function closeSetupModal() {
+        const setupModal = document.getElementById('setup-modal');
+        if (setupModal) setupModal.style.display = 'none';
+    }
+
+    function connectToKioskBackend(onFailCallback) {
+        if (wsClient && wsClient.readyState === WebSocket.OPEN) {
+            wsClient.send(JSON.stringify({ action: 'trigger-read' }));
+            return;
+        }
+        if (wsClient) try { wsClient.close(); } catch(e) {}
+
+        wsClient = new WebSocket('ws://localhost:8080');
+
+        wsClient.onopen = () => {
+            console.log('✅ เชื่อมต่อระบบหลังบ้านสำเร็จ');
+            wsConnected = true;
+            setPrintBtnReady(false);
+            wsClient.send(JSON.stringify({ action: 'trigger-read' }));
+            document.getElementById('response-text').innerText = "💳 ระบบพร้อมใช้งาน กรุณาเสียบบัตรประชาชนที่เครื่องอ่าน...";
+        };
+
+        wsClient.onerror = function() {
+            wsConnected = false;
+            console.error('❌ เชื่อมต่อ backend ไม่ได้');
+            if (onFailCallback) onFailCallback();
+        };
+
+        wsClient.onmessage = async function(event) {
+            try {
+                const response = JSON.parse(event.data);
+
+                if (response.status === 'deleted') {
+                    clearIdCardDOM();
+                    setPrintBtnReady(false);
+                    document.getElementById('response-text').innerText = "💳 ระบบพร้อมใช้งาน กรุณาเสียบบัตรประชาชนที่เครื่องอ่าน...";
+                    console.log('✅ [Backend] ลบข้อมูลบัตรแล้ว');
+                    return;
+                }
+
+                if (response.status === 'success') {
+                    const cleanData = response.rawData.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g).map(s => s.replace(/^"|"$/g, '').trim());
+                    if (cleanData.length > 0) {
+                        const clean = (idx, prefix) => cleanData[idx] ? cleanData[idx].replace(new RegExp(`^${prefix}`, 'gi'), '').trim() : '';
+                        const vNo = cleanData[14] || '—', vMoo = clean(15, 'หมู่ที่'), vSub = clean(16, 'ตำบล'), vDist = clean(17, 'อำเภอ'), vProv = clean(18, 'จังหวัด');
+                        const fullAddress = `เลขที่ ${vNo} ${vMoo ? 'หมู่ที่ ' + vMoo : ''} ตำบล${vSub} อำเภอ${vDist} จังหวัด${vProv}`.replace(/\s+/g, ' ');
+                        if (document.getElementById('val-id')) document.getElementById('val-id').innerText = cleanData[2] || '—';
+                        if (document.getElementById('val-name-th')) document.getElementById('val-name-th').innerText = `${cleanData[3] || ''} ${cleanData[4] || ''} ${cleanData[5] || ''}`.trim();
+                        if (document.getElementById('val-name-en')) document.getElementById('val-name-en').innerText = `${cleanData[6] || ''} ${cleanData[7] || ''} ${cleanData[8] || ''}`.trim();
+                        if (document.getElementById('val-dob')) document.getElementById('val-dob').innerText = cleanData[9] || '—';
+                        if (document.getElementById('val-gender')) document.getElementById('val-gender').innerText = cleanData[10] || '—';
+                        if (document.getElementById('val-issue')) document.getElementById('val-issue').innerText = cleanData[19] || '—';
+                        if (document.getElementById('val-expiry')) document.getElementById('val-expiry').innerText = cleanData[20] || '—';
+                        if (document.getElementById('val-address')) document.getElementById('val-address').innerText = fullAddress;
+                    }
+                    if (response.photoBase64 && document.getElementById('id-card-render')) {
+                        try {
+                            const enhancedPhoto = await ยกระดับภาพพิมพ์(response.photoBase64, 40, 35);
+                            document.getElementById('id-card-render').src = enhancedPhoto;
+                        } catch (imgErr) {
+                            document.getElementById('id-card-render').src = response.photoBase64.startsWith('data:image') ? response.photoBase64 : `data:image/jpeg;base64,${response.photoBase64}`;
+                        }
+                    }
+                    document.getElementById('response-text').innerText = "✨ โหลดข้อมูลสำเร็จ! กรุณากดปุ่มด้านล่างเพื่อยืนยันการพิมพ์สำเนา";
+                    setPrintBtnReady(true);
+                } else {
+                    setPrintBtnReady(false);
+                }
+            } catch (err) { console.error('ประมวลผลข้อมูลล้มเหลว:', err); }
+        };
+
+        wsClient.onclose = () => {
+            wsConnected = false;
+            console.log('🔴 [WebSocket] Disconnected.');
+        };
+    }
+
+    async function printLicenseNote(type, note, items) {
+      const now = new Date();
+      document.getElementById('printLicenseType').innerText = type;
+      document.getElementById('printLicenseNote').innerText = note;
+      document.getElementById('printLicenseTime').innerText = `เวลาพิมพ์: ${now.toLocaleString('th-TH')}`;
+      const docArray = items.includes('\\n') ? items.split('\\n') : items.split('\n');
+      document.getElementById('printLicenseItems').innerHTML = docArray
+        .filter(i => i.trim() !== "")
+        .map(i => `<div style="text-align: left !important; font-weight: 900 !important; margin-bottom: 3px;">[ ✓ ] ${i.trim()}</div>`)
+        .join('');
+      const audio = document.getElementById('queueSound');
+      if (audio) { audio.currentTime = 0; audio.play().catch(e => {}); }
+      const original = document.getElementById('ticketLicenseWrapper');
+      const clone = original.cloneNode(true);
+      clone.style.setProperty('display', 'block', 'important');
+      clone.style.setProperty('position', 'relative', 'important');
+      clone.style.setProperty('background', '#ffffff', 'important');
+      const wrapper = document.createElement('div');
+      wrapper.style.position = 'absolute';
+      wrapper.style.top = '0';
+      wrapper.style.left = '0';
+      wrapper.style.zIndex = '999999';
+      wrapper.appendChild(clone);
+      document.body.appendChild(wrapper);
+      window.scrollTo(0, 0);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      const opt = {
+          margin: 0, filename: 'ticket.pdf',
+          image: { type: 'jpeg', quality: 1 },
+          html2canvas: { scale: 3, useCORS: true, scrollY: 0, scrollX: 0 },
+          jsPDF: { unit: 'mm', format: [57, 120], orientation: 'portrait' }
+      };
+      try {
+          const pdfBase64 = await html2pdf().set(opt).from(clone).outputPdf('datauristring');
+          await fetch('http://localhost:8080/print', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ type: 'ticket', pdfBase64: pdfBase64 })
+          });
+      } catch (error) {
+          console.error("ส่งคำสั่งพิมพ์ไป Backend ล้มเหลว:", error);
+      }
+      document.body.removeChild(wrapper);
+      if (typeof renderFAQButtons === "function") renderFAQButtons();
+    }
+
+    async function triggerIdCardPrint() {
+        const printBtn = document.querySelector('.btn-idcard-single');
+
+        showSetupOnFail = true;
+        wsReconnectEnabled = true;
+
+        if (!wsClient || wsClient.readyState !== WebSocket.OPEN) {
+            connectToKioskBackend();
+            setTimeout(() => {
+                if (!wsClient || wsClient.readyState !== WebSocket.OPEN) {
+                    const setupModal = document.getElementById('setup-modal');
+                    if (setupModal && setupModal.style.display !== 'flex') {
+                        setupModal.style.display = 'flex';
+                    }
+                }
+            }, 1500);
+            return;
+        }
+
+        showSetupOnFail = false;
+
+        const currentId = document.getElementById('val-id') ? document.getElementById('val-id').innerText : '—';
+        if (currentId === '—' || currentId === '') {
+            document.getElementById('response-text').innerText = "💳 กรุณาเสียบบัตรประชาชนที่เครื่องอ่านให้เรียบร้อยก่อนครับ"; return;
+        }
+
+        printBtn.classList.add('printing-now');
+        setPrintBtnReady(false);
+        document.getElementById('response-text').innerText = "🖨️ กำลังส่งข้อมูลไปเครื่องพิมพ์...";
+
+        const original = document.getElementById('id-card-copy-print');
+        const clone = original.cloneNode(true);
+        clone.style.setProperty('display', 'block', 'important');
+        clone.style.setProperty('position', 'relative', 'important');
+        clone.style.setProperty('background', '#ffffff', 'important');
+        clone.style.setProperty('width', '210mm', 'important');
+        clone.style.setProperty('min-height', '297mm', 'important');
+        clone.style.setProperty('padding-top', '20mm', 'important');
+        clone.style.setProperty('padding-left', '20mm', 'important');
+        clone.style.setProperty('padding-right', '20mm', 'important');
+        clone.style.setProperty('padding-bottom', '40mm', 'important');
+        clone.style.setProperty('box-sizing', 'border-box', 'important');
+        clone.style.setProperty('margin', '0', 'important');
+
+        const wrapper = document.createElement('div');
+        wrapper.style.position = 'absolute';
+        wrapper.style.top = '-9999px';
+        wrapper.appendChild(clone);
+        document.body.appendChild(wrapper);
+
+        await new Promise(resolve => setTimeout(resolve, 800));
+
+        const opt = {
+            margin: 0, filename: 'idcard.pdf',
+            image: { type: 'jpeg', quality: 1 },
+            html2canvas: { scale: 3, useCORS: true, windowWidth: 794 },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+
+        try {
+            const pdfBase64 = await html2pdf().set(opt).from(clone).outputPdf('datauristring');
+            await fetch('http://localhost:8080/print', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'copy', pdfBase64: pdfBase64 })
+            });
+
+            if (wsClient && wsClient.readyState === WebSocket.OPEN) {
+                wsClient.send(JSON.stringify({ action: 'delete-data' }));
+            }
+
+            setTimeout(() => {
+                const idEl = document.getElementById('val-id');
+                if (idEl && idEl.innerText !== '—') {
+                    console.warn('⚠️ [Fallback] Backend ไม่ยืนยันภายใน 5 วินาที — ล้าง DOM ฝั่ง client');
+                    clearIdCardDOM();
+                }
+            }, 5000);
+
+            document.getElementById('response-text').innerText = "🎉 สั่งพิมพ์สำเนาบัตรประชาชนเรียบร้อยแล้ว";
+        } catch (error) {
+            console.error("ผิดพลาด:", error);
+            document.getElementById('response-text').innerText = "❌ เกิดข้อผิดพลาด";
+            clearIdCardDOM();
+        }
+
+        document.body.removeChild(wrapper);
+
+        setTimeout(() => {
+            if (typeof backToHomeKeepPerson === 'function') backToHomeKeepPerson();
+            if (wsClient && wsClient.readyState === WebSocket.OPEN) wsClient.send(JSON.stringify({ action: 'trigger-read' }));
+        }, 3000);
+    }
+
+    window.addEventListener('DOMContentLoaded', connectToKioskBackend);
+  </script>
+</body>
+</html>
