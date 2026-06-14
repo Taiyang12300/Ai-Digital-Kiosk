@@ -10,6 +10,8 @@
  * - [VISION-UPGRADE] อัปเกรดเป็น SsdMobilenetv1 + Landmarks เพื่อความนิ่ง
  * - [FUTURE-PROOF] เพิ่มตัวแปร window.detectedAge สำหรับเก็บอายุ (รอการนำไปใช้ในอนาคต)
  * - [TTS-UPGRADE] cleanTextForSpeech() + ปรับ rate/pitch ให้ Pattara ฟังธรรมชาติขึ้น
+ * - [WALK-AWAY] หยุดอ่านและกลับหน้าโฮมเมื่อคนเดินออกจากกล้อง
+ * - [FACE-MEMORY] จำใบหน้าชั่วคราวเพื่อไม่ทักทายซ้ำในวันเดียวกัน (จำกัด 50 คน)
  */
 
 window.localDatabase = null;
@@ -27,6 +29,10 @@ window.currentAudio = null;
 window.detectedGender = 'male';
 window.detectedAge = null;
 
+// --- [FACE-MEMORY] ระบบจำใบหน้าชั่วคราว (เก็บใน RAM เท่านั้น ปิด browser ล้างหมด) ---
+window.seenFaceDescriptors = []; // เก็บ descriptor ของคนที่เคยทักทายแล้ววันนี้
+const FACE_MATCH_THRESHOLD = 0.45; // ค่าความใกล้เคียงของใบหน้า (ต่ำ = เข้มงวดกว่า)
+
 let isAtHome = true;
 const GAS_URL = "https://script.google.com/macros/s/AKfycbycksNLQnAvB6k0VKGoffG2imIfeYATcZRqztcKzYC274UpOVQtBmYnMI-SBAXiI_0deQ/exec";
 
@@ -38,6 +44,10 @@ let isDetecting = true;
 let personInFrameTime = null;
 let lastSeenTime = Date.now();
 
+// [WALK-AWAY] ตัวแปรสำหรับตรวจจับคนเดินออก
+let walkAwayTimer = null;
+const WALK_AWAY_DELAY = 10000; // 10 วินาทีหลังไม่เจอหน้า → หยุดอ่าน
+
 const DETECTION_INTERVAL = 200;
 
 let wakeWordRecognition;
@@ -46,6 +56,36 @@ let lastAskedQuestion = "";
 
 const DB_MAX_RETRIES = 5;
 let dbRetryCount = 0;
+
+// --- [FACE-MEMORY] ฟังก์ชันคำนวณระยะห่างระหว่าง descriptor 2 ชุด ---
+function euclideanDistance(desc1, desc2) {
+    let sum = 0;
+    for (let i = 0; i < desc1.length; i++) {
+        sum += Math.pow(desc1[i] - desc2[i], 2);
+    }
+    return Math.sqrt(sum);
+}
+
+function isAlreadySeen(descriptor) {
+    if (!descriptor || window.seenFaceDescriptors.length === 0) return false;
+    return window.seenFaceDescriptors.some(seen => {
+        const dist = euclideanDistance(descriptor, seen);
+        return dist < FACE_MATCH_THRESHOLD;
+    });
+}
+
+function rememberFace(descriptor) {
+    if (!descriptor) return;
+    if (!isAlreadySeen(descriptor)) {
+        // จำกัดการจำไว้ที่ 50 คน ถ้าเกินให้ลบคนแรกสุด (เก่าสุด) ทิ้งไป
+        if (window.seenFaceDescriptors.length >= 50) {
+            window.seenFaceDescriptors.shift(); 
+        }
+        
+        window.seenFaceDescriptors.push(Array.from(descriptor));
+        console.log(`🧠 [Face-Memory] จำใบหน้าใหม่ รวมทั้งหมด: ${window.seenFaceDescriptors.length}/50 คน`);
+    }
+}
 
 // --- ระบบไมโครโฟน STT ---
 
@@ -451,9 +491,11 @@ async function loadFaceModels() {
         await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
         await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
         await faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL);
+        // [FACE-MEMORY] โหลด faceRecognitionNet สำหรับจำใบหน้าชั่วคราว
+        await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
         setupWakeWord();
         setInterval(detectPerson, DETECTION_INTERVAL);
-        console.log("✅ [FaceAPI] SsdMobilenetv1 + Landmarks + Age/Gender loaded.");
+        console.log("✅ [FaceAPI] SsdMobilenetv1 + Landmarks + Age/Gender + Recognition loaded.");
     } catch (err) {
         console.error("❌ AI Model Load Failed", err);
     }
@@ -466,6 +508,7 @@ async function detectPerson() {
         const options = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.65 });
         const predictions = await faceapi.detectAllFaces(video, options)
                                          .withFaceLandmarks()
+                                         .withFaceDescriptors()
                                          .withAgeAndGender();
 
         const validFaces = predictions.filter(f => {
@@ -474,6 +517,12 @@ async function detectPerson() {
         });
 
         if (validFaces.length > 0) {
+            // [WALK-AWAY] มีคนอยู่ → ยกเลิก walk-away timer
+            if (walkAwayTimer) {
+                clearTimeout(walkAwayTimer);
+                walkAwayTimer = null;
+            }
+
             const face = validFaces.reduce((prev, current) =>
                 (prev.detection.box.width > current.detection.box.width) ? prev : current
             );
@@ -483,12 +532,49 @@ async function detectPerson() {
             window.detectedGender = face.gender;
             window.detectedAge = Math.round(face.age);
 
+            // [FACE-MEMORY] เช็คว่าเคยทักทายคนนี้แล้วหรือยัง
+            const descriptor = face.descriptor;
+            const alreadySeen = isAlreadySeen(descriptor);
+
             if ((now - personInFrameTime) >= 2000 && isAtHome && !window.isBusy && !window.hasGreeted) {
-                console.log(`👤 [Detected] เพศ: ${window.detectedGender}, อายุประมาณ: ${window.detectedAge} ปี`);
-                greetUser();
+                if (alreadySeen) {
+                    // คนเดิมกลับมา → ไม่ทักทายซ้ำ แต่พร้อมรับคำถาม
+                    console.log("🔁 [Face-Memory] คนเดิมกลับมา ไม่ทักทายซ้ำ");
+                    isAtHome = false;
+                    window.hasGreeted = true;
+                    window.isBusy = false;
+                    window.allowWakeWord = true;
+                    startWakeWord();
+                } else {
+                    // คนใหม่ → ทักทายและจำใบหน้า
+                    console.log(`👤 [Detected] เพศ: ${window.detectedGender}, อายุประมาณ: ${window.detectedAge} ปี`);
+                    rememberFace(descriptor);
+                    greetUser();
+                }
             }
             lastSeenTime = now;
         } else {
+            // [WALK-AWAY] ไม่เจอหน้า → เริ่มนับ walk-away timer
+            if (personInFrameTime !== null && walkAwayTimer === null && !isAtHome) {
+                walkAwayTimer = setTimeout(() => {
+                    console.log("🚶 [Walk-Away] คนเดินออกไป → หยุดอ่านและกลับหน้าโฮม");
+                    stopAllSpeech();
+                    forceStopAllMic();
+                    personInFrameTime = null;
+                    window.hasGreeted = false;
+                    window.allowWakeWord = false;
+                    walkAwayTimer = null;
+                    isAtHome = true;
+                    const fbContainer = document.getElementById('feedback-container');
+                    if (fbContainer) fbContainer.innerHTML = '';
+                    displayResponse(window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone.");
+                    renderFAQButtons();
+                    updateLottie('idle');
+                    if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+                }, WALK_AWAY_DELAY);
+            }
+
+            // reset เดิม กรณีออกไปนานเกิน 8 วินาที
             if (personInFrameTime !== null && (now - lastSeenTime > 8000)) {
                 personInFrameTime = null;
                 window.hasGreeted = false;
@@ -707,46 +793,35 @@ async function processQuery(query) {
 
 function cleanTextForSpeech(text) {
     return text
-        // ลบ HTML tags
         .replace(/<[^>]*>/gm, '')
-        // ลบ markdown และสัญลักษณ์รบกวน
         .replace(/[*#_]/g, '')
         .replace(/\-\-+/g, '')
-        // ✅ ช่วงเวลา เช่น "08.00 น. - 08.50 น." → "เวลา 8 นาฬิกา ถึง เวลา 8 นาฬิกา 50 นาที"
         .replace(/(\d{1,2})\.(\d{2})\s*น\.?\s*[-–]\s*(\d{1,2})\.(\d{2})\s*น\.?/g, (match, h1, m1, h2, m2) => {
             const start = parseInt(m1) === 0 ? `เวลา ${parseInt(h1)} นาฬิกา` : `เวลา ${parseInt(h1)} นาฬิกา ${parseInt(m1)} นาที`;
             const end   = parseInt(m2) === 0 ? `เวลา ${parseInt(h2)} นาฬิกา` : `เวลา ${parseInt(h2)} นาฬิกา ${parseInt(m2)} นาที`;
             return `${start} ถึง ${end}`;
         })
-        // ✅ เวลาเดี่ยว เช่น "08.00 น." → "เวลา 8 นาฬิกา"
         .replace(/(\d{1,2})\.00\s*น\.?/g, (match, h) => `เวลา ${parseInt(h)} นาฬิกา`)
         .replace(/(\d{1,2})\.(\d{2})\s*น\.?/g, (match, h, m) => `เวลา ${parseInt(h)} นาฬิกา ${parseInt(m)} นาที`)
-        // คำย่อกฎหมาย
+        .replace(/(\d+)\s*-\s*(\d+)\s*(ปี|เดือน|วัน|ชั่วโมง|นาที)/g, '$1 ถึง $2 $3')
         .replace(/พ\.ร\.บ\./g, 'พระราชบัญญัติ')
         .replace(/ตรอ\./g, 'ตรอ')
         .replace(/ขส\.บ\.\d+/g, 'เอกสารขนส่ง')
-        // คำย่อองค์กร
         .replace(/DLT/gi, 'ดีแอลที')
         .replace(/Smart Queue/gi, 'สมาร์ทคิว')
         .replace(/e-Learning/gi, 'อีเลิร์นนิ่ง')
         .replace(/LPG|CNG|NGV/g, match => match.split('').join(' '))
-        // ตัวเลข + หน่วย
         .replace(/(\d+)\s*ชม\./g, '$1 ชั่วโมง')
         .replace(/(\d+)\s*ชม\b/g, '$1 ชั่วโมง')
         .replace(/(\d+)\s*วันทำการ/g, '$1 วันทำการ')
         .replace(/(\d+)\s*ปี\b/g, '$1 ปี')
         .replace(/(\d+)\s*เดือน\b/g, '$1 เดือน')
-        // ป้ายทะเบียนรถ เช่น รย.1 → รย 1
         .replace(/รย\.(\d+)/g, 'รย $1')
         .replace(/บ\.(\d+)/g, 'บ $1')
         .replace(/ท\.(\d+)/g, 'ท $1')
-        // หัวข้อ "1. ยื่น" → "1 ยื่น"
         .replace(/(\d+)\.\s/g, '$1 ')
-        // วงเล็บ → เว้นวรรค
         .replace(/[()[\]]/g, ' ')
-        // ช่องว่างซ้อน
         .replace(/\s{2,}/g, ' ')
-        // ขึ้นบรรทัดใหม่ → เว้นวรรค
         .replace(/\n+/g, ' ')
         .trim();
 }
@@ -765,14 +840,12 @@ function speak(text, callback = null, isGreeting = false) {
     window.speechSynthesis.cancel();
     window.isBusy = true;
 
-    // ✅ ทำความสะอาดข้อความก่อนอ่าน
     let cleanText = cleanTextForSpeech(text);
 
     const msg = new SpeechSynthesisUtterance(cleanText);
     const targetLang = window.currentLang === 'th' ? 'th-TH' : 'en-US';
     msg.lang = targetLang;
 
-    // ✅ ลำดับเลือกเสียง: Pattara → Premwadee → Niwat → Neural → th-TH อื่นๆ
     let selectedVoice =
         voices.find(v => v.name.includes('Pattara'))                                                          ||
         voices.find(v => v.name.includes('Premwadee'))                                                        ||
@@ -785,14 +858,11 @@ function speak(text, callback = null, isGreeting = false) {
         console.log(`%c[TTS] 🎙️ Voice: ${selectedVoice.name}`, "color: #00b894; font-weight: bold;");
     }
 
-    // ✅ ค่าที่ทำให้ Pattara ฟังธรรมชาติขึ้น
     msg.rate   = 0.88;
     msg.pitch  = 1.1;
     msg.volume = 1.0;
 
-    msg.onstart = () => {
-        updateLottie('talking');
-    };
+    msg.onstart = () => { updateLottie('talking'); };
 
     msg.onend = () => {
         window.isBusy = false;
