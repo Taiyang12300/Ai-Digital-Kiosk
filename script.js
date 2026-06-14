@@ -13,6 +13,7 @@
  * - [WALK-AWAY] หยุดอ่านและกลับหน้าโฮมเมื่อคนเดินออกจากกล้อง
  * - [FACE-MEMORY] จำใบหน้าชั่วคราวเพื่อไม่ทักทายซ้ำในวันเดียวกัน (จำกัด 50 คน)
  * - [WELCOME-BACK] ทักทายแบบคุ้นเคยเมื่อประชาชนคนเดิมเดินกลับมาหน้าตู้อีกครั้ง
+ * - [GENDER-SAFEGUARD] ใช้ค่าความมั่นใจ (Confidence >= 95%) เพื่อป้องกันการทักเพศสภาพผิดพลาด
  */
 
 window.localDatabase = null;
@@ -28,6 +29,7 @@ window.currentAudio = null;
 
 // ตัวแปรส่วนใบหน้า
 window.detectedGender = 'male';
+window.detectedGenderProbability = 0; // ตัวแปรเก็บค่าความมั่นใจของ AI
 window.detectedAge = null;
 
 // --- [FACE-MEMORY] ระบบจำใบหน้าชั่วคราว (เก็บใน RAM เท่านั้น ปิด browser ล้างหมด) ---
@@ -531,6 +533,7 @@ async function detectPerson() {
             if (personInFrameTime === null) personInFrameTime = now;
 
             window.detectedGender = face.gender;
+            window.detectedGenderProbability = face.genderProbability; // เก็บค่าความมั่นใจเพื่อใช้ทักทาย
             window.detectedAge = Math.round(face.age);
 
             // [FACE-MEMORY] เช็คว่าเคยทักทายคนนี้แล้วหรือยัง
@@ -539,12 +542,12 @@ async function detectPerson() {
 
             if ((now - personInFrameTime) >= 1000 && isAtHome && !window.isBusy && !window.hasGreeted) {
                 if (alreadySeen) {
-                    // คนเดิมกลับมา → ทักทายแบบคุ้นเคย (ใช้งานฟังก์ชันใหม่)
+                    // คนเดิมกลับมา → ทักทายแบบคุ้นเคย
                     console.log("🔁 [Face-Memory] คนเดิมกลับมา ทักทายแบบคุ้นเคย");
                     greetWelcomeBack(); 
                 } else {
                     // คนใหม่ → ทักทายและจำใบหน้า
-                    console.log(`👤 [Detected] เพศ: ${window.detectedGender}, อายุประมาณ: ${window.detectedAge} ปี`);
+                    console.log(`👤 [Detected] เพศ: ${window.detectedGender} (มั่นใจ: ${(window.detectedGenderProbability * 100).toFixed(1)}%), อายุ: ${window.detectedAge} ปี`);
                     rememberFace(descriptor);
                     greetUser();
                 }
@@ -593,15 +596,29 @@ function greetUser() {
     const hour = now.getHours();
 
     const gender = window.detectedGender || 'male';
+    const confidence = window.detectedGenderProbability || 0; 
     let finalGreet = "";
+
+    // ปรับเกณฑ์ความมั่นใจที่ 95% (0.95)
+    const isConfident = confidence >= 0.95;
 
     if (window.currentLang === 'th') {
         let timeGreet = hour < 12 ? "สวัสดีตอนเช้าครับ" : hour === 12 ? "สวัสดีตอนเที่ยงครับ" : hour < 17 ? "สวัสดีตอนบ่ายครับ" : "สวัสดีตอนเย็นครับ";
-        const pType = (gender === 'male') ? "คุณผู้ชาย" : "คุณผู้หญิง";
         const ends = ["มีอะไรให้ช่วยไหมครับ?", "น้องนำทางยินดีให้บริการครับ", "วันนี้มาติดต่อเรื่องอะไรครับ?"];
-        finalGreet = `${timeGreet} ${pType}... ${ends[Math.floor(Math.random() * ends.length)]}`;
+        const endPhrase = ends[Math.floor(Math.random() * ends.length)];
+
+        if (isConfident) {
+            // มั่นใจสูง ทักทายระบุเพศเพื่อความว้าว
+            const pType = (gender === 'male') ? "คุณผู้ชาย" : "คุณผู้หญิง";
+            finalGreet = `${timeGreet} ${pType}... ${endPhrase}`;
+        } else {
+            // มั่นใจต่ำ ทักทายแบบกลางๆ ปลอดภัย
+            finalGreet = `${timeGreet}... ${endPhrase}`;
+        }
     } else {
-        finalGreet = `Hello ${gender === 'male' ? 'Sir' : 'Madam'}, how can I help you?`;
+        finalGreet = isConfident 
+            ? `Hello ${gender === 'male' ? 'Sir' : 'Madam'}, how can I help you?` 
+            : `Hello, how can I help you today?`;
     }
 
     displayResponse(finalGreet);
@@ -620,18 +637,29 @@ function greetWelcomeBack() {
     window.isBusy = true;
 
     const gender = window.detectedGender || 'male';
+    const confidence = window.detectedGenderProbability || 0;
     let finalGreet = "";
 
+    // ปรับเกณฑ์ความมั่นใจที่ 95% (0.95)
+    const isConfident = confidence >= 0.95;
+
     if (window.currentLang === 'th') {
-        const pType = (gender === 'male') ? "คุณผู้ชาย" : "คุณผู้หญิง";
         // สุ่มคำทักทายสำหรับคนที่กลับมาหน้าตู้อีกครั้ง
         const phrases = [
-            "มีอะไรให้ผมช่วยเพิ่มเติมไหมครับ?",
-            "สอบถามข้อมูลเพิ่มเติมได้เลยนะครับ",
-            "ต้องการติดต่อเรื่องอื่นเพิ่มเติม สอบถามได้เลยครับ",
-            "ยินดีต้อนรับกลับมาครับ มีอะไรให้รับใช้เพิ่มไหมครับ?"
+            "การติดต่อธุระราบรื่นดีไหมครับ มีอะไรให้ผมช่วยเพิ่มเติมสอบถามได้เลยนะครับ",
+            "ยังติดต่อธุระไม่เสร็จใช่ไหมครับ มีอะไรให้น้องนำทางช่วยเพิ่มเติมไหมครับ",
+            "ขาดเหลือข้อมูลส่วนไหนหรือเปล่าครับ ให้ผมช่วยเหลือเพิ่มเติมได้นะครับ",
+            "เจอกันอีกแล้วนะครับ ติดขัดขั้นตอนไหน สอบถามน้องนำทางได้เลยครับ"
         ];
-        finalGreet = `${pType}... ${phrases[Math.floor(Math.random() * phrases.length)]}`;
+        const phrase = phrases[Math.floor(Math.random() * phrases.length)];
+
+        if (isConfident) {
+            const pType = (gender === 'male') ? "คุณผู้ชาย" : "คุณผู้หญิง";
+            finalGreet = `${pType}... ${phrase}`;
+        } else {
+            // มั่นใจต่ำ ละการระบุเพศไว้
+            finalGreet = `คุณครับ... ${phrase}`;
+        }
     } else {
         finalGreet = `Welcome back! Do you need any further assistance?`;
     }
