@@ -46,9 +46,9 @@ let lastSeenTime = Date.now();
 
 // [WALK-AWAY] ตัวแปรสำหรับตรวจจับคนเดินออก
 let walkAwayTimer = null;
-const WALK_AWAY_DELAY = 10000; // 10 วินาทีหลังไม่เจอหน้า → หยุดอ่าน
+const WALK_AWAY_DELAY = 20000; // 20 วินาทีหลังไม่เจอหน้า → หยุดอ่าน
 
-const DETECTION_INTERVAL = 200;
+const DETECTION_INTERVAL = 500;
 
 let wakeWordRecognition;
 let isWakeWordActive = false;
@@ -536,7 +536,7 @@ async function detectPerson() {
             const descriptor = face.descriptor;
             const alreadySeen = isAlreadySeen(descriptor);
 
-            if ((now - personInFrameTime) >= 2000 && isAtHome && !window.isBusy && !window.hasGreeted) {
+            if ((now - personInFrameTime) >= 1000 && isAtHome && !window.isBusy && !window.hasGreeted) {
                 if (alreadySeen) {
                     // คนเดิมกลับมา → ไม่ทักทายซ้ำ แต่พร้อมรับคำถาม
                     console.log("🔁 [Face-Memory] คนเดิมกลับมา ไม่ทักทายซ้ำ");
