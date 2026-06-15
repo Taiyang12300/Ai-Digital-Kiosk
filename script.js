@@ -508,7 +508,7 @@ async function detectPerson() {
     if (!isDetecting || typeof faceapi === 'undefined' || !video) return;
     const now = Date.now();
     try {
-        const options = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.65 });
+        const options = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.55 });
         const predictions = await faceapi.detectAllFaces(video, options)
                                          .withFaceLandmarks()
                                          .withFaceDescriptors()
@@ -516,7 +516,7 @@ async function detectPerson() {
 
         const validFaces = predictions.filter(f => {
             const box = f.detection.box;
-            return f.detection.score > 0.65 && box.width > 80;
+            return f.detection.score > 0.65 && box.width > 60;
         });
 
         if (validFaces.length > 0) {
