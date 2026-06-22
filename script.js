@@ -14,6 +14,8 @@
  * - [FACE-MEMORY] จำใบหน้าชั่วคราวเพื่อไม่ทักทายซ้ำในวันเดียวกัน (จำกัด 50 คน)
  * - [WELCOME-BACK] ทักทายแบบคุ้นเคยเมื่อประชาชนคนเดิมเดินกลับมาหน้าตู้อีกครั้ง
  * - [GENDER-SAFEGUARD] ใช้ค่าความมั่นใจ (Confidence >= 95%) เพื่อป้องกันการทักเพศสภาพผิดพลาด
+ * - [SMART-GRACE-PERIOD] แยกระบบตัดจบ 8 วินาที (ตอนอยู่เฉยๆ) กับ 20 วินาที (ตอนก้มอ่าน/กำลังพูด)
+ * - [TOUCH-RESCUE] ยกเลิกการตัดจบเดินหนีทันที หากมีการแตะหรือไถหน้าจอ
  */
 
 window.localDatabase = null;
@@ -420,22 +422,6 @@ function stopWakeWord() {
     }
 }
 
-function updateInteractionTime() {
-    lastSeenTime = Date.now();
-    if (!isAtHome) restartIdleTimer();
-}
-
-document.addEventListener('mousedown', updateInteractionTime);
-document.addEventListener('touchstart', updateInteractionTime);
-
-async function logQuestionToSheet(userQuery) {
-    if (!userQuery || !GAS_URL) return;
-    try {
-        const finalUrl = `${GAS_URL}?action=logOnly&query=${encodeURIComponent(userQuery)}`;
-        await fetch(finalUrl, { mode: 'no-cors' });
-    } catch (e) {}
-}
-
 function forceUnmute() {
     window.isMuted = false;
     const muteBtn = document.getElementById('muteBtn');
@@ -554,33 +540,50 @@ async function detectPerson() {
             }
             lastSeenTime = now;
         } else {
-            // [WALK-AWAY] ไม่เจอหน้า → เริ่มนับ walk-away timer
-            if (personInFrameTime !== null && walkAwayTimer === null && !isAtHome) {
-                walkAwayTimer = setTimeout(() => {
-                    console.log("🚶 [Walk-Away] คนเดินออกไป → หยุดอ่านและกลับหน้าโฮม");
-                    stopAllSpeech();
-                    forceStopAllMic();
+            // ==========================================================
+            // 🔴 [กรณีไม่เจอหน้าคน] แยกตรรกะตามสถานะการทำงานของตู้
+            // ==========================================================
+            
+            if (window.isBusy || window.isAudioPlaying) {
+                // 🗣️ สถานะที่ 1: น้องนำทางกำลังพูด หรือเล่นเสียงอยู่ (คนอาจจะก้มอ่าน หรือเดินหนีกลางคัน)
+                // บังคับใช้กฎ 20 วินาที เพื่อเปิดช่วงเวลาผ่อนผันให้ก้มอ่านได้ยาวๆ
+                if (personInFrameTime !== null && walkAwayTimer === null && !isAtHome) {
+                    console.log("⚠️ หน้าหายไปขณะกำลังพูด! เริ่มนับเวลาผ่อนผัน 20 วินาที เผื่อประชาชนก้มอ่าน...");
+                    
+                    walkAwayTimer = setTimeout(() => {
+                        // เช็คด่านสุดท้ายเผื่อพูดจบไปก่อนหน้าแล้วปล่อยให้กฎอื่นดูแล
+                        if (window.isBusy || window.isAudioPlaying) {
+                            console.log("🚶 [Walk-Away] ไม่มีคนฟังเกิน 20 วินาทีจริง สั่งตัดจบและกลับหน้าโฮม");
+                            stopAllSpeech();
+                            forceStopAllMic();
+                            personInFrameTime = null;
+                            window.hasGreeted = false;
+                            window.allowWakeWord = false;
+                            walkAwayTimer = null;
+                            isAtHome = true;
+                            
+                            const fbContainer = document.getElementById('feedback-container');
+                            if (fbContainer) fbContainer.innerHTML = '';
+                            displayResponse(window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone.");
+                            renderFAQButtons();
+                            updateLottie('idle');
+                            if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+                        }
+                    }, WALK_AWAY_DELAY); // 20000 วินาที
+                }
+
+            } else {
+                // 😴 สถานะที่ 2: น้องนำทางเงียบแล้ว/อยู่เฉยๆ (ประชาชนเดินหนีไปแล้ว)
+                // บังคับใช้กฎ 8 วินาที เพื่อเคลียร์หน้าจอให้พร้อมต้อนรับคนถัดไปอย่างรวดเร็ว
+                if (personInFrameTime !== null && (now - lastSeenTime > 8000)) {
+                    console.log("⏱️ ไม่มีคนอยู่หน้าตู้เกิน 8 วินาที (หลังพูดจบ) -> รีเซ็ตกลับหน้าหลัก");
                     personInFrameTime = null;
                     window.hasGreeted = false;
                     window.allowWakeWord = false;
-                    walkAwayTimer = null;
-                    isAtHome = true;
-                    const fbContainer = document.getElementById('feedback-container');
-                    if (fbContainer) fbContainer.innerHTML = '';
-                    displayResponse(window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone.");
-                    renderFAQButtons();
-                    updateLottie('idle');
-                    if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
-                }, WALK_AWAY_DELAY);
-            }
-
-            // reset เดิม กรณีออกไปนานเกิน 8 วินาที
-            if (personInFrameTime !== null && (now - lastSeenTime > 8000)) {
-                personInFrameTime = null;
-                window.hasGreeted = false;
-                window.allowWakeWord = false;
-                forceStopAllMic();
-                if (!isAtHome) restartIdleTimer();
+                    forceStopAllMic();
+                    if (walkAwayTimer) { clearTimeout(walkAwayTimer); walkAwayTimer = null; }
+                    if (!isAtHome) restartIdleTimer();
+                }
             }
         }
     } catch (e) {}
@@ -1152,3 +1155,24 @@ async function submitFeedback(result) {
         console.error("ส่งพลาด:", e);
     }
 }
+
+// =========================================================================
+// 🚨 [UPDATE] ส่วนสำคัญ: จัดการเวลา Touch & Interaction เพื่อกู้คืนตู้ Kiosk
+// =========================================================================
+function updateInteractionTime() {
+    lastSeenTime = Date.now();
+    
+    // ถ้าระบบกำลังนับเวลาคนเดินหนี 20 วิอยู่ แล้วมีคนแตะจอ/ไถจอ ให้ยกเลิกการนับเวลา!
+    if (typeof walkAwayTimer !== 'undefined' && walkAwayTimer !== null) {
+        clearTimeout(walkAwayTimer);
+        walkAwayTimer = null;
+        console.log("👆 [Touch] มีการสัมผัสหน้าจอ ยกเลิกการตัดจบ 20 วินาที");
+    }
+
+    if (!isAtHome) restartIdleTimer();
+}
+
+// ผูก Event Listener ดักจับการแตะและการไถหน้าจอทั้งหมด (ครอบคลุมการก้มอ่านจอ)
+document.addEventListener('mousedown', updateInteractionTime);
+document.addEventListener('touchstart', updateInteractionTime, { passive: true });
+document.addEventListener('scroll', updateInteractionTime, true);
