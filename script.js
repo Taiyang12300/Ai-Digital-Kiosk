@@ -169,34 +169,45 @@ function initSpeechRecognition() {
 }
 
 function toggleListening() {
+    // 1. จดจำสถานะเดิมของไมค์เอาไว้ก่อน (สำคัญมาก)
+    const wasListening = window.isListening;
+
+    // 2. หยุดเสียงพูดและล้างค่าต่างๆ
     window.speechSynthesis.cancel();
     if (window.currentAudio) {
         window.currentAudio.pause();
         window.currentAudio = null;
     }
+    
+    // สั่งปิดไมค์ทั้งหมด (ฟังก์ชันนี้จะเปลี่ยน window.isListening ให้กลายเป็น false)
     if (typeof forceStopAllMic === "function") forceStopAllMic();
-    window.isManualAborted = false;
+    
     if (window.micTimer) clearTimeout(window.micTimer);
     window.isBusy = false;
     window.isAudioPlaying = false;
 
-    if (window.isListening) {
+    // 3. ใช้สถานะเดิมที่เราจำไว้มาตัดสินใจ
+    if (wasListening) {
+        // 🔴 กรณี: ต้องการ "ปิดไมค์" (กดปุ่มตอนที่ไมค์กำลังฟังอยู่)
         updateLottie('idle');
-        try { window.recognition.stop(); } catch(e) {}
+        window.isManualAborted = true; // บล็อกไว้ไม่ให้ WakeWord แอบเปิดขึ้นมาเอง
+        console.log("🛑 [Manual] User Stopped Mic (ปิดไมค์สำเร็จ)");
     } else {
+        // 🟢 กรณี: ต้องการ "เปิดไมค์"
         updateLottie('thinking');
+        
+        // หน่วงเวลา 400ms เพื่อให้เบราว์เซอร์เคลียร์พอร์ตไมค์เดิมให้ว่าง 100% ป้องกันไมค์ชนกัน
         setTimeout(() => {
             try {
-                if (!window.isListening) {
-                    window.recognition.start();
-                    console.log("🎤 [Manual] User Triggered Mic");
-                }
+                window.isManualAborted = false; // ปลดล็อก
+                window.recognition.start();
+                console.log("🎤 [Manual] User Triggered Mic (เปิดไมค์สำเร็จ)");
             } catch (e) {
                 console.warn("Prevented Mic Overlap:", e.message);
                 window.isListening = false;
                 updateLottie('idle');
             }
-        }, 300);
+        }, 400); 
     }
 }
 
