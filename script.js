@@ -915,12 +915,11 @@ async function speak(text, callback = null, isGreeting = false) {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                // ใส่ API Key ที่คุณให้มาเรียบร้อยแล้วครับ
                 "apikey": "iapp_live_173c8714af0fc15752878415fcbca946f7e80adffb7a51d359e8e6928b65e212"
             },
             body: JSON.stringify({
                 text: cleanText,
-                speed: 1.15 // ปรับความเร็วตามที่คุณเทสไว้
+                speed: 1.15
             })
         });
 
@@ -930,14 +929,31 @@ async function speak(text, callback = null, isGreeting = false) {
             throw new Error(`iApp API Error: ${response.status} ${errData}`);
         }
 
-        const blob = await response.blob();
-        
-        if (blob.size === 0) {
-            alert("🚨 iApp ส่งไฟล์เสียงขนาด 0 byte กลับมา (ไม่มีเสียง)");
-            throw new Error("Empty audio blob");
+        // 🔍 [จุดที่แก้ไข] เช็คว่า iApp ตอบกลับมาเป็น JSON หรือ ไฟล์เสียง
+        const contentType = response.headers.get("content-type") || "";
+        let audioSrc = "";
+
+        if (contentType.includes("application/json")) {
+            // กรณีส่งกลับมาเป็นข้อความ (JSON)
+            const data = await response.json();
+            // ควานหาลิงก์ไฟล์เสียงจากตัวแปรต่างๆ ที่ iApp อาจจะส่งมา
+            audioSrc = data.audio_url || data.url || data.file || data.audio || data.data; 
+            
+            if (!audioSrc) {
+                alert("🚨 API ส่งข้อมูลกลับมา แต่หาลิงก์ไฟล์เสียงไม่เจอ: " + JSON.stringify(data));
+                throw new Error("No audio link found in JSON");
+            }
+        } else {
+            // กรณีส่งกลับมาเป็นไฟล์เสียงโดยตรง (WAV/MP3)
+            const blob = await response.blob();
+            if (blob.size === 0) {
+                alert("🚨 ไฟล์เสียงมีขนาด 0 byte");
+                throw new Error("Empty audio blob");
+            }
+            audioSrc = URL.createObjectURL(blob);
         }
 
-        const audioSrc = URL.createObjectURL(blob);
+        // โหลดและเล่นเสียง
         const audio = new Audio(audioSrc);
         window.currentAudio = audio;
 
