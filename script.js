@@ -897,91 +897,48 @@ function cleanTextForSpeech(text) {
         .trim();
 }
 
-// =====================================================================
-// 🎙️ ระบบเสียง ChindaTTS V3 (iApp Technology) + Fallback
-// =====================================================================
-async function speak(text, callback = null, isGreeting = false) {
+function speak(text, callback = null, isGreeting = false) {
     if (!text || window.isMuted) return;
+
+    let voices = window.speechSynthesis.getVoices();
+    if (voices.length === 0) {
+        console.warn("[TTS] Voices not loaded yet. Retrying in 100ms...");
+        setTimeout(() => speak(text, callback, isGreeting), 100);
+        return;
+    }
 
     forceStopAllMic();
     window.speechSynthesis.cancel();
     window.isBusy = true;
-    updateLottie('talking');
 
     let cleanText = cleanTextForSpeech(text);
-
-    try {
-        // เพิ่มระบุ voice ให้ชัดเจนตามที่ iApp V3 รองรับ
-        const response = await fetch("https://api.iapp.co.th/v3/store/audio/tts", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "apikey": "iapp_live_173c8714af0fc15752878415fcbca946f7e80adffb7a51d359e8e6928b65e212"
-            },
-            body: JSON.stringify({
-                text: cleanText,
-                speed: 1.15,
-                voice: "kaitom_v3" // ระบุชื่อเสียงให้ชัดเจน
-            })
-        });
-
-        if (!response.ok) throw new Error("API call failed");
-
-        const blob = await response.blob();
-        const audioSrc = URL.createObjectURL(blob);
-
-        const audio = new Audio(audioSrc);
-        window.currentAudio = audio;
-
-        // ถ้าเล่นไฟล์จาก iApp ได้สำเร็จ
-        audio.onplay = () => console.log("🎧 กำลังเล่นเสียงจาก iApp (ChindaTTS V3)");
-        
-        audio.onended = () => {
-            window.isBusy = false;
-            updateLottie('idle');
-            if (callback) callback();
-            // ... (โค้ดจัดการไมค์ต่อตามปกติ)
-        };
-
-        await audio.play();
-
-    } catch (error) {
-        console.warn("⚠️ iApp มีปัญหา สลับไปใช้เสียงสำรอง", error);
-        fallbackToChromeTTS(cleanText, callback, isGreeting);
-    }
-}
-
-// =====================================================================
-// 🛞 ยางอะไหล่: ฟังก์ชันเสียงดั้งเดิมของเบราว์เซอร์ (Chrome TTS)
-// =====================================================================
-function fallbackToChromeTTS(cleanText, callback, isGreeting) {
-    let voices = window.speechSynthesis.getVoices();
-    
-    // รอให้โหลดเสียงเสร็จ
-    if (voices.length === 0) {
-        setTimeout(() => fallbackToChromeTTS(cleanText, callback, isGreeting), 100);
-        return;
-    }
 
     const msg = new SpeechSynthesisUtterance(cleanText);
     const targetLang = window.currentLang === 'th' ? 'th-TH' : 'en-US';
     msg.lang = targetLang;
 
-    // พยายามหาเสียงภัทรา (Pattara) ก่อน
-    let selectedVoice = 
-        voices.find(v => v.name.includes('Pattara')) || 
+    let selectedVoice =
+        voices.find(v => v.name.includes('Pattara'))                                                          ||
+        voices.find(v => v.name.includes('Premwadee'))                                                        ||
+        voices.find(v => v.name.includes('Niwat'))                                                            ||
+        voices.find(v => (v.name.includes('Neural') || v.name.includes('Natural')) && v.lang === targetLang)  ||
         voices.find(v => v.lang === targetLang);
-        
-    if (selectedVoice) msg.voice = selectedVoice;
-    
-    msg.rate = 0.88;
-    msg.pitch = 1.1;
+
+    if (selectedVoice) {
+        msg.voice = selectedVoice;
+        console.log(`%c[TTS] 🎙️ Voice: ${selectedVoice.name}`, "color: #00b894; font-weight: bold;");
+    }
+
+    msg.rate   = 0.88;
+    msg.pitch  = 1.1;
+    msg.volume = 1.0;
+
+    msg.onstart = () => { updateLottie('talking'); };
 
     msg.onend = () => {
         window.isBusy = false;
         updateLottie('idle');
         if (callback) callback();
-        
         setTimeout(() => {
             if (window.isBusy || window.isAudioPlaying) return;
             if (isGreeting) {
@@ -989,6 +946,7 @@ function fallbackToChromeTTS(cleanText, callback, isGreeting) {
                 startWakeWord();
             } else {
                 if (!window.isListening && window.hasGreeted && !isAtHome) {
+                    console.log("🎤 [Auto] Safe Opening Mic...");
                     toggleListening();
                     if (window.micTimer) clearTimeout(window.micTimer);
                     window.micTimer = setTimeout(() => {
@@ -1003,9 +961,13 @@ function fallbackToChromeTTS(cleanText, callback, isGreeting) {
         }, 1000);
     };
 
-    setTimeout(() => {
-        window.speechSynthesis.speak(msg);
-    }, 150);
+    msg.onerror = (e) => {
+        console.error("TTS Error occurred:", e);
+        window.isBusy = false;
+        updateLottie('idle');
+    };
+
+    window.speechSynthesis.speak(msg);
 }
 
 function stopAllSpeech() {
