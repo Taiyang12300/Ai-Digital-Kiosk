@@ -903,48 +903,41 @@ function cleanTextForSpeech(text) {
 async function speak(text, callback = null, isGreeting = false) {
     if (!text || window.isMuted) return;
 
-    // 1. หยุดการทำงานของเสียงและไมค์เดิม
     forceStopAllMic();
     window.speechSynthesis.cancel();
     window.isBusy = true;
     updateLottie('talking');
 
-    // 2. ทำความสะอาดข้อความก่อนส่งให้ AI
     let cleanText = cleanTextForSpeech(text);
 
     try {
-        // 3. ส่งข้อความไปให้ iApp ChindaTTS V3 แปลงเป็นเสียง
         const response = await fetch("https://api.iapp.co.th/v3/store/audio/tts", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "apikey": "iapp_live_173c8714af0fc15752878415fcbca946f7e80adffb7a51d359e8e6928b65e212" // API Key ของคุณ
+                // ใส่ API Key ที่คุณให้มาเรียบร้อยแล้วครับ
+                "apikey": "iapp_live_173c8714af0fc15752878415fcbca946f7e80adffb7a51d359e8e6928b65e212"
             },
             body: JSON.stringify({
                 text: cleanText,
-                voice: "kaitom" // หากต้องการเสียงผู้หญิง ลองเปลี่ยนเป็น "kaimook" 
+                speed: 1.15 // ปรับความเร็วตามที่คุณเทสไว้
             })
         });
 
         if (!response.ok) {
-            throw new Error(`iApp API Error: ${response.status} ${response.statusText}`);
+            const errData = await response.text();
+            alert(`🚨 iApp Error: ${response.status}\nสาเหตุ: ${errData}`);
+            throw new Error(`iApp API Error: ${response.status} ${errData}`);
         }
 
-        let audioSrc;
-        const contentType = response.headers.get("content-type");
-
-        // 4. ตรวจสอบว่า iApp ส่งกลับมาเป็นไฟล์เสียง (Blob) หรือเป็นลิงก์ (JSON)
-        if (contentType && contentType.includes("application/json")) {
-            const data = await response.json();
-            audioSrc = data.audio_url || data.url || data.data || data.file;
-            if (!audioSrc) throw new Error("API ส่ง JSON กลับมาแต่ไม่มีลิงก์ไฟล์เสียง");
-        } else {
-            // กรณีส่งกลับมาเป็นไฟล์เสียง WAV/MP3 โดยตรง
-            const blob = await response.blob();
-            audioSrc = URL.createObjectURL(blob);
+        const blob = await response.blob();
+        
+        if (blob.size === 0) {
+            alert("🚨 iApp ส่งไฟล์เสียงขนาด 0 byte กลับมา (ไม่มีเสียง)");
+            throw new Error("Empty audio blob");
         }
 
-        // 5. นำไฟล์เสียงมาเล่น
+        const audioSrc = URL.createObjectURL(blob);
         const audio = new Audio(audioSrc);
         window.currentAudio = audio;
 
@@ -953,36 +946,24 @@ async function speak(text, callback = null, isGreeting = false) {
             updateLottie('idle');
             if (callback) callback();
             
-            // ปล่อยให้ระบบไมค์ทำงานต่อเมื่อพูดจบ
             setTimeout(() => {
                 if (window.isBusy || window.isAudioPlaying) return;
                 if (isGreeting) {
                     window.allowWakeWord = true;
                     startWakeWord();
-                } else {
-                    if (!window.isListening && window.hasGreeted && !isAtHome) {
-                        toggleListening();
-                        if (window.micTimer) clearTimeout(window.micTimer);
-                        window.micTimer = setTimeout(() => {
-                            if (window.isListening && !window.isBusy && !window.isAudioPlaying) {
-                                forceStopAllMic();
-                                window.allowWakeWord = true;
-                                startWakeWord();
-                            }
-                        }, 6000);
-                    }
+                } else if (!window.isListening && window.hasGreeted && !isAtHome) {
+                    toggleListening();
                 }
             }, 1000);
         };
 
         audio.play().catch(e => {
-            console.error("Audio Play Error:", e);
-            throw e; // โยน Error ไปให้ Fallback ทำงาน
+            alert(`🚨 ลำโพงไม่ยอมเล่นเสียง: ${e.message}`);
+            throw e;
         });
 
     } catch (error) {
-        console.warn("⚠️ ChindaTTS ล้มเหลว (อาจเน็ตหลุด, โควตาหมด, หรือชื่อ Voice ผิด) -> สลับไปใช้เสียงเบราว์เซอร์แทน", error);
-        // เลี้ยวกลับไปใช้เสียงเดิมของตู้ Kiosk ทันที เพื่อไม่ให้ระบบค้าง
+        console.warn("⚠️ สลับไปใช้เสียงสำรอง", error);
         fallbackToChromeTTS(cleanText, callback, isGreeting);
     }
 }
