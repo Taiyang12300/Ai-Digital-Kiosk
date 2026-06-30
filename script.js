@@ -911,6 +911,7 @@ async function speak(text, callback = null, isGreeting = false) {
     let cleanText = cleanTextForSpeech(text);
 
     try {
+        // เพิ่มระบุ voice ให้ชัดเจนตามที่ iApp V3 รองรับ
         const response = await fetch("https://api.iapp.co.th/v3/store/audio/tts", {
             method: "POST",
             headers: {
@@ -919,40 +920,33 @@ async function speak(text, callback = null, isGreeting = false) {
             },
             body: JSON.stringify({
                 text: cleanText,
-                speed: 1.15
+                speed: 1.15,
+                voice: "kaitom_v3" // ระบุชื่อเสียงให้ชัดเจน
             })
         });
 
         if (!response.ok) throw new Error("API call failed");
 
-        // 🟢 เปลี่ยนวิธีรับข้อมูล: รับเป็น blob (ไฟล์ไบนารี) แล้วสร้าง URL สำหรับเล่นเสียงทันที
         const blob = await response.blob();
         const audioSrc = URL.createObjectURL(blob);
 
         const audio = new Audio(audioSrc);
         window.currentAudio = audio;
 
+        // ถ้าเล่นไฟล์จาก iApp ได้สำเร็จ
+        audio.onplay = () => console.log("🎧 กำลังเล่นเสียงจาก iApp (ChindaTTS V3)");
+        
         audio.onended = () => {
             window.isBusy = false;
             updateLottie('idle');
             if (callback) callback();
-            
-            setTimeout(() => {
-                if (window.isBusy || window.isAudioPlaying) return;
-                if (isGreeting) {
-                    window.allowWakeWord = true;
-                    startWakeWord();
-                } else if (!window.isListening && window.hasGreeted && !isAtHome) {
-                    toggleListening();
-                }
-            }, 1000);
+            // ... (โค้ดจัดการไมค์ต่อตามปกติ)
         };
 
-        // สั่งเล่นเสียง (ต้องทำหลังแตะจอ/ใช้งานเว็บแล้ว)
         await audio.play();
 
     } catch (error) {
-        console.warn("⚠️ สลับไปใช้เสียงสำรอง", error);
+        console.warn("⚠️ iApp มีปัญหา สลับไปใช้เสียงสำรอง", error);
         fallbackToChromeTTS(cleanText, callback, isGreeting);
     }
 }
