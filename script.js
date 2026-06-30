@@ -923,14 +923,11 @@ async function speak(text, callback = null, isGreeting = false) {
             })
         });
 
-        if (!response.ok) throw new Error(`Status: ${response.status}`);
+        if (!response.ok) throw new Error("API call failed");
 
-        // 🟢 เปลี่ยนวิธีรับข้อมูล: แปลงเป็น ArrayBuffer แล้วเข้าสู่ขั้นตอนสร้างไฟล์เสียง
-        const arrayBuffer = await response.arrayBuffer();
-        
-        // แปลงเป็น Base64
-        const base64Audio = btoa(new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), ''));
-        const audioSrc = `data:audio/wav;base64,${base64Audio}`;
+        // 🟢 เปลี่ยนวิธีรับข้อมูล: รับเป็น blob (ไฟล์ไบนารี) แล้วสร้าง URL สำหรับเล่นเสียงทันที
+        const blob = await response.blob();
+        const audioSrc = URL.createObjectURL(blob);
 
         const audio = new Audio(audioSrc);
         window.currentAudio = audio;
@@ -951,13 +948,11 @@ async function speak(text, callback = null, isGreeting = false) {
             }, 1000);
         };
 
-        audio.play().catch(e => {
-            // ถ้าเล่นไม่ได้จริงๆ ค่อยไปใช้เสียงเบราว์เซอร์สำรอง
-            fallbackToChromeTTS(cleanText, callback, isGreeting);
-        });
+        // สั่งเล่นเสียง (ต้องทำหลังแตะจอ/ใช้งานเว็บแล้ว)
+        await audio.play();
 
     } catch (error) {
-        console.warn("⚠️ API ล้มเหลว -> สลับไปใช้เสียงสำรอง", error);
+        console.warn("⚠️ สลับไปใช้เสียงสำรอง", error);
         fallbackToChromeTTS(cleanText, callback, isGreeting);
     }
 }
