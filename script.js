@@ -923,37 +923,15 @@ async function speak(text, callback = null, isGreeting = false) {
             })
         });
 
-        if (!response.ok) {
-            const errData = await response.text();
-            alert(`🚨 iApp Error: ${response.status}\nสาเหตุ: ${errData}`);
-            throw new Error(`iApp API Error: ${response.status} ${errData}`);
-        }
+        if (!response.ok) throw new Error(`Status: ${response.status}`);
 
-        // 🔍 [จุดที่แก้ไข] เช็คว่า iApp ตอบกลับมาเป็น JSON หรือ ไฟล์เสียง
-        const contentType = response.headers.get("content-type") || "";
-        let audioSrc = "";
+        // 🟢 เปลี่ยนวิธีรับข้อมูล: แปลงเป็น ArrayBuffer แล้วเข้าสู่ขั้นตอนสร้างไฟล์เสียง
+        const arrayBuffer = await response.arrayBuffer();
+        
+        // แปลงเป็น Base64
+        const base64Audio = btoa(new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), ''));
+        const audioSrc = `data:audio/wav;base64,${base64Audio}`;
 
-        if (contentType.includes("application/json")) {
-            // กรณีส่งกลับมาเป็นข้อความ (JSON)
-            const data = await response.json();
-            // ควานหาลิงก์ไฟล์เสียงจากตัวแปรต่างๆ ที่ iApp อาจจะส่งมา
-            audioSrc = data.audio_url || data.url || data.file || data.audio || data.data; 
-            
-            if (!audioSrc) {
-                alert("🚨 API ส่งข้อมูลกลับมา แต่หาลิงก์ไฟล์เสียงไม่เจอ: " + JSON.stringify(data));
-                throw new Error("No audio link found in JSON");
-            }
-        } else {
-            // กรณีส่งกลับมาเป็นไฟล์เสียงโดยตรง (WAV/MP3)
-            const blob = await response.blob();
-            if (blob.size === 0) {
-                alert("🚨 ไฟล์เสียงมีขนาด 0 byte");
-                throw new Error("Empty audio blob");
-            }
-            audioSrc = URL.createObjectURL(blob);
-        }
-
-        // โหลดและเล่นเสียง
         const audio = new Audio(audioSrc);
         window.currentAudio = audio;
 
@@ -974,12 +952,12 @@ async function speak(text, callback = null, isGreeting = false) {
         };
 
         audio.play().catch(e => {
-            alert(`🚨 ลำโพงไม่ยอมเล่นเสียง: ${e.message}`);
-            throw e;
+            // ถ้าเล่นไม่ได้จริงๆ ค่อยไปใช้เสียงเบราว์เซอร์สำรอง
+            fallbackToChromeTTS(cleanText, callback, isGreeting);
         });
 
     } catch (error) {
-        console.warn("⚠️ สลับไปใช้เสียงสำรอง", error);
+        console.warn("⚠️ API ล้มเหลว -> สลับไปใช้เสียงสำรอง", error);
         fallbackToChromeTTS(cleanText, callback, isGreeting);
     }
 }
