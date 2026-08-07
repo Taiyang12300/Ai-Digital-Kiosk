@@ -365,19 +365,11 @@
         </button>
       </div>
 
-      <!-- 🎟️ ปุ่มระบบจองคิวตรวจสภาพรถ (ปรับปรุงโครงสร้างใหม่ให้แสดงผล 100%) -->
-      <div style="width: 100%; margin-bottom: 12px; display: flex; justify-content: center;">
-        <button onclick="openQueueModal()" style="
-            width: 100%; background: white; border: 2px solid #00b894; border-radius: 14px; padding: 10px 16px;
-            display: flex; align-items: center; justify-content: center; gap: 12px; cursor: pointer;
-            box-shadow: 0 4px 12px rgba(0, 184, 148, 0.1); font-family: 'Sarabun', sans-serif;
-        ">
-          <div style="width: 38px; height: 38px; border-radius: 50%; background: #00b894; color: white; display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0;">
-              <i class="fas fa-ticket-alt"></i>
-          </div>
-          <div style="color: #2d3436; font-size: 13px; text-align: left; line-height: 1.3; flex: 1;">
-              ระบบบริการสะดวก<br><b style="font-size: 15px; color: #00b894;">รับบัตรคิวงานตรวจสภาพรถ</b>
-          </div>
+            <!-- 🎟️ ปุ่มระบบจองคิวตรวจสภาพรถ (แก้ให้ข้อความอยู่ตรงกลางเป๊ะ) -->
+      <div class="idcard-single-section" style="margin-bottom: 12px;">
+        <button class="btn-idcard-single" onclick="openQueueModal()" style="border-color: #00b894; box-shadow: 0 4px 12px rgba(0, 184, 148, 0.06);">
+          <div class="icon-box" style="background: #00b894;"><i class="fas fa-ticket-alt"></i></div>
+          <div class="text-box">ระบบบริการสะดวก<br><b style="color: #00b894;">รับบัตรคิวงานตรวจสภาพรถ</b></div>
         </button>
       </div>
 
