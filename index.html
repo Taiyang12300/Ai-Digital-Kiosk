@@ -822,20 +822,18 @@
     }
 
     // ==========================================
-    // 🎟️ ฟังก์ชันควบคุม Popup ระบบคิวงานตรวจสภาพรถ
+    // 🎟️ ฟังก์ชันควบคุม Popup ระบบคิวงานตรวจสภาพรถ (ทำงานร่วมกับระบบตรวจจับใบหน้าเดิม)
     // ==========================================
     function openQueueModal() {
         const modal = document.getElementById('queueModal');
         if (modal) {
             if (typeof forceStopAllMic === 'function') forceStopAllMic();
             if (typeof stopAllSpeech === 'function') stopAllSpeech();
+            
             modal.style.display = 'flex';
             
+            // ⏳ ผูกเข้ากับระบบรีเซ็ตเวลาของตู้เดิม (อัปเดตสถานะการใช้งาน)
             if (typeof updateInteractionTime === 'function') updateInteractionTime();
-            if (typeof walkAwayTimer !== 'undefined' && walkAwayTimer !== null) {
-                clearTimeout(walkAwayTimer);
-                walkAwayTimer = null;
-            }
             
             const msg = window.currentLang === 'th' ? "เชิญเลือกประเภทงานบริการ และสแกนรับบัตรคิวได้เลยครับ" : "Please select a service to get your queue ticket.";
             if (typeof speak === 'function') speak(msg, () => {
@@ -848,6 +846,8 @@
         const modal = document.getElementById('queueModal');
         if (modal) {
             modal.style.display = 'none';
+            
+            // ⏳ รีเซ็ตเวลาระบบเมื่อปิดหน้าต่าง
             if (typeof updateInteractionTime === 'function') updateInteractionTime();
             
             const msg = window.currentLang === 'th' ? "มีอะไรให้น้องนำทางช่วยเหลือเพิ่มเติมไหมครับ" : "Is there anything else I can help you with?";
@@ -857,6 +857,16 @@
                 if (typeof startWakeWord === 'function') startWakeWord();
             });
         }
+    }
+
+    // 🛑 ดักจับกรณีที่ไม่มีคนยืนหน้าตู้แล้วระบบสั่งเคลียร์หน้าจอ (Back to Home) ให้หน้าต่างคิวปิดลงด้วยอัตโนมัติ
+    if (typeof window.backToHomeKeepPerson !== 'undefined') {
+        const originalBackToHome = window.backToHomeKeepPerson;
+        window.backToHomeKeepPerson = function() {
+            const modal = document.getElementById('queueModal');
+            if (modal) modal.style.display = 'none'; 
+            originalBackToHome.apply(this, arguments); 
+        };
     }
 
     window.addEventListener('DOMContentLoaded', connectToKioskBackend);
