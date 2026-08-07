@@ -447,6 +447,8 @@ function resetToHome() {
         return;
     }
     if (isAtHome) return;
+    const queueModal = document.getElementById('queueModal');
+    if (queueModal) queueModal.style.display = 'none';
     stopAllSpeech();
     forceStopAllMic();
     forceUnmute();
@@ -566,6 +568,8 @@ async function detectPerson() {
                         // เช็คด่านสุดท้ายเผื่อพูดจบไปก่อนหน้าแล้วปล่อยให้กฎอื่นดูแล
                         if (window.isBusy || window.isAudioPlaying) {
                             console.log("🚶 [Walk-Away] ไม่มีคนฟังเกิน 20 วินาทีจริง สั่งตัดจบและกลับหน้าโฮม");
+                            const queueModal = document.getElementById('queueModal');
+                            if (queueModal) queueModal.style.display = 'none';
                             stopAllSpeech();
                             forceStopAllMic();
                             personInFrameTime = null;
@@ -589,6 +593,8 @@ async function detectPerson() {
                 // บังคับใช้กฎ 8 วินาที เพื่อเคลียร์หน้าจอให้พร้อมต้อนรับคนถัดไปอย่างรวดเร็ว
                 if (personInFrameTime !== null && (now - lastSeenTime > 8000)) {
                     console.log("⏱️ ไม่มีคนอยู่หน้าตู้เกิน 8 วินาที (หลังพูดจบ) -> รีเซ็ตกลับหน้าหลัก");
+                    const queueModal = document.getElementById('queueModal');
+                    if (queueModal) queueModal.style.display = 'none';
                     personInFrameTime = null;
                     window.hasGreeted = false;
                     window.allowWakeWord = false;
