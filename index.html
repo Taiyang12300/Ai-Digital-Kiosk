@@ -859,14 +859,27 @@
         }
     }
 
-    // 🛑 ดักจับกรณีที่ไม่มีคนยืนหน้าตู้แล้วระบบสั่งเคลียร์หน้าจอ (Back to Home) ให้หน้าต่างคิวปิดลงด้วยอัตโนมัติ
+    // 🛑 [ตัวดักจับสถานะกลับหน้าหลัก] บังคับให้ปิดหน้าต่างคิวทันที เมื่อระบบตรวจจับว่าคนเดินหนีและสั่ง Reset กลับโฮม
     if (typeof window.backToHomeKeepPerson !== 'undefined') {
         const originalBackToHome = window.backToHomeKeepPerson;
         window.backToHomeKeepPerson = function() {
             const modal = document.getElementById('queueModal');
-            if (modal) modal.style.display = 'none'; 
+            if (modal) modal.style.display = 'none'; // สั่งปิดหน้าคิวทิ้งทันที
             originalBackToHome.apply(this, arguments); 
         };
+    } else {
+        // กรณีเรียกฟังก์ชัน resetToHome ตรงๆ จากสคริปต์หลัก
+        const intervalChecker = setInterval(() => {
+            if (typeof resetToHome === 'function') {
+                const originalReset = resetToHome;
+                window.resetToHome = function() {
+                    const modal = document.getElementById('queueModal');
+                    if (modal) modal.style.display = 'none'; // ซ่อนหน้าคิวเมื่อตู้รีเซ็ต
+                    originalReset.apply(this, arguments);
+                };
+                clearInterval(intervalChecker);
+            }
+        }, 500);
     }
 
     window.addEventListener('DOMContentLoaded', connectToKioskBackend);
