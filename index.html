@@ -822,23 +822,18 @@
     }
 
     // ==========================================
-    // 🎟️ ฟังก์ชันควบคุม Popup ระบบคิวงานตรวจสภาพรถ (ทำงานร่วมกับระบบตรวจจับใบหน้าเดิม)
+    // 🎟️ ฟังก์ชันควบคุม Popup ระบบคิวงานตรวจสภาพรถ
     // ==========================================
     function openQueueModal() {
         const modal = document.getElementById('queueModal');
         if (modal) {
             if (typeof forceStopAllMic === 'function') forceStopAllMic();
             if (typeof stopAllSpeech === 'function') stopAllSpeech();
-            
             modal.style.display = 'flex';
-            
-            // ⏳ ผูกเข้ากับระบบรีเซ็ตเวลาของตู้เดิม (อัปเดตสถานะการใช้งาน)
             if (typeof updateInteractionTime === 'function') updateInteractionTime();
             
             const msg = window.currentLang === 'th' ? "เชิญเลือกประเภทงานบริการ และสแกนรับบัตรคิวได้เลยครับ" : "Please select a service to get your queue ticket.";
-            if (typeof speak === 'function') speak(msg, () => {
-                window.isBusy = false;
-            });
+            if (typeof speak === 'function') speak(msg, () => { window.isBusy = false; });
         }
     }
 
@@ -846,8 +841,6 @@
         const modal = document.getElementById('queueModal');
         if (modal) {
             modal.style.display = 'none';
-            
-            // ⏳ รีเซ็ตเวลาระบบเมื่อปิดหน้าต่าง
             if (typeof updateInteractionTime === 'function') updateInteractionTime();
             
             const msg = window.currentLang === 'th' ? "มีอะไรให้น้องนำทางช่วยเหลือเพิ่มเติมไหมครับ" : "Is there anything else I can help you with?";
@@ -857,29 +850,6 @@
                 if (typeof startWakeWord === 'function') startWakeWord();
             });
         }
-    }
-
-    // 🛑 [ตัวดักจับสถานะกลับหน้าหลัก] บังคับให้ปิดหน้าต่างคิวทันที เมื่อระบบตรวจจับว่าคนเดินหนีและสั่ง Reset กลับโฮม
-    if (typeof window.backToHomeKeepPerson !== 'undefined') {
-        const originalBackToHome = window.backToHomeKeepPerson;
-        window.backToHomeKeepPerson = function() {
-            const modal = document.getElementById('queueModal');
-            if (modal) modal.style.display = 'none'; // สั่งปิดหน้าคิวทิ้งทันที
-            originalBackToHome.apply(this, arguments); 
-        };
-    } else {
-        // กรณีเรียกฟังก์ชัน resetToHome ตรงๆ จากสคริปต์หลัก
-        const intervalChecker = setInterval(() => {
-            if (typeof resetToHome === 'function') {
-                const originalReset = resetToHome;
-                window.resetToHome = function() {
-                    const modal = document.getElementById('queueModal');
-                    if (modal) modal.style.display = 'none'; // ซ่อนหน้าคิวเมื่อตู้รีเซ็ต
-                    originalReset.apply(this, arguments);
-                };
-                clearInterval(intervalChecker);
-            }
-        }, 500);
     }
 
     window.addEventListener('DOMContentLoaded', connectToKioskBackend);
