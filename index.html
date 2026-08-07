@@ -365,14 +365,6 @@
         </button>
       </div>
 
-            <!-- 🎟️ ปุ่มระบบจองคิวตรวจสภาพรถ (แก้ให้ข้อความอยู่ตรงกลางเป๊ะ) -->
-      <div class="idcard-single-section" style="margin-bottom: 12px;">
-        <button class="btn-idcard-single" onclick="openQueueModal()" style="border-color: #00b894; box-shadow: 0 4px 12px rgba(0, 184, 148, 0.06);">
-          <div class="icon-box" style="background: #00b894;"><i class="fas fa-ticket-alt"></i></div>
-          <div class="text-box">ระบบบริการสะดวก<br><b style="color: #00b894;">รับบัตรคิวงานตรวจสภาพรถ</b></div>
-        </button>
-      </div>
-
       <div class="faq-title"><i class="fas fa-id-card"></i> ระบบคัดกรองเอกสารต่อใบขับขี่:</div>
       <div class="quick-menu">
         <button class="quick-card card-car" onclick="startLicenseCheck('รถยนต์')">
@@ -462,14 +454,6 @@
   </audio>
   <video id="video" width="640" height="480" autoplay muted playsinline style="display:none;"></video>
   
-  <!-- หน้าต่าง Popup สำหรับจองคิว (ซ่อนไว้เป็นค่าเริ่มต้น) -->
-  <div id="queueModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.85); z-index: 99999; justify-content: center; align-items: center; backdrop-filter: blur(5px);">
-      <div style="background-color: #f4f7f6; width: 95%; height: 95%; border-radius: 20px; position: relative; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
-          <button onclick="closeQueueModal()" style="position: absolute; top: 15px; right: 15px; background: #ff7675; color: white; border: none; border-radius: 50%; width: 60px; height: 60px; font-size: 30px; cursor: pointer; z-index: 100000; box-shadow: 0 4px 10px rgba(255, 118, 117, 0.4); display: flex; justify-content: center; align-items: center;">✖</button>
-          <iframe src="https://script.google.com/macros/s/AKfycbwJfX_zFhONJBfGMM3oltLUVTGj_wr6BjEPlgGAJ9sE1bjVkseiil3gK2ta6HkD_jv7/exec?page=register" style="width: 100%; height: 100%; border: none;"></iframe>
-      </div>
-  </div>
-
   <script src="https://code.responsivevoice.org/responsivevoice.js"></script>
   <script src="script.js?v=2.2"></script>
 
@@ -804,44 +788,6 @@
             if (typeof backToHomeKeepPerson === 'function') backToHomeKeepPerson();
             if (wsClient && wsClient.readyState === WebSocket.OPEN) wsClient.send(JSON.stringify({ action: 'trigger-read' }));
         }, 3000);
-    }
-
-    // ==========================================
-    // 🎟️ ฟังก์ชันควบคุม Popup ระบบคิวงานตรวจสภาพรถ
-    // ==========================================
-    function openQueueModal() {
-        const modal = document.getElementById('queueModal');
-        if (modal) {
-            if (typeof forceStopAllMic === 'function') forceStopAllMic();
-            if (typeof stopAllSpeech === 'function') stopAllSpeech();
-            modal.style.display = 'flex';
-            
-            if (typeof updateInteractionTime === 'function') updateInteractionTime();
-            if (typeof walkAwayTimer !== 'undefined' && walkAwayTimer !== null) {
-                clearTimeout(walkAwayTimer);
-                walkAwayTimer = null;
-            }
-            
-            const msg = window.currentLang === 'th' ? "เชิญเลือกประเภทงานบริการ และสแกนรับบัตรคิวได้เลยครับ" : "Please select a service to get your queue ticket.";
-            if (typeof speak === 'function') speak(msg, () => {
-                window.isBusy = false;
-            });
-        }
-    }
-
-    function closeQueueModal() {
-        const modal = document.getElementById('queueModal');
-        if (modal) {
-            modal.style.display = 'none';
-            if (typeof updateInteractionTime === 'function') updateInteractionTime();
-            
-            const msg = window.currentLang === 'th' ? "มีอะไรให้น้องนำทางช่วยเหลือเพิ่มเติมไหมครับ" : "Is there anything else I can help you with?";
-            if (typeof speak === 'function') speak(msg, () => {
-                window.isBusy = false;
-                window.allowWakeWord = true;
-                if (typeof startWakeWord === 'function') startWakeWord();
-            });
-        }
     }
 
     window.addEventListener('DOMContentLoaded', connectToKioskBackend);
