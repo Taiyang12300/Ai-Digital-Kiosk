@@ -832,7 +832,7 @@
             modal.style.display = 'flex';
             if (typeof updateInteractionTime === 'function') updateInteractionTime();
             
-            const msg = window.currentLang === 'th' ? "เชิญเลือกประเภทงานบริการ และสแกนรับบัตรคิวได้เลยครับ" : "Please select a service to get your queue ticket.";
+            const msg = window.currentLang === 'th' ? "กรุณากดคิวเลือกประเภทงานบริการ หรือสแกนคิวอาโค้ดเพื่อรับแจ้งคิวออนไลน์ได้เลยครับ" : "Please select a service to get your queue ticket.";
             if (typeof speak === 'function') speak(msg, () => { window.isBusy = false; });
         }
     }
