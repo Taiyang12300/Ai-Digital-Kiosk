@@ -87,11 +87,11 @@
     .btn-lang.active { border-color: var(--primary); background: #f0edff; color: var(--primary); font-weight: bold; }
     .btn-mute.muted { background: var(--accent); color: white; border-color: var(--accent); }
 
-    .avatar-container { 
-      width: clamp(60px, 9dvh, 110px); 
-      height: clamp(60px, 9dvh, 110px); 
-      margin-bottom: 0.5dvh; 
-      border-radius: 50%; background: white; box-shadow: 0 5px 15px rgba(0,0,0,0.05); 
+        .avatar-container { 
+      width: clamp(120px, 18dvh, 200px);   /* ขยายขนาดความกว้าง (เล็กสุด 120px, ใหญ่สุด 200px) */
+      height: clamp(120px, 18dvh, 200px);  /* ขยายขนาดความสูง ให้เท่ากับความกว้าง */
+      margin-bottom: 1.5dvh; 
+      border-radius: 50%; background: white; box-shadow: 0 5px 15px rgba(0,0,0,0.1); 
       overflow: hidden; flex-shrink: 0; 
     }
     #lottie-canvas { width: 100%; height: 100%; }
