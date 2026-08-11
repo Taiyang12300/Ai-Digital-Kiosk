@@ -53,7 +53,7 @@
 
     /* โซนบน: scroll ได้เมื่อตอบคำถาม */
     .scroll-zone {
-      flex: 1;
+      flex: 1 1 auto;
       width: 100%;
       overflow-y: auto;
       overflow-x: hidden;
@@ -71,7 +71,18 @@
       width: 100%;
       flex-shrink: 0;
       background: var(--bg);
-      padding-bottom: clamp(40px, 18vh, 200px); 
+      padding-bottom: 10px; 
+    }
+
+        /* 🌟 สร้าง "สปริงล่องหน" หนุนกล่องข้อความจากด้านล่างสุด */
+    .main-container::after {
+      content: '';
+      display: block;
+      width: 100%;
+      /* สปริงกางออกปกติ 18vh แต่ยอมหดตัวเร็วมากเมื่อถูกทับ (shrink: 10) */
+      flex: 0 10 18vh; 
+      /* ลิมิตการยุบตัว: โดนข้อความยาวๆ ทับจนสุด จะยุบเหลือ 15px (ปุ่มไมค์จะไม่ตกขอบ) */
+      min-height: 15px; 
     }
     
     .top-controls { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5dvh; flex-shrink: 0; }
