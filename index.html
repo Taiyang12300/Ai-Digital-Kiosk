@@ -862,8 +862,6 @@
         }
     }
 
-    window.addEventListener('DOMContentLoaded', connectToKioskBackend);
-
       <!-- =================================================================== -->
   <!-- 🕵️‍♂️ ระบบทักทาย VIP ลับ (MP3 สมจริง + ทักทายแค่ครั้งเดียวเท่านั้น) -->
   <!-- =================================================================== -->
@@ -871,7 +869,7 @@
   <input type="file" id="inspectorPhotoUpload" accept="image/*" multiple style="display: none;" onchange="processInspectorPhoto(event)">
   
   <div onclick="document.getElementById('inspectorPhotoUpload').click()" 
-       style="position: absolute; top: 0; left: 0; width: 80px; height: 80px; z-index: 999999; cursor: default; opacity: 0;">
+       style="position: absolute; bottom: 0; left: 0; width: 150px; height: 150px; z-index: 999999; cursor: default; opacity: 0;">
   </div>
 
   <!-- 🌟 เพิ่มไฟล์เสียง MP3 ที่เตรียมไว้ตรงนี้ -->
@@ -970,6 +968,8 @@
             }
         }, 1500); 
     }
+
+    window.addEventListener('DOMContentLoaded', connectToKioskBackend);
   </script>
 </body>
 </html>
