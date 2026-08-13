@@ -952,11 +952,16 @@ function cleanTextForSpeech(text) {
 }
 
 function speak(text, callback = null, isGreeting = false) {
-    // 🛑 เกราะเหล็ก: ถ้าเปิดหน้าคิวอยู่ ห้ามพูดเด็ดขาด!
-    if (!text || window.isMuted || window.isQueueOpen) return;
+    if (!text || window.isMuted) return;
+
+    // 🟢 1. เงื่อนไขพิเศษ: เช็กว่าเป็นข้อความแนะนำคิวหรือไม่
+    // ถ้าใช่ จะยอมให้พูดออกเสียงได้ แม้ว่า window.isQueueOpen จะเป็น true อยู่ก็ตาม
+    const isQueueMessage = text.includes("กรุณากดคิว") || text.includes("Please select");
+    if (window.isQueueOpen && !isQueueMessage) return;
 
     let voices = window.speechSynthesis.getVoices();
     if (voices.length === 0) {
+        console.warn("[TTS] Voices not loaded yet. Retrying in 100ms...");
         setTimeout(() => speak(text, callback, isGreeting), 100);
         return;
     }
@@ -965,19 +970,12 @@ function speak(text, callback = null, isGreeting = false) {
     window.speechSynthesis.cancel();
     window.isBusy = true;
 
-    // เช็กอีกรอบก่อนเริ่มกระบวนการ
-    if (window.isQueueOpen) {
-        window.isBusy = false;
-        return;
-    }
-
     let cleanText = cleanTextForSpeech(text);
 
     const msg = new SpeechSynthesisUtterance(cleanText);
     const targetLang = window.currentLang === 'th' ? 'th-TH' : 'en-US';
     msg.lang = targetLang;
 
-    // ... (ส่วนเลือกเสียง โค้ดเดิมของคุณ)
     let selectedVoice =
         voices.find(v => v.name.includes('Pattara'))                                                          ||
         voices.find(v => v.name.includes('Premwadee'))                                                        ||
@@ -987,37 +985,36 @@ function speak(text, callback = null, isGreeting = false) {
 
     if (selectedVoice) {
         msg.voice = selectedVoice;
+        console.log(`%c[TTS] 🎙️ Voice: ${selectedVoice.name}`, "color: #00b894; font-weight: bold;");
     }
 
-    msg.rate   = 0.88;
+    // 🟢 2. ปรับความเร็วลงเล็กน้อย (0.88 -> 0.85) เพื่อให้เสียงพูดตอนเปิดหน้าคิวดูเนียน ไม่รีบร้อน
+    msg.rate   = 0.85; 
     msg.pitch  = 1.1;
     msg.volume = 1.0;
 
-    msg.onstart = () => { 
-        // เช็กครั้งสุดท้ายตอนจะเริ่มออกเสียง ถ้าดันเปิดหน้าคิวแทรก ให้ฆ่าทิ้งทันที
-        if (window.isQueueOpen) {
-            window.speechSynthesis.cancel();
-            return;
-        }
-        updateLottie('talking'); 
-    };
+    msg.onstart = () => { updateLottie('talking'); };
 
     msg.onend = () => {
         window.isBusy = false;
         updateLottie('idle');
         
-        if (callback) callback();
+        if (callback) callback(); 
         
         setTimeout(() => {
+            // 🛑 3. ล็อกเพิ่มเติม: ถ้าเปิดหน้าคิวอยู่ ห้ามทำกระบวนการเปิดไมค์ต่อเด็ดขาด
             if (window.isBusy || window.isAudioPlaying || window.isQueueOpen) return;
+            
             if (isGreeting) {
                 window.allowWakeWord = true;
                 startWakeWord();
             } else {
                 if (!window.isListening && window.hasGreeted && !isAtHome) {
+                    console.log("🎤 [Auto] Safe Opening Mic...");
                     toggleListening();
                     if (window.micTimer) clearTimeout(window.micTimer);
                     window.micTimer = setTimeout(() => {
+                        // 🛑 เช็กอีกชั้น: ก่อนจะตัดกลับไปใช้ WakeWord ต้องไม่เปิดหน้าคิวอยู่
                         if (window.isListening && !window.isBusy && !window.isAudioPlaying && !window.isQueueOpen) {
                             forceStopAllMic();
                             window.allowWakeWord = true;
@@ -1030,14 +1027,12 @@ function speak(text, callback = null, isGreeting = false) {
     };
 
     msg.onerror = (e) => {
+        console.error("TTS Error occurred:", e);
         window.isBusy = false;
         updateLottie('idle');
     };
 
-    // ส่งเสียงออกไป (ถ้าไม่ได้เปิดหน้าคิว)
-    if (!window.isQueueOpen) {
-        window.speechSynthesis.speak(msg);
-    }
+    window.speechSynthesis.speak(msg);
 }
 
 function stopAllSpeech() {
