@@ -927,9 +927,10 @@
       event.target.value = '';
     }
 
-        // ฟังก์ชันเปิดเรดาร์สแกนสดจากกล้อง
+            // ฟังก์ชันเปิดเรดาร์สแกนสดจากกล้อง
     function startInspectorScanner() {
         const videoEl = document.getElementById('video');
+        const lottiePlayer = document.getElementById('lottie-canvas'); // 🌟 ดึงตัว Lottie มาเตรียมไว้
         
         setInterval(async () => {
             // ถ้ากล้องดับ ระบบไม่ว่าง หรือ "ทักทายไปแล้ว (hasGreetedVIPOnce)" ให้ข้ามไปเลย
@@ -948,8 +949,10 @@
                     if (typeof forceStopAllMic === 'function') forceStopAllMic();
                     if (typeof stopAllSpeech === 'function') stopAllSpeech();
 
-                    // 🌟 1. สั่งให้น้องเปลี่ยนเป็นท่าทาง "กำลังพูด" ผ่านฟังก์ชันของคุณ
-                    if (typeof UpdateLottie === 'function') UpdateLottie('talking');
+                    // 🌟 1. สั่งโหลดไฟล์ Lottie "ตอนพูด" ตรงๆ ทันที
+                    if (lottiePlayer) {
+                        lottiePlayer.load('https://lottie.host/79a24a65-7d74-4ff7-8ac5-bb3eeaa49073/4BES9eWBuE.json');
+                    }
 
                     const msg = "สวัสดีครับ ท่านผู้ตรวจราชการ ผม 'น้องนำทาง' ระบบผู้ช่วยอัจฉริยะ AI ประจำสำนักงานขนส่งสาขาอำเภอพยัคฆภูมิพิสัย ยินดีต้อนรับครับ! หน้าที่ของผมคือการเป็นด่านหน้า ดูแลประชาชนแบบครบวงจร ตั้งแต่ให้คำแนะนำเบื้องต้น ช่วยพิมพ์สำเนาบัตรประชาชน คัดกรองเอกสารใบขับขี่ และออกบัตรคิวอัตโนมัติ เพื่อลดความแออัด ลดระยะเวลาการรอคอย และยกระดับหน่วยงานของเราสู่การเป็น สมาร์ท ออฟฟิศ อย่างเต็มรูปแบบครับ";
                     document.getElementById('response-text').innerText = msg;
@@ -961,11 +964,17 @@
                         vipAudio.play().catch(e => console.error("เล่นเสียงไม่ได้:", e));
                         
                         vipAudio.onended = () => {
-                            // 🌟 2. สั่งให้น้องเปลี่ยนกลับเป็นท่าทาง "ปกติ/ยืนรอ" เมื่อพูดจบ
-                            if (typeof UpdateLottie === 'function') UpdateLottie('idle');
+                            // 🌟 2. สั่งโหลดไฟล์ Lottie "ยืนนิ่ง" ตรงๆ เมื่อเสียงพูดจบ
+                            if (lottiePlayer) {
+                                lottiePlayer.load('https://lottie.host/568e8594-a319-4491-bf10-a0f5c012fc76/6S3urqybG5.json');
+                            }
                             window.isBusy = false; 
                         };
                     } else {
+                        // กรณีที่เสียงมีปัญหา ก็ให้กลับมายืนนิ่งและปลดล็อกระบบ
+                        if (lottiePlayer) {
+                            lottiePlayer.load('https://lottie.host/568e8594-a319-4491-bf10-a0f5c012fc76/6S3urqybG5.json');
+                        }
                         window.isBusy = false;
                     }
                 }
