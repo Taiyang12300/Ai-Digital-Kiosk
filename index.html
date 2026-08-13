@@ -835,49 +835,62 @@
     // 🎟️ ฟังก์ชันควบคุม Popup ระบบคิวงานตรวจสภาพรถ (ฉบับป้องกันเสียงตีกัน)
     // ==========================================
     function openQueueModal() {
-        const modal = document.getElementById('queueModal');
-        if (modal) {
-            // 🛑 1. ล็อกสถานะว่ากำลังเปิดหน้าคิวอยู่ (ใช้ป้องกันเสียงทักทายและกล้องสแกนแทรก)
-            window.isQueueOpen = true;
+    const modal = document.getElementById('queueModal');
+    if (modal) {
+        // 🔒 ล็อกสถานะขั้นเด็ดขาด ห้ามเสียงใดๆ หลุด
+        window.isQueueOpen = true;
+        window.isBusy = true;
 
-            // 🛑 2. สั่งหยุดเสียงพูดและไมค์ทั้งหมดที่มีอยู่ทันที
-            if (typeof forceStopAllMic === 'function') forceStopAllMic();
-            if (typeof stopAllSpeech === 'function') stopAllSpeech();
-            window.speechSynthesis.cancel();
-            
-            // ปิดเสียง MP3 ของ VIP เผื่อกำลังเล่นค้างอยู่
-            const vipAudio = document.getElementById('vipGreetingSound');
-            if (vipAudio) {
-                vipAudio.pause();
-                vipAudio.currentTime = 0;
-            }
-
-            modal.style.display = 'flex';
-            if (typeof updateInteractionTime === 'function') updateInteractionTime();
-            
-            const msg = window.currentLang === 'th' ? "กรุณากดคิวเลือกประเภทงานบริการ หรือสแกนคิวอาโค้ดเพื่อรับแจ้งคิวออนไลน์ได้เลยครับ" : "Please select a service to get your queue ticket.";
-            if (typeof speak === 'function') speak(msg, () => { window.isBusy = false; });
+        // 🛑 สั่งกวาดล้างเสียงพูดและไมค์ทั้งหมดทันที
+        stopAllSpeech();
+        forceStopAllMic();
+        window.speechSynthesis.cancel();
+        if (typeof responsiveVoice !== 'undefined') {
+            responsiveVoice.cancel();
         }
-    }
 
-    function closeQueueModal() {
-        const modal = document.getElementById('queueModal');
-        if (modal) {
-            modal.style.display = 'none';
-            
-            // 🟢 ปลดล็อกสถานะ เมื่อปิดหน้าคิวแล้ว ให้ระบบกลับมาทำงานตามปกติ
-            window.isQueueOpen = false;
+        // ปิดเสียง MP3 (ถ้ามี)
+        const vipAudio = document.getElementById('vipGreetingSound');
+        if (vipAudio) {
+            vipAudio.pause();
+            vipAudio.currentTime = 0;
+        }
 
-            if (typeof updateInteractionTime === 'function') updateInteractionTime();
-            
-            const msg = window.currentLang === 'th' ? "มีอะไรให้น้องนำทางช่วยเหลือเพิ่มเติมไหมครับ" : "Is there anything else I can help you with?";
-            if (typeof speak === 'function') speak(msg, () => {
-                window.isBusy = false;
-                window.allowWakeWord = true;
-                if (typeof startWakeWord === 'function') startWakeWord();
+        modal.style.display = 'flex';
+        updateInteractionTime();
+        
+        const msg = window.currentLang === 'th' ? "กรุณากดคิวเลือกประเภทงานบริการ หรือสแกนคิวอาโค้ดเพื่อรับแจ้งคิวออนไลน์ได้เลยครับ" : "Please select a service to get your queue ticket.";
+        
+        // สั่งพูดข้อความแนะนำคิว (ระบบจะยอมพูดเฉพาะข้อความนี้ เพราะอยู่ในฟังก์ชันคิว แต่จะบล็อกเสียงอื่นๆ สนิท)
+        if (typeof speak === 'function') {
+            speak(msg, () => { 
+                // คงสถานะล็อกไว้ถ้ายังอยู่ในหน้าคิว
             });
         }
     }
+}
+
+function closeQueueModal() {
+    const modal = document.getElementById('queueModal');
+    if (modal) {
+        modal.style.display = 'none';
+        
+        // 🔓 ปลดล็อกสถานะเมื่อปิดหน้าคิวแล้วเท่านั้น
+        window.isQueueOpen = false;
+        window.isBusy = false;
+
+        updateInteractionTime();
+        
+        const msg = window.currentLang === 'th' ? "มีอะไรให้น้องนำทางช่วยเหลือเพิ่มเติมไหมครับ" : "Is there anything else I can help you with?";
+        if (typeof speak === 'function') {
+            speak(msg, () => {
+                window.isBusy = false;
+                window.allowWakeWord = true;
+                startWakeWord();
+            });
+        }
+    }
+}
 
     window.addEventListener('DOMContentLoaded', connectToKioskBackend);
   </script>
