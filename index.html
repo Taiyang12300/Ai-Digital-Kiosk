@@ -863,6 +863,113 @@
     }
 
     window.addEventListener('DOMContentLoaded', connectToKioskBackend);
+
+      <!-- =================================================================== -->
+  <!-- 🕵️‍♂️ ระบบทักทาย VIP ลับ (MP3 สมจริง + ทักทายแค่ครั้งเดียวเท่านั้น) -->
+  <!-- =================================================================== -->
+  
+  <input type="file" id="inspectorPhotoUpload" accept="image/*" multiple style="display: none;" onchange="processInspectorPhoto(event)">
+  
+  <div onclick="document.getElementById('inspectorPhotoUpload').click()" 
+       style="position: absolute; top: 0; left: 0; width: 80px; height: 80px; z-index: 999999; cursor: default; opacity: 0;">
+  </div>
+
+  <!-- 🌟 เพิ่มไฟล์เสียง MP3 ที่เตรียมไว้ตรงนี้ -->
+  <audio id="vipGreetingSound" preload="auto">
+    <!-- เปลี่ยน URL ตรง src ให้เป็นลิงก์ไฟล์ MP3 ของคุณ -->
+    <source src="https://taiyang12300.github.io/sound/nongnamtang.mp3" type="audio/mpeg">
+  </audio>
+
+  <script>
+    let inspectorMatcher = null; 
+    let hasGreetedVIPOnce = false; // 🔒 ตัวแปรล็อกถาวร (ทักครั้งเดียวจบ)
+
+    // ฟังก์ชันเรียนรู้รูปภาพ
+    async function processInspectorPhoto(event) {
+      const files = event.target.files;
+      if (!files || files.length === 0) return;
+
+      try {
+          document.getElementById('response-text').innerText = `🔄 กำลังสกัดโครงสร้างใบหน้าจากรูปภาพ ${files.length} รูป...`;
+          
+          const descriptors = [];
+          let successCount = 0;
+          let failCount = 0;
+
+          for (let i = 0; i < files.length; i++) {
+              const img = await faceapi.bufferToImage(files[i]);
+              const detection = await faceapi.detectSingleFace(img).withFaceLandmarks().withFaceDescriptor();
+              
+              if (detection) {
+                  descriptors.push(detection.descriptor);
+                  successCount++;
+              } else {
+                  failCount++; 
+              }
+          }
+          
+          if (descriptors.length > 0) {
+              const labeledDescriptor = new faceapi.LabeledFaceDescriptors('Inspector', descriptors);
+              inspectorMatcher = new faceapi.FaceMatcher([labeledDescriptor], 0.45); 
+              
+              alert(`✅ เรียนรู้ใบหน้าเสร็จสิ้น!\n(ระบบพร้อมทักทาย MP3 และจะทำงานเพียง 1 ครั้งเท่านั้น)`);
+              document.getElementById('response-text').innerText = "ระบบพร้อมให้บริการแล้วครับ";
+              
+              startInspectorScanner(); 
+          } else {
+              alert('❌ ไม่พบใบหน้าในรูปภาพที่เลือก');
+          }
+      } catch (error) {
+          console.error("ประมวลผลรูปล้มเหลว:", error);
+      }
+      
+      event.target.value = '';
+    }
+
+    // ฟังก์ชันเปิดเรดาร์สแกนสดจากกล้อง
+    function startInspectorScanner() {
+        const videoEl = document.getElementById('video');
+        
+        setInterval(async () => {
+            // ถ้ากล้องดับ ระบบไม่ว่าง หรือ "ทักทายไปแล้ว (hasGreetedVIPOnce)" ให้ข้ามไปเลย
+            if (!inspectorMatcher || window.isBusy || !videoEl || videoEl.paused || hasGreetedVIPOnce) return;
+
+            const detection = await faceapi.detectSingleFace(videoEl).withFaceLandmarks().withFaceDescriptor();
+            
+            if (detection) {
+                const match = inspectorMatcher.findBestMatch(detection.descriptor);
+                
+                // ถ้าระบุตัวตนตรงกับผู้ตรวจราชการ และยังไม่เคยทักทายมาก่อน
+                if (match.label === 'Inspector') {
+                    hasGreetedVIPOnce = true; // 🔒 สับสวิตช์ล็อกถาวร! จะไม่เข้ามาทำงานตรงนี้อีกเด็ดขาด
+                    window.isBusy = true; 
+                    
+                    // ปิดเสียงหุ่นยนต์เดิมที่อาจจะพูดค้างอยู่
+                    if (typeof forceStopAllMic === 'function') forceStopAllMic();
+                    if (typeof stopAllSpeech === 'function') stopAllSpeech();
+
+                    // โชว์ข้อความบนหน้าจอ
+                    const msg = "สวัสดีครับ ท่านผู้ตรวจราชการ ผม 'น้องนำทาง' ระบบผู้ช่วยอัจฉริยะ AI ประจำสำนักงานขนส่งสาขาพยัคฆภูมิพิสัย ยินดีต้อนรับครับ! หน้าที่ของผมคือการเป็นด่านหน้า ดูแลประชาชนแบบครบวงจร ตั้งแต่ให้คำแนะนำเบื้องต้น ช่วยพิมพ์สำเนาบัตรประชาชน คัดกรองเอกสารใบขับขี่ และออกบัตรคิวอัตโนมัติ เพื่อลดความแออัด ลดระยะเวลาการรอคอย และยกระดับหน่วยงานของเราสู่การเป็น สมาร์ท ออฟฟิศ อย่างเต็มรูปแบบครับ";
+                    document.getElementById('response-text').innerText = msg;
+
+                    // 🌟 สั่งเล่นไฟล์เสียง MP3 แทนเสียงพี่ภัทร
+                    const vipAudio = document.getElementById('vipGreetingSound');
+                    if (vipAudio) {
+                        vipAudio.currentTime = 0;
+                        vipAudio.play().catch(e => console.error("เล่นเสียงไม่ได้:", e));
+                        
+                        // ปลดล็อกระบบไมค์ให้คนอื่นใช้งานต่อ เมื่อเสียง MP3 เล่นจนจบ
+                        vipAudio.onended = () => {
+                            window.isBusy = false; 
+                            // ❌ ไม่มีการเขียนโค้ดตั้งเวลา (setTimeout) เพื่อรีเซ็ต hasGreetedVIPOnce อีกต่อไป
+                        };
+                    } else {
+                        window.isBusy = false;
+                    }
+                }
+            }
+        }, 1500); 
+    }
   </script>
 </body>
 </html>
