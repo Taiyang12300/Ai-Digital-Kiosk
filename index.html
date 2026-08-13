@@ -837,15 +837,13 @@
     function openQueueModal() {
     const modal = document.getElementById('queueModal');
     if (modal) {
-        // 🔒 ล็อกสถานะหน้าคิว
+        // 🔒 ล็อกสถานะเพื่อป้องกัน AI ทำงานแทรกขณะเปิดหน้าต่าง
         window.isQueueOpen = true;
-        window.isBusy = true;
+        window.isBusy = true; 
 
-        // 🛑 เคลียร์เฉพาะเสียงพูดและไมค์เก่าค้างทิ้ง (ไม่ใช้ stopAllSpeech เพื่อไม่ให้ตัดเสียงแนะนำคิวใหม่)
+        // 🛑 เคลียร์เสียงพูดและไมค์ทั้งหมดทันที
         window.speechSynthesis.cancel();
-        if (typeof responsiveVoice !== 'undefined') {
-            responsiveVoice.cancel();
-        }
+        if (typeof responsiveVoice !== 'undefined') responsiveVoice.cancel();
         if (typeof forceStopAllMic === 'function') forceStopAllMic();
 
         // ปิดเสียง MP3 VIP (ถ้ามี)
@@ -860,10 +858,10 @@
         
         const msg = window.currentLang === 'th' ? "กรุณากดคิวเลือกประเภทงานบริการ หรือสแกนคิวอาโค้ดเพื่อรับแจ้งคิวออนไลน์ได้เลยครับ" : "Please select a service to get your queue ticket.";
         
-        // 🟢 สั่งพูดข้อความแนะนำคิว (จะทำงานออกเสียงได้ตามปกติเพราะเราอนุญาตผ่านเงื่อนไขพิเศษในฟังก์ชัน speak แล้ว)
+        // 🟢 สั่งพูดและจัดการสถานะ Busy ให้จบลงหลังจากพูดจบเท่านั้น
         if (typeof speak === 'function') {
             speak(msg, () => { 
-                // คงสถานะล็อกไว้ถ้ายังอยู่ในหน้าคิว
+                window.isBusy = false; // ปลดล็อกให้ผู้ใช้แตะปุ่มเลือกคิวได้
             });
         }
     }
@@ -874,18 +872,22 @@ function closeQueueModal() {
     if (modal) {
         modal.style.display = 'none';
         
-        // 🔓 ปลดล็อกสถานะเมื่อปิดหน้าคิวแล้วเท่านั้น
+        // 🔓 ปลดล็อกสถานะการเปิดหน้าต่าง
         window.isQueueOpen = false;
-        window.isBusy = false;
+        
+        // ⚠️ ล็อก Busy ไว้ก่อนเพื่อเล่นเสียงบอกลา
+        window.isBusy = true; 
 
         updateInteractionTime();
         
         const msg = window.currentLang === 'th' ? "มีอะไรให้น้องนำทางช่วยเหลือเพิ่มเติมไหมครับ" : "Is there anything else I can help you with?";
+        
         if (typeof speak === 'function') {
             speak(msg, () => {
+                // หลังจากบอกลาจบ ค่อยปลดล็อกทุกอย่างและเริ่ม WakeWord ใหม่
                 window.isBusy = false;
                 window.allowWakeWord = true;
-                startWakeWord();
+                if (typeof startWakeWord === 'function') startWakeWord();
             });
         }
     }
