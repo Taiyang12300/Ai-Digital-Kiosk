@@ -973,13 +973,13 @@
     }
 
     // ฟังก์ชันเปิดเรดาร์สแกนสดจากกล้อง (เวอร์ชันแซงคิวล็อกเดิมเฉพาะ VIP + ทักครั้งเดียวจบ)
-    function startInspectorScanner() {
+        function startInspectorScanner() {
         const videoEl = document.getElementById('video');
         const lottiePlayer = document.getElementById('lottie-canvas');
         
         setInterval(async () => {
-            // ถ้าระบบยังไม่พร้อม หรือ "เคยทักทาย VIP ไปแล้ว" ให้ข้าม (ไม่ให้ทัก VIP ซ้ำซ้อน)
-            if (!inspectorMatcher || !videoEl || videoEl.paused || hasGreetedVIPOnce) return;
+            // 🛑 เพิ่ม !window.isQueueOpen ไว้ตรงนี้ เพื่อบล็อกการทำงานทั้งหมดขณะเปิดหน้าคิว
+            if (!inspectorMatcher || window.isBusy || !videoEl || videoEl.paused || hasGreetedVIPOnce || window.isQueueOpen) return;
 
             const detection = await faceapi.detectSingleFace(videoEl, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.55 }))
                                               .withFaceLandmarks()
@@ -988,15 +988,15 @@
             if (detection) {
                 const match = inspectorMatcher.findBestMatch(detection.descriptor);
                 
-                // 🌟 หัวใจสำคัญ: ถือกำเนิดเงื่อนไข "พบหน้า VIP" และยังไม่เคยทักทาย
-                if (match.label === 'Inspector') {
+                // 🌟 เช็กซ้ำอีกรอบเพื่อความปลอดภัยสูงสุด ว่าไม่ได้เปิดหน้าคิวอยู่
+                if (match.label === 'Inspector' && !window.isQueueOpen) {
                     
                     // 🛑 ล็อกสถานะ VIP ทันที เพื่อไม่ให้เข้ามาทักซ้ำอีก
                     hasGreetedVIPOnce = true; 
                     window.hasGreeted = true; 
                     window.isBusy = true;
                     
-                    // สั่งตัดเสียงและไมค์เดิมทั้งหมดทันที (แม้จะมีคนอื่นยืนแช่อยู่หรือระบบเดิมกำลังล็อกอยู่ ก็จะถูกกระชากสิทธิ์มาที่ VIP ทันที)
+                    // สั่งตัดเสียงและไมค์เดิมทั้งหมดทันที
                     if (typeof forceStopAllMic === 'function') forceStopAllMic();
                     if (typeof stopAllSpeech === 'function') stopAllSpeech();
                     window.speechSynthesis.cancel(); 
@@ -1009,9 +1009,9 @@
                     const msg = "สวัสดีครับ ท่านผู้ตรวจราชการ ผม 'น้องนำทาง' ระบบผู้ช่วยอัจฉริยะ AI ประจำสำนักงานขนส่งสาขาอำเภอพยัคฆภูมิพิสัย ยินดีต้อนรับครับ! หน้าที่ของผมคือการเป็นด่านหน้า ดูแลประชาชนแบบครบวงจร ตั้งแต่ให้คำแนะนำเบื้องต้น ช่วยพิมพ์สำเนาบัตรประชาชน คัดกรองเอกสารใบขับขี่ และออกบัตรคิวอัตโนมัติ เพื่อลดความแออัด ลดระยะเวลาการรอคอย และยกระดับหน่วยงานของเราสู่การเป็น สมาร์ท ออฟฟิศ อย่างเต็มรูปแบบครับ";
                     document.getElementById('response-text').innerText = msg;
 
-                    // 🌟 เล่นเสียง MP3 ทันที
+                    // 🌟 เล่นเสียง MP3 ทันที (พร้อมเช็กดักหน้าต่างคิวอีกชั้นก่อนเล่น)
                     const vipAudio = document.getElementById('vipGreetingSound');
-                    if (vipAudio) {
+                    if (vipAudio && !window.isQueueOpen) {
                         vipAudio.currentTime = 0;
                         vipAudio.play().catch(e => console.error("เล่นเสียงไม่ได้:", e));
                         
