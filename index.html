@@ -865,7 +865,7 @@
     window.addEventListener('DOMContentLoaded', connectToKioskBackend);
   </script>
 
-     <!-- =================================================================== -->
+  <!-- =================================================================== -->
   <!-- 🕵️‍♂️ ระบบทักทาย VIP ลับ (MP3 สมจริง + ทักทายแค่ครั้งเดียวเท่านั้น) -->
   <!-- =================================================================== -->
   
@@ -881,11 +881,11 @@
     <source src="https://taiyang12300.github.io/sound/nongnamtang.mp3" type="audio/mpeg">
   </audio>
 
-  <script>
+    <script>
     let inspectorMatcher = null; 
     let hasGreetedVIPOnce = false; // 🔒 ตัวแปรล็อกถาวร (ทักครั้งเดียวจบ)
 
-        // ==========================================
+    // ==========================================
     // 🔒 ระบบป้องกันการกดผิด: ต้องกด 5 ครั้ง ภายใน 3 วินาที
     // ==========================================
     let tapCount = 0;
@@ -955,29 +955,34 @@
       event.target.value = '';
     }
 
-            // ฟังก์ชันเปิดเรดาร์สแกนสดจากกล้อง
-        function startInspectorScanner() {
+    // ฟังก์ชันเปิดเรดาร์สแกนสดจากกล้อง (เวอร์ชันแซงคิวล็อกเดิมเฉพาะ VIP + ทักครั้งเดียวจบ)
+    function startInspectorScanner() {
         const videoEl = document.getElementById('video');
         const lottiePlayer = document.getElementById('lottie-canvas');
         
         setInterval(async () => {
-            // ถ้าระบบกำลังยุ่ง หรือทักทายไปแล้ว ข้ามไป
-            if (!inspectorMatcher || window.isBusy || !videoEl || videoEl.paused || hasGreetedVIPOnce) return;
+            // ถ้าระบบยังไม่พร้อม หรือ "เคยทักทาย VIP ไปแล้ว" ให้ข้าม (ไม่ให้ทัก VIP ซ้ำซ้อน)
+            if (!inspectorMatcher || !videoEl || videoEl.paused || hasGreetedVIPOnce) return;
 
-            const detection = await faceapi.detectSingleFace(videoEl).withFaceLandmarks().withFaceDescriptor();
+            const detection = await faceapi.detectSingleFace(videoEl, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.55 }))
+                                              .withFaceLandmarks()
+                                              .withFaceDescriptor();
             
             if (detection) {
                 const match = inspectorMatcher.findBestMatch(detection.descriptor);
                 
+                // 🌟 หัวใจสำคัญ: ถือกำเนิดเงื่อนไข "พบหน้า VIP" และยังไม่เคยทักทาย
                 if (match.label === 'Inspector') {
-                    // 🛑 ล็อกตัดหน้าทันที! ไม่ให้ระบบทักทายเดิม (script.js) ทำงานเด็ดขาด
+                    
+                    // 🛑 ล็อกสถานะ VIP ทันที เพื่อไม่ให้เข้ามาทักซ้ำอีก
+                    hasGreetedVIPOnce = true; 
                     window.hasGreeted = true; 
                     window.isBusy = true;
-                    hasGreetedVIPOnce = true; 
                     
+                    // สั่งตัดเสียงและไมค์เดิมทั้งหมดทันที (แม้จะมีคนอื่นยืนแช่อยู่หรือระบบเดิมกำลังล็อกอยู่ ก็จะถูกกระชากสิทธิ์มาที่ VIP ทันที)
                     if (typeof forceStopAllMic === 'function') forceStopAllMic();
                     if (typeof stopAllSpeech === 'function') stopAllSpeech();
-                    window.speechSynthesis.cancel(); // ฆ่าเสียงพูดเดิมทิ้งทันที
+                    window.speechSynthesis.cancel(); 
 
                     // 🌟 สั่ง Lottie ขยับปากพูด
                     if (lottiePlayer) {
