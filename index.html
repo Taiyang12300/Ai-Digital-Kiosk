@@ -885,6 +885,34 @@
     let inspectorMatcher = null; 
     let hasGreetedVIPOnce = false; // 🔒 ตัวแปรล็อกถาวร (ทักครั้งเดียวจบ)
 
+        // ==========================================
+    // 🔒 ระบบป้องกันการกดผิด: ต้องกด 5 ครั้ง ภายใน 3 วินาที
+    // ==========================================
+    let tapCount = 0;
+    let tapTimer = null;
+
+    function handleSecretTap() {
+        tapCount++; // เพิ่มยอดการกด
+        
+        // ถ้าเป็นการกดครั้งแรก ให้เริ่มจับเวลา 3 วินาที
+        if (tapCount === 1) {
+            tapTimer = setTimeout(() => {
+                tapCount = 0; // ถ้านานเกิน 3 วินาทีแล้วกดไม่ครบ ให้รีเซ็ตเป็น 0 ใหม่
+                console.log("⏱️ หมดเวลาการกดรหัสลับ (รีเซ็ต)");
+            }, 3000);
+        }
+
+        // ถ้ากดครบ 5 ครั้งภายในเวลาที่กำหนด
+        if (tapCount >= 5) {
+            clearTimeout(tapTimer); // หยุดตัวจับเวลา
+            tapCount = 0; // รีเซ็ตค่าไว้เผื่ออนาคต
+            console.log("🔓 ปลดล็อกระบบ VIP สำเร็จ!");
+            
+            // สั่งเปิดหน้าต่างเลือกไฟล์รูปภาพ
+            document.getElementById('inspectorPhotoUpload').click();
+        }
+    }
+
     // ฟังก์ชันเรียนรู้รูปภาพ
     async function processInspectorPhoto(event) {
       const files = event.target.files;
