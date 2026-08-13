@@ -837,19 +837,18 @@
     function openQueueModal() {
     const modal = document.getElementById('queueModal');
     if (modal) {
-        // 🔒 ล็อกสถานะขั้นเด็ดขาด ห้ามเสียงใดๆ หลุด
+        // 🔒 ล็อกสถานะหน้าคิว
         window.isQueueOpen = true;
         window.isBusy = true;
 
-        // 🛑 สั่งกวาดล้างเสียงพูดและไมค์ทั้งหมดทันที
-        stopAllSpeech();
-        forceStopAllMic();
+        // 🛑 เคลียร์เฉพาะเสียงพูดและไมค์เก่าค้างทิ้ง (ไม่ใช้ stopAllSpeech เพื่อไม่ให้ตัดเสียงแนะนำคิวใหม่)
         window.speechSynthesis.cancel();
         if (typeof responsiveVoice !== 'undefined') {
             responsiveVoice.cancel();
         }
+        if (typeof forceStopAllMic === 'function') forceStopAllMic();
 
-        // ปิดเสียง MP3 (ถ้ามี)
+        // ปิดเสียง MP3 VIP (ถ้ามี)
         const vipAudio = document.getElementById('vipGreetingSound');
         if (vipAudio) {
             vipAudio.pause();
@@ -861,7 +860,7 @@
         
         const msg = window.currentLang === 'th' ? "กรุณากดคิวเลือกประเภทงานบริการ หรือสแกนคิวอาโค้ดเพื่อรับแจ้งคิวออนไลน์ได้เลยครับ" : "Please select a service to get your queue ticket.";
         
-        // สั่งพูดข้อความแนะนำคิว (ระบบจะยอมพูดเฉพาะข้อความนี้ เพราะอยู่ในฟังก์ชันคิว แต่จะบล็อกเสียงอื่นๆ สนิท)
+        // 🟢 สั่งพูดข้อความแนะนำคิว (จะทำงานออกเสียงได้ตามปกติเพราะเราอนุญาตผ่านเงื่อนไขพิเศษในฟังก์ชัน speak แล้ว)
         if (typeof speak === 'function') {
             speak(msg, () => { 
                 // คงสถานะล็อกไว้ถ้ายังอยู่ในหน้าคิว
