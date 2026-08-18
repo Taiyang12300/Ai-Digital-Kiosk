@@ -447,8 +447,13 @@ function resetToHome() {
         return;
     }
     if (isAtHome) return;
+    
     const queueModal = document.getElementById('queueModal');
     if (queueModal) queueModal.style.display = 'none';
+    
+    // 🔓 [แก้ไข] ต้องปลดล็อกตัวแปรคิวทุกครั้งที่กลับหน้าโฮม!
+    window.isQueueOpen = false; 
+
     stopAllSpeech();
     forceStopAllMic();
     forceUnmute();
@@ -457,6 +462,7 @@ function resetToHome() {
     window.isBusy = false;
     personInFrameTime = null;
     isAtHome = true;
+    
     const fbContainer = document.getElementById('feedback-container');
     if (fbContainer) fbContainer.innerHTML = '';
     displayResponse(window.currentLang === 'th' ? "กดปุ่มไมค์เพื่อสอบถามข้อมูลได้เลยครับ" : "Please tap the microphone.");
@@ -570,6 +576,10 @@ async function detectPerson() {
                             console.log("🚶 [Walk-Away] ไม่มีคนฟังเกิน 20 วินาทีจริง สั่งตัดจบและกลับหน้าโฮม");
                             const queueModal = document.getElementById('queueModal');
                             if (queueModal) queueModal.style.display = 'none';
+
+                            // 🔓 [แก้ไข] ต้องปลดล็อกตัวแปรคิวทุกครั้งที่กลับหน้าโฮม!
+                            window.isQueueOpen = false; 
+                            
                             stopAllSpeech();
                             forceStopAllMic();
                             personInFrameTime = null;
@@ -595,6 +605,10 @@ async function detectPerson() {
                     console.log("⏱️ ไม่มีคนอยู่หน้าตู้เกิน 8 วินาที (หลังพูดจบ) -> รีเซ็ตกลับหน้าหลัก");
                     const queueModal = document.getElementById('queueModal');
                     if (queueModal) queueModal.style.display = 'none';
+
+                    // 🔓 [แก้ไข] ต้องปลดล็อกตัวแปรคิวทุกครั้งที่กลับหน้าโฮม!
+                    window.isQueueOpen = false; 
+                    
                     personInFrameTime = null;
                     window.hasGreeted = false;
                     window.allowWakeWord = false;
