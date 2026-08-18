@@ -1027,7 +1027,16 @@ function closeQueueModal() {
                     const vipAudio = document.getElementById('vipGreetingSound');
                     if (vipAudio && !window.isQueueOpen) {
                         vipAudio.currentTime = 0;
-                        vipAudio.play().catch(e => console.error("เล่นเสียงไม่ได้:", e));
+                        
+                        // ✅ ปรับปรุง: ดัก Catch ให้ปลดล็อกระบบทันทีหากเล่นเสียงไม่ได้
+                        vipAudio.play().catch(e => {
+                            console.error("เล่นเสียงไม่ได้ (อาจติด Autoplay Policy):", e);
+                            // ปลดล็อกระบบและคืนค่าแอนิเมชันทันที ป้องกันตู้ค้าง
+                            window.isBusy = false; 
+                            if (lottiePlayer) {
+                                lottiePlayer.load('https://lottie.host/568e8594-a319-4491-bf10-a0f5c012fc76/6S3urqybG5.json');
+                            }
+                        });
                         
                         vipAudio.onended = () => {
                             if (lottiePlayer) {
