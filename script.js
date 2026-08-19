@@ -1,9 +1,9 @@
 /**
  * 🚀 สมองกลน้องนำทาง - Ultimate Hybrid Version (Fixed & Secured + Advanced Vision)
- * + [NEW] Hybrid Voice System (WAV + TTS) ทดสอบเสียงทักทายเรียงต่อกัน
+ * + [NEW] Hybrid Voice System (WAV + TTS) เต็มรูปแบบ (ทักทายคนใหม่ + ทักทายคนเดิม)
  */
 
-// 🎵 1. รวมไฟล์เสียง .wav สำหรับระบบทักทายประชาชน (Hybrid Voice)
+// 🎵 1. รวมไฟล์เสียงทักทายคนใหม่
 const GREETING_TIME_SOUNDS = {
     morning: "https://taiyang12300.github.io/sound/สวัสดีตอนเช้าครับ.wav",
     noon: "https://taiyang12300.github.io/sound/สวัสดีตอนเที่ยงครับ.wav",
@@ -12,18 +12,23 @@ const GREETING_TIME_SOUNDS = {
 };
 
 const GREETING_ENDING_SOUNDS = [
-    {
-        text: "น้องนำทางยินดีให้บริการครับ",
-        url: "https://taiyang12300.github.io/sound/น้องนำทางยินดีให้บริการครับ.wav"
-    },
-    {
-        text: "มีอะไรให้ช่วยไหมครับ?",
-        url: "https://taiyang12300.github.io/sound/มีอะไรให้ช่วยไหมครับ.wav"
-    },
-    {
-        text: "วันนี้มาติดต่อเรื่องอะไรครับ?",
-        url: "https://taiyang12300.github.io/sound/วันนี้มาติดต่อเรื่องอะไรครับ.wav"
-    }
+    { text: "น้องนำทางยินดีให้บริการครับ", url: "https://taiyang12300.github.io/sound/น้องนำทางยินดีให้บริการครับ.wav" },
+    { text: "มีอะไรให้ช่วยไหมครับ?", url: "https://taiyang12300.github.io/sound/มีอะไรให้ช่วยไหมครับ.wav" },
+    { text: "วันนี้มาติดต่อเรื่องอะไรครับ?", url: "https://taiyang12300.github.io/sound/วันนี้มาติดต่อเรื่องอะไรครับ.wav" }
+];
+
+// 🎵 2. รวมไฟล์เสียงทักทายคนเดิม (Welcome Back)
+const WELCOME_BACK_PREFIXES = {
+    male: "https://taiyang12300.github.io/sound/คุณผู้ชาย.wav",
+    female: "https://taiyang12300.github.io/sound/คุณผู้หญิง.wav",
+    neutral: "https://taiyang12300.github.io/sound/คุณครับ.wav"
+};
+
+const WELCOME_BACK_PHRASES = [
+    { text: "การติดต่อธุระราบรื่นดีไหมครับ มีอะไรให้ผมช่วยเพิ่มเติมสอบถามได้เลยนะครับ", url: "https://taiyang12300.github.io/sound/การติดต่อธุระราบรื่นดีไหมครับ_มีอะไรให้ผมช่วยเพิ่มเติมสอบถามได้เลยนะครับ.wav" },
+    { text: "ยังติดต่อธุระไม่เสร็จใช่ไหมครับ มีอะไรให้น้องนำทางช่วยเพิ่มเติมไหมครับ", url: "https://taiyang12300.github.io/sound/ยังติดต่อธุระไม่เสร็จใช่ไหมครับ_มีอะไรให้น้องนำทางช่วยเพิ่มเติมไหมครับ.wav" },
+    { text: "ขาดเหลือข้อมูลส่วนไหนหรือเปล่าครับ ให้ผมช่วยเหลือเพิ่มเติมได้นะครับ", url: "https://taiyang12300.github.io/sound/ขาดเหลือข้อมูลส่วนไหนหรือเปล่าครับ_ให้ผมช่วยเหลือเพิ่มเติมได้นะครับ.wav" },
+    { text: "เจอกันอีกแล้วนะครับ ติดขัดขั้นตอนไหน สอบถามน้องนำทางได้เลยครับ", url: "https://taiyang12300.github.io/sound/เจอกันอีกแล้วนะครับ_ติดขัดขั้นตอนไหน_สอบถามน้องนำทางได้เลยครับ.wav" }
 ];
 
 window.localDatabase = null;
@@ -39,12 +44,11 @@ window.currentAudio = null;
 
 // ตัวแปรส่วนใบหน้า
 window.detectedGender = 'male';
-window.detectedGenderProbability = 0; // ตัวแปรเก็บค่าความมั่นใจของ AI
+window.detectedGenderProbability = 0; 
 window.detectedAge = null;
 
-// --- [FACE-MEMORY] ระบบจำใบหน้าชั่วคราว (เก็บใน RAM เท่านั้น ปิด browser ล้างหมด) ---
-window.seenFaceDescriptors = []; // เก็บ descriptor ของคนที่เคยทักทายแล้ววันนี้
-const FACE_MATCH_THRESHOLD = 0.45; // ค่าความใกล้เคียงของใบหน้า (ต่ำ = เข้มงวดกว่า)
+window.seenFaceDescriptors = []; 
+const FACE_MATCH_THRESHOLD = 0.45; 
 
 let isAtHome = true;
 const GAS_URL = "https://script.google.com/macros/s/AKfycbycksNLQnAvB6k0VKGoffG2imIfeYATcZRqztcKzYC274UpOVQtBmYnMI-SBAXiI_0deQ/exec";
@@ -57,9 +61,8 @@ let isDetecting = true;
 let personInFrameTime = null;
 let lastSeenTime = Date.now();
 
-// [WALK-AWAY] ตัวแปรสำหรับตรวจจับคนเดินออก
 let walkAwayTimer = null;
-const WALK_AWAY_DELAY = 20000; // 20 วินาทีหลังไม่เจอหน้า → หยุดอ่าน
+const WALK_AWAY_DELAY = 20000; 
 
 const DETECTION_INTERVAL = 500;
 
@@ -70,7 +73,6 @@ let lastAskedQuestion = "";
 const DB_MAX_RETRIES = 5;
 let dbRetryCount = 0;
 
-// --- [FACE-MEMORY] ฟังก์ชันคำนวณระยะห่างระหว่าง descriptor 2 ชุด ---
 function euclideanDistance(desc1, desc2) {
     let sum = 0;
     for (let i = 0; i < desc1.length; i++) {
@@ -326,7 +328,6 @@ function playAudioLink(url, callback = null) {
     });
 }
 
-// 🟢 [NEW] ฟังก์ชันเล่นไฟล์เสียงแบบเรียงต่อกัน (ไร้รอยต่อ)
 function playAudioSequence(urls, callback = null) {
     if (!urls || urls.length === 0) {
         if (callback) callback();
@@ -357,7 +358,7 @@ function playAudioSequence(urls, callback = null) {
                 } else if (window.allowWakeWord && window.hasGreeted) {
                     startWakeWord();
                 }
-            }, 1000); // หน่วงเวลาเฉพาะเมื่อจบไฟล์สุดท้าย
+            }, 1000);
             return;
         }
 
@@ -372,13 +373,13 @@ function playAudioSequence(urls, callback = null) {
         
         audio.onended = () => {
             currentIndex++;
-            playNext(); // เล่นไฟล์ถัดไปทันทีแบบไร้รอยต่อ
+            playNext(); 
         };
         
         audio.onerror = () => {
             console.warn("⚠️ Audio Sequence Error on:", urls[currentIndex]);
             currentIndex++;
-            playNext(); // ข้ามไปไฟล์ถัดไปถ้าพัง
+            playNext(); 
         };
         
         audio.play().catch(e => {
@@ -664,7 +665,7 @@ async function detectPerson() {
     } catch (e) {}
 }
 
-// 🟢 [UPDATE] เปลี่ยนมาใช้ไฟล์เสียง WAV ในการทักทายคนใหม่
+// 🟢 ทักทายคนใหม่ (WAV 2 ไฟล์ต่อเนื่อง)
 function greetUser() {
     if (window.hasGreeted || window.isBusy) return;
     forceUnmute();
@@ -672,7 +673,6 @@ function greetUser() {
     window.hasGreeted = true;
     window.isBusy = true;
 
-    // ระบบป้องกัน: ถ้าเป็นภาษาอังกฤษให้ใช้ TTS ปกติไปก่อน
     if (window.currentLang !== 'th') {
         const enMsg = "Hello, how can I help you today?";
         displayResponse(enMsg);
@@ -687,7 +687,6 @@ function greetUser() {
     const now = new Date();
     const hour = now.getHours();
 
-    // 1. เลือกเสียงทักตามเวลาจริง
     let timeText = "สวัสดีตอนเช้าครับ";
     let timeSoundUrl = GREETING_TIME_SOUNDS.morning;
 
@@ -702,14 +701,11 @@ function greetUser() {
         timeSoundUrl = GREETING_TIME_SOUNDS.evening;
     }
 
-    // 2. สุ่มประโยคต่อท้าย
     const randomEnding = GREETING_ENDING_SOUNDS[Math.floor(Math.random() * GREETING_ENDING_SOUNDS.length)];
-
-    // 3. แสดงข้อความบนหน้าจอ
     const fullText = `${timeText} ${randomEnding.text}`;
+    
     displayResponse(fullText);
 
-    // 4. สั่งเล่นไฟล์เสียง WAV 2 ไฟล์ติดกัน
     playAudioSequence([timeSoundUrl, randomEnding.url], () => {
         window.isBusy = false;
         window.allowWakeWord = true;
@@ -717,7 +713,7 @@ function greetUser() {
     });
 }
 
-// --- ฟังก์ชันสำหรับทักทายคนที่เคยคุยด้วยแล้วในวันนั้น (ยังใช้ TTS ไปก่อนจนกว่าจะมีไฟล์ WAV เสริม) ---
+// 🟢 ทักทายคนเดิมที่เดินกลับมา (WAV 2 ไฟล์ต่อเนื่อง)
 function greetWelcomeBack() {
     if (window.hasGreeted || window.isBusy) return;
     forceUnmute();
@@ -727,34 +723,48 @@ function greetWelcomeBack() {
 
     const gender = window.detectedGender || 'male';
     const confidence = window.detectedGenderProbability || 0;
-    let finalGreet = "";
-
+    
+    // เกณฑ์ความมั่นใจเกิน 95% ถึงจะเรียกเพศ
     const isConfident = confidence >= 0.95;
 
-    if (window.currentLang === 'th') {
-        const phrases = [
-            "การติดต่อธุระราบรื่นดีไหมครับ มีอะไรให้ผมช่วยเพิ่มเติมสอบถามได้เลยนะครับ",
-            "ยังติดต่อธุระไม่เสร็จใช่ไหมครับ มีอะไรให้น้องนำทางช่วยเพิ่มเติมไหมครับ",
-            "ขาดเหลือข้อมูลส่วนไหนหรือเปล่าครับ ให้ผมช่วยเหลือเพิ่มเติมได้นะครับ",
-            "เจอกันอีกแล้วนะครับ ติดขัดขั้นตอนไหน สอบถามน้องนำทางได้เลยครับ"
-        ];
-        const phrase = phrases[Math.floor(Math.random() * phrases.length)];
-
-        if (isConfident) {
-            const pType = (gender === 'male') ? "คุณผู้ชาย" : "คุณผู้หญิง";
-            finalGreet = `${pType}... ${phrase}`;
-        } else {
-            finalGreet = `คุณครับ... ${phrase}`;
-        }
-    } else {
-        finalGreet = `Welcome back! Do you need any further assistance?`;
+    if (window.currentLang !== 'th') {
+        const enMsg = `Welcome back! Do you need any further assistance?`;
+        displayResponse(enMsg);
+        speak(enMsg, () => {
+            window.isBusy = false;
+            window.allowWakeWord = true;
+            if (typeof startWakeWord === 'function') startWakeWord();
+        }, true);
+        return;
     }
 
-    displayResponse(finalGreet);
-    speak(finalGreet, () => {
+    // 1. เลือกสรรพนามตามเพศ
+    let prefixText = "คุณครับ...";
+    let prefixUrl = WELCOME_BACK_PREFIXES.neutral;
+
+    if (isConfident) {
+        if (gender === 'male') {
+            prefixText = "คุณผู้ชาย...";
+            prefixUrl = WELCOME_BACK_PREFIXES.male;
+        } else {
+            prefixText = "คุณผู้หญิง...";
+            prefixUrl = WELCOME_BACK_PREFIXES.female;
+        }
+    }
+
+    // 2. สุ่มประโยคถามไถ่
+    const randomPhrase = WELCOME_BACK_PHRASES[Math.floor(Math.random() * WELCOME_BACK_PHRASES.length)];
+
+    // 3. รวมข้อความแสดงบนจอ
+    const fullText = `${prefixText} ${randomPhrase.text}`;
+    displayResponse(fullText);
+
+    // 4. เล่นเสียงสรรพนาม ต่อด้วย เสียงถามไถ่ ทันที
+    playAudioSequence([prefixUrl, randomPhrase.url], () => {
         window.isBusy = false;
         window.allowWakeWord = true;
-    }, true);
+        if (typeof startWakeWord === 'function') startWakeWord();
+    });
 }
 
 // --- ระบบคัดกรองใบขับขี่ ---
