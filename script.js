@@ -1,23 +1,30 @@
 /**
  * 🚀 สมองกลน้องนำทาง - Ultimate Hybrid Version (Fixed & Secured + Advanced Vision)
- * แก้ไข:
- * - [FIX-1] Flag Deadlock ใน startWakeWord()
- * - [FIX-2] speak() เปิดไมค์อัตโนมัติโดยไม่เช็ค context
- * - [FIX-3] initDatabase() retry ไม่มี limit
- * - [FIX-4] requestAnimationFrame loop สิ้นเปลือง CPU
- * - [FIX-5] Frontend รอยืนยัน deleted จาก backend ก่อน reset UI
- * - [FIX-6] ล้าง DOM ข้อมูลบัตรทันทีหลังยืนยัน
- * - [VISION-UPGRADE] อัปเกรดเป็น SsdMobilenetv1 + Landmarks เพื่อความนิ่ง
- * - [FUTURE-PROOF] เพิ่มตัวแปร window.detectedAge สำหรับเก็บอายุ (รอการนำไปใช้ในอนาคต)
- * - [TTS-UPGRADE] cleanTextForSpeech() + ปรับ rate/pitch ให้ Pattara ฟังธรรมชาติขึ้น
- * - [WALK-AWAY] หยุดอ่านและกลับหน้าโฮมเมื่อคนเดินออกจากกล้อง
- * - [FACE-MEMORY] จำใบหน้าชั่วคราวเพื่อไม่ทักทายซ้ำในวันเดียวกัน (จำกัด 50 คน)
- * - [WELCOME-BACK] ทักทายแบบคุ้นเคยเมื่อประชาชนคนเดิมเดินกลับมาหน้าตู้อีกครั้ง
- * - [GENDER-SAFEGUARD] ใช้ค่าความมั่นใจ (Confidence >= 95%) เพื่อป้องกันการทักเพศสภาพผิดพลาด
- * - [SMART-GRACE-PERIOD] แยกระบบตัดจบ 8 วินาที (ตอนอยู่เฉยๆ) กับ 20 วินาที (ตอนก้มอ่าน/กำลังพูด)
- * - [TOUCH-RESCUE] ยกเลิกการตัดจบเดินหนีทันที หากมีการแตะหรือไถหน้าจอ
- * - [DEADLOCK-FIX] แก้ไข getResponse และ processQuery ให้คลายสถานะ isBusy เมื่อพูดจบเสมอ
+ * + [NEW] Hybrid Voice System (WAV + TTS) ทดสอบเสียงทักทายเรียงต่อกัน
  */
+
+// 🎵 1. รวมไฟล์เสียง .wav สำหรับระบบทักทายประชาชน (Hybrid Voice)
+const GREETING_TIME_SOUNDS = {
+    morning: "https://taiyang12300.github.io/sound/สวัสดีตอนเช้าครับ.wav",
+    noon: "https://taiyang12300.github.io/sound/สวัสดีตอนเที่ยงครับ.wav",
+    afternoon: "https://taiyang12300.github.io/sound/สวัสดีตอนบ่ายครับ.wav",
+    evening: "https://taiyang12300.github.io/sound/สวัสดีตอนเย็นครับ.wav"
+};
+
+const GREETING_ENDING_SOUNDS = [
+    {
+        text: "น้องนำทางยินดีให้บริการครับ",
+        url: "https://taiyang12300.github.io/sound/น้องนำทางยินดีให้บริการครับ.wav"
+    },
+    {
+        text: "มีอะไรให้ช่วยไหมครับ?",
+        url: "https://taiyang12300.github.io/sound/มีอะไรให้ช่วยไหมครับ.wav"
+    },
+    {
+        text: "วันนี้มาติดต่อเรื่องอะไรครับ?",
+        url: "https://taiyang12300.github.io/sound/วันนี้มาติดต่อเรื่องอะไรครับ.wav"
+    }
+];
 
 window.localDatabase = null;
 window.currentLang = 'th';
@@ -83,11 +90,9 @@ function isAlreadySeen(descriptor) {
 function rememberFace(descriptor) {
     if (!descriptor) return;
     if (!isAlreadySeen(descriptor)) {
-        // จำกัดการจำไว้ที่ 50 คน ถ้าเกินให้ลบคนแรกสุด (เก่าสุด) ทิ้งไป
         if (window.seenFaceDescriptors.length >= 50) {
             window.seenFaceDescriptors.shift(); 
         }
-        
         window.seenFaceDescriptors.push(Array.from(descriptor));
         console.log(`🧠 [Face-Memory] จำใบหน้าใหม่ รวมทั้งหมด: ${window.seenFaceDescriptors.length}/50 คน`);
     }
@@ -170,37 +175,29 @@ function initSpeechRecognition() {
 }
 
 function toggleListening() {
-    // 1. จดจำสถานะเดิมของไมค์เอาไว้ก่อน (สำคัญมาก)
     const wasListening = window.isListening;
 
-    // 2. หยุดเสียงพูดและล้างค่าต่างๆ
     window.speechSynthesis.cancel();
     if (window.currentAudio) {
         window.currentAudio.pause();
         window.currentAudio = null;
     }
     
-    // สั่งปิดไมค์ทั้งหมด (ฟังก์ชันนี้จะเปลี่ยน window.isListening ให้กลายเป็น false)
     if (typeof forceStopAllMic === "function") forceStopAllMic();
     
     if (window.micTimer) clearTimeout(window.micTimer);
     window.isBusy = false;
     window.isAudioPlaying = false;
 
-    // 3. ใช้สถานะเดิมที่เราจำไว้มาตัดสินใจ
     if (wasListening) {
-        // 🔴 กรณี: ต้องการ "ปิดไมค์" (กดปุ่มตอนที่ไมค์กำลังฟังอยู่)
         updateLottie('idle');
-        window.isManualAborted = true; // บล็อกไว้ไม่ให้ WakeWord แอบเปิดขึ้นมาเอง
+        window.isManualAborted = true;
         console.log("🛑 [Manual] User Stopped Mic (ปิดไมค์สำเร็จ)");
     } else {
-        // 🟢 กรณี: ต้องการ "เปิดไมค์"
         updateLottie('thinking');
-        
-        // หน่วงเวลา 400ms เพื่อให้เบราว์เซอร์เคลียร์พอร์ตไมค์เดิมให้ว่าง 100% ป้องกันไมค์ชนกัน
         setTimeout(() => {
             try {
-                window.isManualAborted = false; // ปลดล็อก
+                window.isManualAborted = false;
                 window.recognition.start();
                 console.log("🎤 [Manual] User Triggered Mic (เปิดไมค์สำเร็จ)");
             } catch (e) {
@@ -329,6 +326,71 @@ function playAudioLink(url, callback = null) {
     });
 }
 
+// 🟢 [NEW] ฟังก์ชันเล่นไฟล์เสียงแบบเรียงต่อกัน (ไร้รอยต่อ)
+function playAudioSequence(urls, callback = null) {
+    if (!urls || urls.length === 0) {
+        if (callback) callback();
+        return;
+    }
+    
+    window.isBusy = true;
+    window.isAudioPlaying = true;
+    window.isManualAborted = true;
+    stopAllSpeech();
+    forceStopAllMic();
+    if (window.micTimer) clearTimeout(window.micTimer);
+    updateLottie('talking');
+
+    let currentIndex = 0;
+
+    function playNext() {
+        if (currentIndex >= urls.length) {
+            window.isAudioPlaying = false;
+            window.currentAudio = null;
+            setTimeout(() => {
+                window.isBusy = false;
+                window.isManualAborted = false;
+                updateLottie('idle');
+                updateInteractionTime();
+                if (callback) {
+                    callback();
+                } else if (window.allowWakeWord && window.hasGreeted) {
+                    startWakeWord();
+                }
+            }, 1000); // หน่วงเวลาเฉพาะเมื่อจบไฟล์สุดท้าย
+            return;
+        }
+
+        const audio = new Audio(urls[currentIndex]);
+        window.currentAudio = audio;
+        
+        audio.onplay = () => {
+            window.isBusy = true;
+            window.isManualAborted = true;
+            if (wakeWordRecognition) try { wakeWordRecognition.abort(); } catch(e) {}
+        };
+        
+        audio.onended = () => {
+            currentIndex++;
+            playNext(); // เล่นไฟล์ถัดไปทันทีแบบไร้รอยต่อ
+        };
+        
+        audio.onerror = () => {
+            console.warn("⚠️ Audio Sequence Error on:", urls[currentIndex]);
+            currentIndex++;
+            playNext(); // ข้ามไปไฟล์ถัดไปถ้าพัง
+        };
+        
+        audio.play().catch(e => {
+            console.error("Audio Sequence Autoplay Blocked:", e);
+            currentIndex++;
+            playNext();
+        });
+    }
+    
+    playNext();
+}
+
 // --- Wake Word ---
 
 function setupWakeWord() {
@@ -451,7 +513,6 @@ function resetToHome() {
     const queueModal = document.getElementById('queueModal');
     if (queueModal) queueModal.style.display = 'none';
     
-    // 🔓 [แก้ไข] ต้องปลดล็อกตัวแปรคิวทุกครั้งที่กลับหน้าโฮม!
     window.isQueueOpen = false; 
 
     stopAllSpeech();
@@ -500,7 +561,6 @@ async function loadFaceModels() {
         await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
         await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
         await faceapi.nets.ageGenderNet.loadFromUri(MODEL_URL);
-        // [FACE-MEMORY] โหลด faceRecognitionNet สำหรับจำใบหน้าชั่วคราว
         await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
         setupWakeWord();
         setInterval(detectPerson, DETECTION_INTERVAL);
@@ -526,7 +586,6 @@ async function detectPerson() {
         });
 
         if (validFaces.length > 0) {
-            // [WALK-AWAY] มีคนอยู่ → ยกเลิก walk-away timer
             if (walkAwayTimer) {
                 clearTimeout(walkAwayTimer);
                 walkAwayTimer = null;
@@ -539,20 +598,17 @@ async function detectPerson() {
             if (personInFrameTime === null) personInFrameTime = now;
 
             window.detectedGender = face.gender;
-            window.detectedGenderProbability = face.genderProbability; // เก็บค่าความมั่นใจเพื่อใช้ทักทาย
+            window.detectedGenderProbability = face.genderProbability;
             window.detectedAge = Math.round(face.age);
 
-            // [FACE-MEMORY] เช็คว่าเคยทักทายคนนี้แล้วหรือยัง
             const descriptor = face.descriptor;
             const alreadySeen = isAlreadySeen(descriptor);
 
             if ((now - personInFrameTime) >= 1000 && isAtHome && !window.isBusy && !window.hasGreeted) {
                 if (alreadySeen) {
-                    // คนเดิมกลับมา → ทักทายแบบคุ้นเคย
                     console.log("🔁 [Face-Memory] คนเดิมกลับมา ทักทายแบบคุ้นเคย");
                     greetWelcomeBack(); 
                 } else {
-                    // คนใหม่ → ทักทายและจำใบหน้า
                     console.log(`👤 [Detected] เพศ: ${window.detectedGender} (มั่นใจ: ${(window.detectedGenderProbability * 100).toFixed(1)}%), อายุ: ${window.detectedAge} ปี`);
                     rememberFace(descriptor);
                     greetUser();
@@ -560,24 +616,15 @@ async function detectPerson() {
             }
             lastSeenTime = now;
         } else {
-            // ==========================================================
-            // 🔴 [กรณีไม่เจอหน้าคน] แยกตรรกะตามสถานะการทำงานของตู้
-            // ==========================================================
-            
             if (window.isBusy || window.isAudioPlaying) {
-                // 🗣️ สถานะที่ 1: น้องนำทางกำลังพูด หรือเล่นเสียงอยู่ (คนอาจจะก้มอ่าน หรือเดินหนีกลางคัน)
-                // บังคับใช้กฎ 20 วินาที เพื่อเปิดช่วงเวลาผ่อนผันให้ก้มอ่านได้ยาวๆ
                 if (personInFrameTime !== null && walkAwayTimer === null && !isAtHome) {
                     console.log("⚠️ หน้าหายไปขณะกำลังพูด! เริ่มนับเวลาผ่อนผัน 20 วินาที เผื่อประชาชนก้มอ่าน...");
-                    
                     walkAwayTimer = setTimeout(() => {
-                        // เช็คด่านสุดท้ายเผื่อพูดจบไปก่อนหน้าแล้วปล่อยให้กฎอื่นดูแล
                         if (window.isBusy || window.isAudioPlaying) {
                             console.log("🚶 [Walk-Away] ไม่มีคนฟังเกิน 20 วินาทีจริง สั่งตัดจบและกลับหน้าโฮม");
                             const queueModal = document.getElementById('queueModal');
                             if (queueModal) queueModal.style.display = 'none';
 
-                            // 🔓 [แก้ไข] ต้องปลดล็อกตัวแปรคิวทุกครั้งที่กลับหน้าโฮม!
                             window.isQueueOpen = false; 
                             
                             stopAllSpeech();
@@ -595,18 +642,14 @@ async function detectPerson() {
                             updateLottie('idle');
                             if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
                         }
-                    }, WALK_AWAY_DELAY); // 20000 วินาที
+                    }, WALK_AWAY_DELAY);
                 }
-
             } else {
-                // 😴 สถานะที่ 2: น้องนำทางเงียบแล้ว/อยู่เฉยๆ (ประชาชนเดินหนีไปแล้ว)
-                // บังคับใช้กฎ 8 วินาที เพื่อเคลียร์หน้าจอให้พร้อมต้อนรับคนถัดไปอย่างรวดเร็ว
                 if (personInFrameTime !== null && (now - lastSeenTime > 8000)) {
                     console.log("⏱️ ไม่มีคนอยู่หน้าตู้เกิน 8 วินาที (หลังพูดจบ) -> รีเซ็ตกลับหน้าหลัก");
                     const queueModal = document.getElementById('queueModal');
                     if (queueModal) queueModal.style.display = 'none';
 
-                    // 🔓 [แก้ไข] ต้องปลดล็อกตัวแปรคิวทุกครั้งที่กลับหน้าโฮม!
                     window.isQueueOpen = false; 
                     
                     personInFrameTime = null;
@@ -621,49 +664,60 @@ async function detectPerson() {
     } catch (e) {}
 }
 
+// 🟢 [UPDATE] เปลี่ยนมาใช้ไฟล์เสียง WAV ในการทักทายคนใหม่
 function greetUser() {
     if (window.hasGreeted || window.isBusy) return;
     forceUnmute();
     isAtHome = false;
     window.hasGreeted = true;
     window.isBusy = true;
+
+    // ระบบป้องกัน: ถ้าเป็นภาษาอังกฤษให้ใช้ TTS ปกติไปก่อน
+    if (window.currentLang !== 'th') {
+        const enMsg = "Hello, how can I help you today?";
+        displayResponse(enMsg);
+        speak(enMsg, () => {
+            window.isBusy = false;
+            window.allowWakeWord = true;
+            if (typeof startWakeWord === 'function') startWakeWord();
+        }, true);
+        return;
+    }
+
     const now = new Date();
     const hour = now.getHours();
 
-    const gender = window.detectedGender || 'male';
-    const confidence = window.detectedGenderProbability || 0; 
-    let finalGreet = "";
+    // 1. เลือกเสียงทักตามเวลาจริง
+    let timeText = "สวัสดีตอนเช้าครับ";
+    let timeSoundUrl = GREETING_TIME_SOUNDS.morning;
 
-    // ปรับเกณฑ์ความมั่นใจที่ 95% (0.95)
-    const isConfident = confidence >= 0.95;
-
-    if (window.currentLang === 'th') {
-        let timeGreet = hour < 12 ? "สวัสดีตอนเช้าครับ" : hour === 12 ? "สวัสดีตอนเที่ยงครับ" : hour < 17 ? "สวัสดีตอนบ่ายครับ" : "สวัสดีตอนเย็นครับ";
-        const ends = ["มีอะไรให้ช่วยไหมครับ?", "น้องนำทางยินดีให้บริการครับ", "วันนี้มาติดต่อเรื่องอะไรครับ?"];
-        const endPhrase = ends[Math.floor(Math.random() * ends.length)];
-
-        if (isConfident) {
-            // มั่นใจสูง ทักทายระบุเพศเพื่อความว้าว
-            const pType = (gender === 'male') ? "คุณผู้ชาย" : "คุณผู้หญิง";
-            finalGreet = `${timeGreet} ${pType}... ${endPhrase}`;
-        } else {
-            // มั่นใจต่ำ ทักทายแบบกลางๆ ปลอดภัย
-            finalGreet = `${timeGreet}... ${endPhrase}`;
-        }
-    } else {
-        finalGreet = isConfident 
-            ? `Hello ${gender === 'male' ? 'Sir' : 'Madam'}, how can I help you?` 
-            : `Hello, how can I help you today?`;
+    if (hour === 12) {
+        timeText = "สวัสดีตอนเที่ยงครับ";
+        timeSoundUrl = GREETING_TIME_SOUNDS.noon;
+    } else if (hour >= 13 && hour < 17) {
+        timeText = "สวัสดีตอนบ่ายครับ";
+        timeSoundUrl = GREETING_TIME_SOUNDS.afternoon;
+    } else if (hour >= 17) {
+        timeText = "สวัสดีตอนเย็นครับ";
+        timeSoundUrl = GREETING_TIME_SOUNDS.evening;
     }
 
-    displayResponse(finalGreet);
-    speak(finalGreet, () => {
+    // 2. สุ่มประโยคต่อท้าย
+    const randomEnding = GREETING_ENDING_SOUNDS[Math.floor(Math.random() * GREETING_ENDING_SOUNDS.length)];
+
+    // 3. แสดงข้อความบนหน้าจอ
+    const fullText = `${timeText} ${randomEnding.text}`;
+    displayResponse(fullText);
+
+    // 4. สั่งเล่นไฟล์เสียง WAV 2 ไฟล์ติดกัน
+    playAudioSequence([timeSoundUrl, randomEnding.url], () => {
         window.isBusy = false;
         window.allowWakeWord = true;
-    }, true);
+        if (typeof startWakeWord === 'function') startWakeWord();
+    });
 }
 
-// --- ฟังก์ชันสำหรับทักทายคนที่เคยคุยด้วยแล้วในวันนั้น ---
+// --- ฟังก์ชันสำหรับทักทายคนที่เคยคุยด้วยแล้วในวันนั้น (ยังใช้ TTS ไปก่อนจนกว่าจะมีไฟล์ WAV เสริม) ---
 function greetWelcomeBack() {
     if (window.hasGreeted || window.isBusy) return;
     forceUnmute();
@@ -675,11 +729,9 @@ function greetWelcomeBack() {
     const confidence = window.detectedGenderProbability || 0;
     let finalGreet = "";
 
-    // ปรับเกณฑ์ความมั่นใจที่ 95% (0.95)
     const isConfident = confidence >= 0.95;
 
     if (window.currentLang === 'th') {
-        // สุ่มคำทักทายสำหรับคนที่กลับมาหน้าตู้อีกครั้ง
         const phrases = [
             "การติดต่อธุระราบรื่นดีไหมครับ มีอะไรให้ผมช่วยเพิ่มเติมสอบถามได้เลยนะครับ",
             "ยังติดต่อธุระไม่เสร็จใช่ไหมครับ มีอะไรให้น้องนำทางช่วยเพิ่มเติมไหมครับ",
@@ -692,7 +744,6 @@ function greetWelcomeBack() {
             const pType = (gender === 'male') ? "คุณผู้ชาย" : "คุณผู้หญิง";
             finalGreet = `${pType}... ${phrase}`;
         } else {
-            // มั่นใจต่ำ ละการระบุเพศไว้
             finalGreet = `คุณครับ... ${phrase}`;
         }
     } else {
@@ -792,13 +843,9 @@ function checkChecklist() {
     else { printBtn.classList.remove('show-btn'); printBtn.style.setProperty('display', 'none', 'important'); }
 }
 
-// =========================================================================
-// 🚨 [UPDATE] ส่วนสำคัญ: จัดการเวลา Touch & Interaction เพื่อกู้คืนตู้ Kiosk
-// =========================================================================
 function updateInteractionTime() {
     lastSeenTime = Date.now();
     
-    // ถ้าระบบกำลังนับเวลาคนเดินหนี 20 วิอยู่ แล้วมีคนแตะจอ/ไถจอ ให้ยกเลิกการนับเวลา!
     if (typeof walkAwayTimer !== 'undefined' && walkAwayTimer !== null) {
         clearTimeout(walkAwayTimer);
         walkAwayTimer = null;
@@ -808,7 +855,6 @@ function updateInteractionTime() {
     if (!isAtHome) restartIdleTimer();
 }
 
-// ผูก Event Listener ดักจับการแตะและการไถหน้าจอทั้งหมด (ครอบคลุมการก้มอ่านจอ)
 document.addEventListener('mousedown', updateInteractionTime);
 document.addEventListener('touchstart', updateInteractionTime, { passive: true });
 document.addEventListener('scroll', updateInteractionTime, true);
@@ -821,9 +867,9 @@ async function logQuestionToSheet(userQuery) {
     } catch (e) {}
 }
 
-// --- ระบบประมวลผลคำตอบ (🔥 ปรับปรุงใหม่ให้ทำงานลื่นไหลและไม่ค้าง) ---
+// --- ระบบประมวลผลคำตอบ ---
 
-function getResponse(userQuery) { // 🟢 เอา async ออกเพื่อไม่ให้บล็อกจังหวะการทำงาน
+function getResponse(userQuery) { 
     if (!userQuery || !window.localDatabase) return;
     
     lastAskedQuestion = userQuery;
@@ -831,11 +877,11 @@ function getResponse(userQuery) { // 🟢 เอา async ออกเพื่�
     if (fbContainer) fbContainer.innerHTML = "";
     
     logQuestionToSheet(userQuery);
-    stopAllSpeech(); // 🟢 สั่งหยุดเสียงเดิมก่อนเริ่มงานใหม่ทุกครั้ง
+    stopAllSpeech(); 
     
     isAtHome = false;
     updateInteractionTime();
-    window.isBusy = true; // 🟢 ล็อกสถานะเพื่อป้องกันการกดซ้อน
+    window.isBusy = true; 
     updateLottie('thinking');
     
     const query = userQuery.toLowerCase().trim().replace(/[?？!！]/g, "");
@@ -896,7 +942,6 @@ function getResponse(userQuery) { // 🟢 เอา async ออกเพื่�
 
         if (isGoodMatch && bestMatch.answer !== "") {
             displayResponse(bestMatch.answer);
-            // 🟢 ปรับปรุง: ให้ระบบปลดล็อก isBusy และโชว์ปุ่ม "เมื่อพูดจบ" เท่านั้น
             speak(bestMatch.answer, () => {
                 window.isBusy = false;
                 renderFeedbackButtons();
@@ -911,12 +956,12 @@ function getResponse(userQuery) { // 🟢 เอา async ออกเพื่�
         }
     } catch (err) {
         console.error("Error in getResponse:", err);
-        window.isBusy = false; // ปลดล็อกทันทีถ้ามี error
+        window.isBusy = false; 
         updateLottie('idle');
     }
 }
 
-function processQuery(query) { // 🟢 เอา async ออกเพื่อไม่ให้บล็อกระบบ
+function processQuery(query) { 
     window.speechSynthesis.cancel();
     
     const inputField = document.getElementById('userInput');
@@ -925,10 +970,10 @@ function processQuery(query) { // 🟢 เอา async ออกเพื่อ�
     const respBox = document.getElementById('response-text');
     if (respBox) respBox.innerText = (window.currentLang === 'th') ? "กำลังค้นหา..." : "Searching...";
     
-    getResponse(query); // เรียกทำงานทันที
+    getResponse(query); 
 }
 
-// --- ระบบเสียง TTS (ปรับปรุงแล้ว) ---
+// --- ระบบเสียง TTS ---
 
 function cleanTextForSpeech(text) {
     return text
@@ -968,8 +1013,6 @@ function cleanTextForSpeech(text) {
 function speak(text, callback = null, isGreeting = false) {
     if (!text || window.isMuted) return;
 
-    // 🟢 1. เงื่อนไขพิเศษ: เช็กว่าเป็นข้อความแนะนำคิวหรือไม่
-    // ถ้าใช่ จะยอมให้พูดออกเสียงได้ แม้ว่า window.isQueueOpen จะเป็น true อยู่ก็ตาม
     const isQueueMessage = text.includes("กรุณากดคิว") || text.includes("Please select");
     if (window.isQueueOpen && !isQueueMessage) return;
 
@@ -1002,7 +1045,6 @@ function speak(text, callback = null, isGreeting = false) {
         console.log(`%c[TTS] 🎙️ Voice: ${selectedVoice.name}`, "color: #00b894; font-weight: bold;");
     }
 
-    // 🟢 2. ปรับความเร็วลงเล็กน้อย (0.88 -> 0.85) เพื่อให้เสียงพูดตอนเปิดหน้าคิวดูเนียน ไม่รีบร้อน
     msg.rate   = 0.85; 
     msg.pitch  = 1.1;
     msg.volume = 1.0;
@@ -1016,7 +1058,6 @@ function speak(text, callback = null, isGreeting = false) {
         if (callback) callback(); 
         
         setTimeout(() => {
-            // 🛑 3. ล็อกเพิ่มเติม: ถ้าเปิดหน้าคิวอยู่ ห้ามทำกระบวนการเปิดไมค์ต่อเด็ดขาด
             if (window.isBusy || window.isAudioPlaying || window.isQueueOpen) return;
             
             if (isGreeting) {
@@ -1028,7 +1069,6 @@ function speak(text, callback = null, isGreeting = false) {
                     toggleListening();
                     if (window.micTimer) clearTimeout(window.micTimer);
                     window.micTimer = setTimeout(() => {
-                        // 🛑 เช็กอีกชั้น: ก่อนจะตัดกลับไปใช้ WakeWord ต้องไม่เปิดหน้าคิวอยู่
                         if (window.isListening && !window.isBusy && !window.isAudioPlaying && !window.isQueueOpen) {
                             forceStopAllMic();
                             window.allowWakeWord = true;
