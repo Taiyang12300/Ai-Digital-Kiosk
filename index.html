@@ -858,11 +858,17 @@
         
         const msg = window.currentLang === 'th' ? "กรุณากดคิวเลือกประเภทงานบริการ หรือสแกนคิวอาโค้ดเพื่อรับแจ้งคิวออนไลน์ได้เลยครับ" : "Please select a service to get your queue ticket.";
         
-        // 🟢 สั่งพูดและจัดการสถานะ Busy ให้จบลงหลังจากพูดจบเท่านั้น
-        if (typeof speak === 'function') {
-            speak(msg, () => { 
+        // 🟢 สั่งพูดและจัดการสถานะ Busy ให้จบลงหลังจากพูดจบเท่านั้น (อัปเกรดใช้ .wav)
+        if (window.currentLang === 'th') {
+            playAudioLink("https://taiyang12300.github.io/sound/กรุณากดคิวเลือกประเภทงานบริการ_หรือสแกนคิวอาร์โค้ดเพื่อรับแจ้งคิวออนไลน์ได้เลยครับ.wav", () => {
                 window.isBusy = false; // ปลดล็อกให้ผู้ใช้แตะปุ่มเลือกคิวได้
             });
+        } else {
+            if (typeof speak === 'function') {
+                speak(msg, () => { 
+                    window.isBusy = false; // ปลดล็อกให้ผู้ใช้แตะปุ่มเลือกคิวได้
+                });
+            }
         }
     }
 }
@@ -882,13 +888,23 @@ function closeQueueModal() {
         
         const msg = window.currentLang === 'th' ? "มีอะไรให้น้องนำทางช่วยเหลือเพิ่มเติมไหมครับ" : "Is there anything else I can help you with?";
         
-        if (typeof speak === 'function') {
-            speak(msg, () => {
+        // 🟢 เล่นไฟล์เสียงแทน TTS เมื่อปิดหน้าคิว (อัปเกรดใช้ .wav)
+        if (window.currentLang === 'th') {
+            playAudioLink("https://taiyang12300.github.io/sound/มีอะไรให้ช่วยไหมครับ.wav", () => {
                 // หลังจากบอกลาจบ ค่อยปลดล็อกทุกอย่างและเริ่ม WakeWord ใหม่
                 window.isBusy = false;
                 window.allowWakeWord = true;
                 if (typeof startWakeWord === 'function') startWakeWord();
             });
+        } else {
+            if (typeof speak === 'function') {
+                speak(msg, () => {
+                    // หลังจากบอกลาจบ ค่อยปลดล็อกทุกอย่างและเริ่ม WakeWord ใหม่
+                    window.isBusy = false;
+                    window.allowWakeWord = true;
+                    if (typeof startWakeWord === 'function') startWakeWord();
+                });
+            }
         }
     }
 }
