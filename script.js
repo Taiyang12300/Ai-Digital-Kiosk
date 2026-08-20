@@ -878,7 +878,6 @@ async function logQuestionToSheet(userQuery) {
 }
 
 // --- ระบบประมวลผลคำตอบ ---
-
 function getResponse(userQuery) { 
     if (!userQuery || !window.localDatabase) return;
     
@@ -903,7 +902,16 @@ function getResponse(userQuery) {
         forceStopAllMic();
         const askMsg = (window.currentLang === 'th') ? "ใบขับขี่ของท่านเป็นแบบชั่วคราว หรือแบบ 5 ปีครับ?" : "Is it Temporary or 5-year?";
         displayResponse(askMsg);
-        speak(askMsg, () => { window.isBusy = false; });
+        
+        // 🟢 จุดที่ 1: เปลี่ยนมาใช้ไฟล์ .wav สำหรับคำถามประเภทใบขับขี่
+        if (window.currentLang === 'th') {
+            playAudioLink("https://taiyang12300.github.io/sound/ใบขับขี่ของท่านเป็นแบบชั่วคราวหรือแบบ5ปีครับ.wav", () => { 
+                window.isBusy = false; 
+            });
+        } else {
+            speak(askMsg, () => { window.isBusy = false; });
+        }
+        
         renderOptionButtons([
             { th: "แบบชั่วคราว (2 ปี)", en: "Temporary (2 years)", s_th: "ต่อใบขับขี่ชั่วคราว", s_en: "renew temporary license", action: () => { forceStopAllMic(); startLicenseCheck("แบบชั่วคราว (2 ปี)"); } },
             { th: "แบบ 5 ปี", en: "5-year type", s_th: "ต่อใบขับขี่ 5 ปี เป็น 5 ปี", s_en: "renew 5 year license", action: () => { forceStopAllMic(); startLicenseCheck("แบบ 5 ปี"); } }
@@ -959,10 +967,19 @@ function getResponse(userQuery) {
         } else {
             const noDataMsg = window.currentLang === 'th' ? "ขออภัยครับ น้องหาข้อมูลไม่พบ กรุณาติดต่อเจ้าหน้าที่นะครับ" : "No info found.";
             displayResponse(noDataMsg);
-            speak(noDataMsg, () => {
-                window.isBusy = false;
-                setTimeout(renderFAQButtons, 1000);
-            });
+            
+            // 🟢 จุดที่ 2: เปลี่ยนมาใช้ไฟล์ .wav กรณีหาข้อมูลไม่พบ
+            if (window.currentLang === 'th') {
+                playAudioLink("https://taiyang12300.github.io/sound/ขออภัยครับ_น้องหาข้อมูลไม่พบ_กรุณาติดต่อเจ้าหน้าที่นะครับ.wav", () => {
+                    window.isBusy = false;
+                    setTimeout(renderFAQButtons, 1000);
+                });
+            } else {
+                speak(noDataMsg, () => {
+                    window.isBusy = false;
+                    setTimeout(renderFAQButtons, 1000);
+                });
+            }
         }
     } catch (err) {
         console.error("Error in getResponse:", err);
