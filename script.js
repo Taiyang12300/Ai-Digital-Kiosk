@@ -779,7 +779,16 @@ function startLicenseCheck(type) {
     }
     const msg = isThai ? `ใบขับขี่ ${type} เดิมของท่าน เป็นแบบไหนครับ?` : `What type is your current ${type} license?`;
     displayResponse(msg);
-    speak(msg, () => { window.isBusy = false; });
+    
+    // 🟢 อัปเกรด: ใช้เสียง .wav แทน TTS
+    if (isThai) {
+        playAudioLink("https://taiyang12300.github.io/sound/ใบขับขี่เดิมของท่าน_เป็นแบบไหนครับ.wav", () => { 
+            window.isBusy = false; 
+        });
+    } else {
+        speak(msg, () => { window.isBusy = false; });
+    }
+
     renderOptionButtons([
         { th: "แบบชั่วคราว (2 ปี)", en: "Temporary (2 years)", action: () => { forceStopAllMic(); selectLicenseExpiry(type + " (ชั่วคราว)", '2to5'); }, borderColor: "#a29bfe" },
         { th: "แบบบุคคล (5 ปี)", en: "Personal (5 years)", action: () => { forceStopAllMic(); selectLicenseExpiry(type + " (5 ปี)", '5to5'); }, borderColor: "#6c5ce7" }
@@ -792,7 +801,16 @@ function selectLicenseExpiry(type, period) {
         ? `ใบขับขี่ ${type} ของท่าน หมดอายุหรือยังครับ?`
         : `Has your ${type} license expired?`;
     displayResponse(msg);
-    speak(msg, () => { window.isBusy = false; });
+    
+    // 🟢 อัปเกรด: ใช้เสียง .wav แทน TTS
+    if (isThai) {
+        playAudioLink("https://taiyang12300.github.io/sound/ใบขับขี่ของท่าน_หมดอายุหรือยังครับ.wav", () => { 
+            window.isBusy = false; 
+        });
+    } else {
+        speak(msg, () => { window.isBusy = false; });
+    }
+
     renderOptionButtons([
         { th: "✅ ยังไม่หมดอายุ / ไม่เกิน 1 ปี", en: "Not expired / Under 1 year", action: () => { forceStopAllMic(); showLicenseChecklist(type, period, 'normal'); }, borderColor: "#28a745" },
         { th: "⚠️ หมดอายุเกิน 1 ปี (ไม่เกิน 3 ปี)", en: "Expired 1-3 years", action: () => { forceStopAllMic(); showLicenseChecklist(type, period, 'over1'); }, borderColor: "#ffc107" },
@@ -840,7 +858,13 @@ function showLicenseChecklist(type, period, expiry) {
             <button id="btnPrintGuide" style="display:none;" onclick="printLicenseNote('${type}', '${note}', '${docs.join('\\n')}'); setTimeout(() => { backToHomeKeepPerson(); }, 6000);">🖨️ ปริ้นใบนำทาง</button>
         </div>`;
     displayResponse(resultHTML);
-    speak(isThai ? "กรุณาตรวจสอบเอกสารให้ครบถ้วน เพื่อพิมพ์ใบนำทางครับ" : "Please check all items to print your guide.");
+    
+    // 🟢 อัปเกรด: ใช้เสียง .wav แทน TTS
+    if (isThai) {
+        playAudioLink("https://taiyang12300.github.io/sound/กรุณาตรวจสอบเอกสารให้ครบถ้วน_เพื่อพิมพ์ใบนำทางครับ.wav");
+    } else {
+        speak("Please check all items to print your guide.");
+    }
 }
 
 function checkChecklist() {
